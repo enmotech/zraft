@@ -173,6 +173,8 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
     if (rv != 0) {
         r->state = RAFT_FOLLOWER;
         raft_free(r->candidate_state.votes);
+	r->follower_state.current_leader.id = 0;
+	r->follower_state.current_leader.address = NULL;
         return rv;
     }
 

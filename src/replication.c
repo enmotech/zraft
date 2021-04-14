@@ -1302,14 +1302,74 @@ err:
     return rv;
 }
 
+#if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
+/* Context for a write log entries request that was submitted by a leader. */
+struct applyLog
+{
+    struct raft *raft;          /* Instance that has submitted the request */
+    raft_index index;           /* Index of the first entry in the request. */
+    struct raft_fsm_apply req;
+};
+static void applyCommandCb(struct raft_fsm_apply *req,
+                                void *result,
+                                int status)
+{
+    struct applyLog *request = req->data;
+    struct raft_apply *req1;
+    struct raft *r = request->raft;
+    raft_index index = request->index;
+
+    assert((r->last_applied + 1) == index);
+
+    req1 = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
+    if (req1 != NULL && req1->cb != NULL) {
+        req1->cb(req1, status, result);
+    }
+
+    r->last_applied = index;
+
+    raft_free(request);
+}
+#endif
+
 /* Apply a RAFT_COMMAND entry that has been committed. */
 static int applyCommand(struct raft *r,
                         const raft_index index,
                         const struct raft_buffer *buf)
 {
+    int rv;
+    #if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
+    struct applyLog *request;
+
+    request = raft_malloc(sizeof *request);
+    
+    if (request == NULL) {
+        rv = RAFT_NOMEM;
+        goto err;
+    }
+
+    request->raft = r;
+    request->index = index;
+    request->req.data = request;
+
+    rv = r->fsm->apply(r->fsm,
+                        &request->req,
+                        buf,
+                        applyCommandCb);
+    if (rv != 0) {
+        goto err_after_alloc;
+    }
+
+    return 0;
+err_after_alloc:
+    raft_free(request);
+err:
+    assert(rv != 0);
+    return rv;
+    #else
     struct raft_apply *req;
     void *result;
-    int rv;
+
     rv = r->fsm->apply(r->fsm, buf, &result);
     if (rv != 0) {
         return rv;
@@ -1318,7 +1378,9 @@ static int applyCommand(struct raft *r,
     if (req != NULL && req->cb != NULL) {
         req->cb(req, 0, result);
     }
+
     return 0;
+    #endif
 }
 
 /* Fire the callback of a barrier request whose entry has been committed. */
@@ -1477,7 +1539,7 @@ int replicationApply(struct raft *r)
         return 0;
     }
 
-    for (index = r->last_applied + 1; index <= r->commit_index; index++) {
+    for (index = r->last_applying + 1; index <= r->commit_index; index++) {
         const struct raft_entry *entry = logGet(&r->log, index);
 
         assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
@@ -1488,12 +1550,18 @@ int replicationApply(struct raft *r)
                 rv = applyCommand(r, index, &entry->buf);
                 break;
             case RAFT_BARRIER:
+                if(r->last_applying < r->last_applied)
+                    goto out;
                 applyBarrier(r, index);
                 rv = 0;
+                r->last_applied = index;
                 break;
             case RAFT_CHANGE:
+                if(r->last_applying < r->last_applied)
+                    goto out;
                 applyChange(r, index);
                 rv = 0;
+                r->last_applied = index;
                 break;
             default:
                 rv = 0; /* For coverity. This case can't be taken. */
@@ -1504,10 +1572,11 @@ int replicationApply(struct raft *r)
             break;
         }
 
-        r->last_applied = index;
+        r->last_applying = index;
     }
-
-    if (shouldTakeSnapshot(r)) {
+out:
+    if (r->last_applying == r->last_applied &&
+		shouldTakeSnapshot(r)) {
         rv = takeSnapshot(r);
     }
 

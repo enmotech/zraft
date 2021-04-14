@@ -24,6 +24,22 @@ struct Fsm
     unsigned long long count;
 };
 
+#if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
+static int FsmApply(struct raft_fsm *fsm,
+		    struct raft_fsm_apply *req,
+		    const struct raft_buffer *buf,
+		    raft_fsm_apply_cb cb)
+{
+    struct Fsm *f = fsm->data;
+    if (buf->len != 8) {
+        return RAFT_MALFORMED;
+    }
+    f->count += *(uint64_t *)buf->base;
+    cb(req, &f->count, 0);
+    
+    return 0;
+}
+#else
 static int FsmApply(struct raft_fsm *fsm,
                     const struct raft_buffer *buf,
                     void **result)
@@ -36,6 +52,7 @@ static int FsmApply(struct raft_fsm *fsm,
     *result = &f->count;
     return 0;
 }
+#endif
 
 static int FsmSnapshot(struct raft_fsm *fsm,
                        struct raft_buffer *bufs[],

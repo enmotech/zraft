@@ -55,6 +55,7 @@ int raft_init(struct raft *r,
     r->install_snapshot_timeout = DEFAULT_INSTALL_SNAPSHOT_TIMEOUT;
     r->commit_index = 0;
     r->last_applied = 0;
+    r->last_applying = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
     r->transfer = NULL;

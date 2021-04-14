@@ -51,6 +51,7 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
 
     r->commit_index = snapshot->index;
     r->last_applied = snapshot->index;
+    r->last_applying = snapshot->index;
     r->last_stored = snapshot->index;
 
     /* Don't free the snapshot data buffer, as ownership has been transferred to

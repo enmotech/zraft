@@ -8,6 +8,13 @@
 
 #define RAFT_API __attribute__((visibility("default")))
 
+#define RAFT_ASYNC_ALL	1
+
+#if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
+#define RAFT_ASYNC_APPLY     1
+#endif
+
+#define RAFT_NORMAL	0
 /**
  * Error codes.
  */
@@ -34,6 +41,10 @@
 #define RAFT_UNAUTHORIZED 21 /* No access to a resource */
 #define RAFT_NOSPACE 22      /* Not enough space on disk */
 #define RAFT_TOOMANY 23      /* Some system or raft limit was hit */
+
+#if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
+#define RAFT_IOAGAIN 24	/* storage is busy and trying to finish previous requests */
+#endif
 
 /**
  * Size of human-readable error message buffers.
@@ -485,13 +496,32 @@ struct raft_io
     int (*random)(struct raft_io *io, int min, int max);
 };
 
+
+#if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
+struct raft_fsm_apply;
+typedef void (*raft_fsm_apply_cb)(struct raft_fsm_apply *req,
+                                void *result,
+                                int status);
+struct raft_fsm_apply {
+    void *data;
+    raft_fsm_apply_cb cb;
+};
+#endif
+
 struct raft_fsm
 {
     int version;
     void *data;
+#if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
+    int (*apply)(struct raft_fsm *fsm,
+                 struct raft_fsm_apply *req,
+                 const struct raft_buffer *buf,
+                 raft_fsm_apply_cb cb);
+#else
     int (*apply)(struct raft_fsm *fsm,
                  const struct raft_buffer *buf,
                  void **result);
+#endif
     int (*snapshot)(struct raft_fsm *fsm,
                     struct raft_buffer *bufs[],
                     unsigned *n_bufs);
@@ -626,6 +656,7 @@ struct raft
      */
     raft_index commit_index; /* Highest log entry known to be committed */
     raft_index last_applied; /* Highest log entry applied to the FSM */
+    raft_index last_applying;/* Highest log entry being applied to the FSM */
     raft_index last_stored;  /* Highest log entry persisted on disk */
 
     /*
@@ -834,6 +865,11 @@ RAFT_API raft_index raft_last_index(struct raft *r);
  * Return the index of the last entry that was applied to the local FSM.
  */
 RAFT_API raft_index raft_last_applied(struct raft *r);
+
+/**
+ * Return the index of the last entry that was being applied to the local FSM.
+ */
+RAFT_API raft_index raft_last_applying(struct raft *r);
 
 /* Common fields across client request types. */
 #define RAFT__REQUEST \

@@ -177,6 +177,7 @@ int raft_start(struct raft *r)
          * the first entry to be the same on all servers. */
         r->commit_index = 1;
         r->last_applied = 1;
+		r->last_applying = 1;
     }
 
     /* Append the entries to the log, possibly restoring the last

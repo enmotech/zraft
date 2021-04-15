@@ -551,6 +551,24 @@ static int ioMethodSetVote(struct raft_io *raft_io, const raft_id server_id)
     return 0;
 }
 
+static int ioMethodSetTermVote(struct raft_io *io,
+                         struct raft_io_set_meta *req,
+                         raft_term term,
+                         raft_id voted_for,
+                         raft_io_set_meta_cb cb)
+{
+    int rv;
+    rv = ioMethodSetTerm(io, term);
+    if(rv != 0){
+        goto callback;
+    }
+
+    rv = ioMethodSetVote(io, voted_for);
+
+    callback:
+        cb(req, rv);
+    return 0;
+}
 static int ioMethodAppend(struct raft_io *raft_io,
                           struct raft_io_append *req,
                           const struct raft_entry entries[],
@@ -876,6 +894,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->snapshot_get = ioMethodSnapshotGet;
     raft_io->time = ioMethodTime;
     raft_io->random = ioMethodRandom;
+    raft_io->set_meta = ioMethodSetTermVote;
 
     return 0;
 }

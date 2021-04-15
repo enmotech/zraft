@@ -464,6 +464,26 @@ static int uvSetVote(struct raft_io *io, const raft_id server_id)
     return 0;
 }
 
+static int uvSetTermVote(struct raft_io *io,
+                          struct raft_io_set_meta *req,
+                          raft_term term,
+                          raft_id voted_for,
+                          raft_io_set_meta_cb cb)
+{
+    int rv;
+
+    rv = uvSetTerm(io, term);
+    if(rv != 0){
+        goto callback;
+    }
+
+    rv = uvSetVote(io, voted_for);
+
+    callback:
+        cb(req, rv);
+    return 0;
+}
+
 /* Implementation of raft_io->bootstrap. */
 static int uvBootstrap(struct raft_io *io,
                        const struct raft_configuration *configuration)
@@ -633,6 +653,7 @@ int raft_uv_init(struct raft_io *io,
     io->snapshot_get = UvSnapshotGet;
     io->time = uvTime;
     io->random = uvRandom;
+    io->set_meta = uvSetTermVote;
 
     return 0;
 

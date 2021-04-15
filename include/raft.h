@@ -443,7 +443,18 @@ struct raft_io; /* Forward declaration. */
  * Callback invoked by the I/O implementation at regular intervals.
  */
 typedef void (*raft_io_tick_cb)(struct raft_io *io);
-
+#if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
+/*
+* Asynchronous request to store term and voted for.
+*/
+struct raft_io_set_meta;
+typedef void (*raft_io_set_meta_cb)(struct raft_io_set_meta *req, int status);
+struct raft_io_set_meta
+{
+   void *data;           /* User data */
+   raft_io_set_meta_cb cb; /* Request callback */
+};
+#endif
 /**
  * Callback invoked by the I/O implementation when an RPC message is received.
  */
@@ -494,6 +505,21 @@ struct raft_io
                         raft_io_snapshot_get_cb cb);
     raft_time (*time)(struct raft_io *io);
     int (*random)(struct raft_io *io, int min, int max);
+
+#if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
+    int (*set_meta)(struct raft_io *io,
+		    struct raft_io_set_meta *req,
+		    raft_term term,
+		    raft_id voted_for,
+		    raft_io_set_meta_cb cb);
+#define RAFT_IO_AVAILABLE	0
+#define RAFT_IO_BUSY		1
+    /*
+     * I/O state of this raft instance,
+     */
+    unsigned short state;
+#endif
+
 };
 
 

@@ -270,6 +270,7 @@ grant_vote:
 
         /* Reset the election timer. */
         r->election_timer_start = r->io->time(r->io);
+	r->follower_state.current_leader.id = 0;
     }
 
     *granted = true;

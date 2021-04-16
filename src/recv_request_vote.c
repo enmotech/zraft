@@ -30,6 +30,8 @@ int recvRequestVote(struct raft *r,
     int match;
     int rv;
 
+    raft_time now;
+
     assert(r != NULL);
     assert(id > 0);
     assert(args != NULL);
@@ -55,9 +57,13 @@ int recvRequestVote(struct raft *r,
      *   special flag to indicate this behavior ("I have permission to disrupt
      *   the leader - it told me to!").
      */
+
+    now = r->io->time(r->io);
     has_leader =
         r->state == RAFT_LEADER ||
-        (r->state == RAFT_FOLLOWER && r->follower_state.current_leader.id != 0);
+	(r->state == RAFT_FOLLOWER &&
+	 (now - r->election_timer_start) <= r->election_timeout);
+    //r->follower_state.current_leader.id != 0);
     if (has_leader && !args->disrupt_leader) {
         tracef("local server has a leader -> reject ");
         goto reply;

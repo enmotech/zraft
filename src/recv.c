@@ -23,11 +23,11 @@
 #endif
 
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
-/* Context for a write log entries request that was submitted by a follower. */
 struct setMeta
 {
 	struct raft *raft; /* Instance that has submitted the request */
 	raft_term	term;
+	raft_id		voted_for;
 	struct raft_message message;
 	struct raft_io_set_meta req;
 };
@@ -45,7 +45,7 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
 	}
 
 	r->current_term = request->term;
-	r->voted_for = 0;
+	r->voted_for = request->voted_for;
 
 	if (r->state != RAFT_FOLLOWER) {
 		/* Also convert to follower. */
@@ -58,16 +58,20 @@ err:
 	raft_free(request);
 }
 
-static int recvBumpCurrentTermIO(struct raft *r,
-				 struct raft_message *message,
-				 raft_term	term)
+int recvSetMeta(struct raft *r,
+		struct raft_message *message,
+		raft_term	term,
+		raft_id voted_for,
+		raft_io_set_meta_cb cb)
 {
 	int rv;
 	struct setMeta *request;
 	char msg[128];
 	char *address;
 
-	assert(term > r->current_term);
+	assert(term > r->current_term ||
+	       (term == r->current_term &&
+		r->voted_for == 0));
 
 	sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
 		term, r->current_term);
@@ -90,16 +94,21 @@ static int recvBumpCurrentTermIO(struct raft *r,
 
 	request->raft = r;
 	request->term = term;
-	request->message = *message;
-	strcpy(address, message->server_address);
-	request->message.server_address = address;
+	request->voted_for = voted_for;
+
+	if(message) {
+		request->message = *message;
+		strcpy(address, message->server_address);
+		request->message.server_address = address;
+	}
+
 	request->req.data = request;
 
 	rv = r->io->set_meta(r->io,
 			     &request->req,
 			     term,
-			     message->server_id,
-			     recvBumpTermIOCb);
+			     voted_for,
+			     cb);
 	if (rv != 0)
 		goto err;
 
@@ -131,25 +140,31 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 	}
 
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
-	switch(message->type) {
-	case RAFT_IO_APPEND_ENTRIES:
-		term = message->append_entries.term;
-		break;
-	case RAFT_IO_APPEND_ENTRIES_RESULT:
-		term = message->append_entries_result.term;
-		break;
-	case RAFT_IO_INSTALL_SNAPSHOT:
-		term = message->install_snapshot.term;
-		break;
-	}
-
-	if(term != 0) {
-		recvCheckMatchingTerms(r, term, &match);
-		if (match == 1) {
-			rv = recvBumpCurrentTermIO(r,
-						   message,
-						   term);
-			return rv;
+	recvCheckMatchingTerms(r, term, &match);
+	if(match > 0) {
+		switch(message->type) {
+		case RAFT_IO_APPEND_ENTRIES:
+			return recvSetMeta(r,
+					 message,
+					 message->append_entries.term,
+					 message->server_id,
+					 recvBumpTermIOCb);
+			break;
+		case RAFT_IO_APPEND_ENTRIES_RESULT:
+			return recvSetMeta(r,
+					 message,
+					 message->append_entries_result.term,
+					 0,
+					 recvBumpTermIOCb);
+			break;
+		case RAFT_IO_INSTALL_SNAPSHOT:
+			return recvSetMeta(r,
+					   message,
+					   message->install_snapshot.term,
+					   message->server_id,
+					   recvBumpTermIOCb);
+			default:
+			break;
 		}
 	}
 #endif

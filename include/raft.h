@@ -265,6 +265,7 @@ struct raft_request_vote_result
 {
     raft_term term;    /* Receiver's current term (candidate updates itself). */
     bool vote_granted; /* True means candidate received vote. */
+    bool pre_vote;             /* True if this is a pre-vote request. */
 };
 
 /**

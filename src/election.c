@@ -101,10 +101,104 @@ static int electionSend(struct raft *r, const struct raft_server *server)
 
 	return 0;
 }
-#if 0
-int electionStart1(struct raft *r)
+#if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
+#include "convert.h"
+struct setMetae
 {
-	raft_term term;
+	struct raft *raft; /* Instance that has submitted the request */
+	raft_term	term;
+	raft_id		voted_for;
+	struct raft_io_set_meta req;
+};
+
+void electionSetMetaCb(struct raft_io_set_meta *req, int status)
+{
+	struct setMetae *request = req->data;
+	struct raft *r = request->raft;
+	size_t n_voters;
+	size_t voting_index;
+	size_t i;
+	int rv;
+
+	assert(r->state == RAFT_CANDIDATE);
+
+	r->io->state = RAFT_IO_AVAILABLE;
+	if(status != 0) {
+		convertToUnavailable(r);
+		goto err;
+	}
+
+	r->current_term = request->term;
+	r->voted_for = request->voted_for;
+
+	/* Reset election timer. */
+	electionResetTimer(r);
+
+	assert(r->candidate_state.votes != NULL);
+
+	n_voters = configurationVoterCount(&r->configuration);
+	voting_index = configurationIndexOfVoter(&r->configuration, r->id);
+	/* Initialize the votes array and send vote requests. */
+	for (i = 0; i < n_voters; i++) {
+		if (i == voting_index) {
+			r->candidate_state.votes[i] = true; /* We vote for ourselves */
+		} else {
+			r->candidate_state.votes[i] = false;
+		}
+	}
+	for (i = 0; i < r->configuration.n; i++) {
+		const struct raft_server *server = &r->configuration.servers[i];
+		if (server->id == r->id || server->role != RAFT_VOTER) {
+			continue;
+		}
+		rv = electionSend(r, server);
+		if (rv != 0) {
+			/* This is not a critical failure, let's just log it. */
+			tracef("failed to send vote request to server %llu: %s", server->id,
+			       raft_strerror(rv));
+		}
+	}
+
+err:
+	raft_free(request);
+}
+
+int electionSetMeta(struct raft *r)
+{
+	int rv;
+	struct setMetae *request;
+
+	request = raft_malloc(sizeof *request);
+	if (request == NULL) {
+		rv = RAFT_NOMEM;
+		goto err2;
+	}
+
+	request->raft = r;
+	request->term = r->current_term + 1;
+	request->voted_for = r->id;
+
+	request->req.data = request;
+
+	rv = r->io->set_meta(r->io,
+			     &request->req,
+			     request->term,
+			     request->voted_for,
+			     electionSetMetaCb);
+	if (rv != 0)
+		goto err1;
+
+	r->io->state = RAFT_IO_BUSY;
+
+	return 0;
+
+err1:
+	raft_free(request);
+err2:
+	return rv;
+}
+int electionStart(struct raft *r)
+{
 	size_t n_voters;
 	size_t voting_index;
 	size_t i;
@@ -127,31 +221,8 @@ int electionStart1(struct raft *r)
 	/* During pre-vote we don't actually increment term or persist vote, however
      * we reset any vote that we previously granted since we have timed out and
      * that vote is no longer valid. */
-	if (r->candidate_state.in_pre_vote) {
-		/* Reset vote */
-		rv = r->io->set_vote(r->io, 0);
-		if (rv != 0) {
-			goto err;
-		}
-		/* Update our cache too. */
-		r->voted_for = 0;
-	} else {
-		/* Increment current term */
-		term = r->current_term + 1;
-		rv = r->io->set_term(r->io, term);
-		if (rv != 0) {
-			goto err;
-		}
-
-		/* Vote for self */
-		rv = r->io->set_vote(r->io, r->id);
-		if (rv != 0) {
-			goto err;
-		}
-
-		/* Update our cache too. */
-		r->current_term = term;
-		r->voted_for = r->id;
+	if (!(r->candidate_state.in_pre_vote)) {
+		return electionSetMeta(r);
 	}
 
 	/* Reset election timer. */
@@ -181,12 +252,8 @@ int electionStart1(struct raft *r)
 	}
 
 	return 0;
-
-err:
-	assert(rv != 0);
-	return rv;
 }
-#endif
+#else
 int electionStart(struct raft *r)
 {
 	raft_term term;
@@ -271,7 +338,7 @@ err:
 	assert(rv != 0);
 	return rv;
 }
-
+#endif
 int electionVote(struct raft *r,
 		 const struct raft_request_vote *args,
 		 bool *granted)

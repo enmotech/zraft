@@ -23,7 +23,7 @@
 #endif
 
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
-struct setMeta
+struct setMetar
 {
 	struct raft *raft; /* Instance that has submitted the request */
 	raft_term	term;
@@ -34,7 +34,7 @@ struct setMeta
 
 static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
 {
-	struct setMeta *request = req->data;
+	struct setMetar *request = req->data;
 	struct raft *r = request->raft;
 	char *address = (char *)(request->message.server_address);
 
@@ -65,7 +65,7 @@ int recvSetMeta(struct raft *r,
 		raft_io_set_meta_cb cb)
 {
 	int rv;
-	struct setMeta *request;
+	struct setMetar *request;
 	char msg[128];
 	char *address;
 
@@ -163,6 +163,14 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 					   message->install_snapshot.term,
 					   message->server_id,
 					   recvBumpTermIOCb);
+			break;
+		case RAFT_IO_TIMEOUT_NOW:
+			return recvSetMeta(r,
+					   message,
+					   message->timeout_now.term,
+					   message->server_id,
+					   recvBumpTermIOCb);
+			break;
 			default:
 			break;
 		}

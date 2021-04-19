@@ -21,7 +21,7 @@ static void requestVoteSendCb(struct raft_io_send *req, int status)
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
 #include <string.h>
 #include "convert.h"
-struct setMeta
+struct setMetar
 {
 	struct raft *raft; /* Instance that has submitted the request */
 	raft_term	term;
@@ -32,7 +32,7 @@ struct setMeta
 
 static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 {
-	struct setMeta *request = req->data;
+	struct setMetar *request = req->data;
 	struct raft *r = request->raft;
 	char *address = (char *)(request->message.server_address);
 	struct raft_io_send *reqs;
@@ -65,7 +65,6 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 			 requestVoteSendCb);
 	if (rv != 0) {
 		raft_free(reqs);
-		convertToUnavailable(r);
 	}
 err:
 	raft_free(address);

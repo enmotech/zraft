@@ -163,7 +163,25 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
 
     return 0;
 }
+#if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
+int raft_aboostrap(struct raft *r,
+		   const struct raft_configuration *conf,
+		   raft_io_bootstrap_cb cb)
+{
+	int rv;
 
+	if (r->state != RAFT_UNAVAILABLE) {
+	    return RAFT_BUSY;
+	}
+
+	rv = r->io->abootstrap(r->io, conf, cb);
+	if (rv != 0) {
+	    return rv;
+	}
+
+	return 0;
+}
+#endif
 int raft_recover(struct raft *r, const struct raft_configuration *conf)
 {
     int rv;

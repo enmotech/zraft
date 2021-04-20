@@ -507,7 +507,8 @@ struct raft_io
 		     struct raft_io_load *req,
 		     raft_io_load_cb cb);
 	int (*abootstrap)(struct raft_io *io,
-		      const struct raft_configuration *conf,
+			  struct raft_io_bootstrap *req,
+			  const struct raft_configuration *conf,
 			  raft_io_bootstrap_cb cb);
 #endif
 	int (*load)(struct raft_io *io,

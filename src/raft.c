@@ -165,6 +165,7 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
 }
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
 int raft_aboostrap(struct raft *r,
+		   struct raft_io_bootstrap *req,
 		   const struct raft_configuration *conf,
 		   raft_io_bootstrap_cb cb)
 {
@@ -174,7 +175,7 @@ int raft_aboostrap(struct raft *r,
 	    return RAFT_BUSY;
 	}
 
-	rv = r->io->abootstrap(r->io, conf, cb);
+	rv = r->io->abootstrap(r->io, req, conf, cb);
 	if (rv != 0) {
 	    return rv;
 	}

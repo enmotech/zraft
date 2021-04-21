@@ -34,7 +34,6 @@ static void recvVoteResultBumpTermIOCb(struct raft_io_set_meta *req, int status)
 {
 	struct setMetar *request = req->data;
 	struct raft *r = request->raft;
-	char *address = (char *)(request->message.server_address);
 
 	r->io->state = RAFT_IO_AVAILABLE;
 	if(status != 0) {
@@ -50,7 +49,6 @@ static void recvVoteResultBumpTermIOCb(struct raft_io_set_meta *req, int status)
 		convertToFollower(r);
 	}
 err:
-	raft_free(address);
 	raft_free(request);
 }
 

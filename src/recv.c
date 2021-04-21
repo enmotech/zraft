@@ -67,7 +67,6 @@ int recvSetMeta(struct raft *r,
 	int rv;
 	struct setMetar *request;
 	char msg[128];
-	char *address;
 
 	assert(term > r->current_term ||
 	       (term == r->current_term &&
@@ -86,22 +85,21 @@ int recvSetMeta(struct raft *r,
 		goto err2;
 	}
 
-	address = raft_malloc(strlen(message->server_address) + 1);
-	if (address == NULL) {
-		rv = RAFT_NOMEM;
-		goto err1;
-	}
-
-	request->raft = r;
-	request->term = term;
-	request->voted_for = voted_for;
-
 	if(message) {
+		char *address;
+		address = raft_malloc(strlen(message->server_address) + 1);
+		if (address == NULL) {
+			rv = RAFT_NOMEM;
+			goto err1;
+		}
 		request->message = *message;
 		strcpy(address, message->server_address);
 		request->message.server_address = address;
 	}
 
+	request->raft = r;
+	request->term = term;
+	request->voted_for = voted_for;
 	request->req.data = request;
 
 	rv = r->io->set_meta(r->io,

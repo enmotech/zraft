@@ -70,8 +70,7 @@ int recvSetMeta(struct raft *r,
 	char *address = NULL;
 
 	assert(term > r->current_term ||
-	       (term == r->current_term &&
-		r->voted_for == 0));
+			r->voted_for != voted_for);
 
 	sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
 		term, r->current_term);

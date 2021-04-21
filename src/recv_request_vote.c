@@ -139,7 +139,9 @@ int recvRequestVote(struct raft *r,
 				}
 
 				if (result->vote_granted) {
-					voted_for = id;
+					voted_for = args->candidate_id;
+					/* Reset the election timer. */
+					r->election_timer_start = r->io->time(r->io);
 				}
 
 				if(match > 0 || r->voted_for != voted_for)

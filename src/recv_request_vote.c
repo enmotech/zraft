@@ -133,8 +133,12 @@ int recvRequestVote(struct raft *r,
 		if(match >= 0) {
 			electionVote(r, args, &result->vote_granted);
 			if (!args->pre_vote) {
-				if (result->vote_granted) {
+				if(match > 0) {
+					voted_for = 0;
 					result->term = args->term;
+				}
+
+				if (result->vote_granted) {
 					voted_for = id;
 				}
 

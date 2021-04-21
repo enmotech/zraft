@@ -78,13 +78,14 @@ int recvSetMeta(struct raft *r,
 		raft_io_set_meta_cb cb);
 
 int recvRequestVote(struct raft *r,
-		     const raft_id id,
-		     const char *address,
-		     const struct raft_request_vote *args)
+		    const raft_id id,
+		    const char *address,
+		    const struct raft_request_vote *args)
 {
 	struct raft_io_send *req;
 	struct raft_message message;
 	struct raft_request_vote_result *result = &message.request_vote_result;
+	raft_id voted_for = r->voted_for;
 	bool has_leader;
 	int match;
 	int rv;
@@ -131,16 +132,18 @@ int recvRequestVote(struct raft *r,
 		recvCheckMatchingTerms(r, args->term, &match);
 		if(match >= 0) {
 			electionVote(r, args, &result->vote_granted);
-			if (result->vote_granted) {
-				if (!args->pre_vote) {
+			if (!args->pre_vote) {
+				if (result->vote_granted) {
 					result->term = args->term;
-					if(match > 0 || r->voted_for != args->candidate_id)
-						return recvSetMeta(r,
-								   &message,
-								   args->term,
-								   id,
-								   respondToRequestVote);
+					voted_for = id;
 				}
+
+				if(match > 0 || r->voted_for != voted_for)
+					return recvSetMeta(r,
+							   &message,
+							   args->term,
+							   voted_for,
+							   respondToRequestVote);
 			}
 		} else {
 			tracef("local term is higher -> reject ");

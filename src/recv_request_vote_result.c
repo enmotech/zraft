@@ -106,7 +106,7 @@ int recvRequestVoteResult(struct raft *r,
 					   result->term,
 					   0,
 					   recvVoteResultBumpTermIOCb);
-		} else if (match < 0){
+		} else if (match < 0) {
 			/* If the term in the result is older than ours, this is an old message
 			 * we should ignore, because the node who voted for us would have
 			 * obtained our term.  This happens if the network is pretty choppy. */

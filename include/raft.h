@@ -483,8 +483,8 @@ typedef void (*raft_io_bootstrap_cb)(struct raft_io_bootstrap *req,
 				     int status);
 struct raft_io_bootstrap
 {
-	void *data;         /* User data */
-	raft_io_load_cb cb; /* Request callback */
+	void *data;         	 /* User data */
+	raft_io_bootstrap_cb cb; /* Request callback */
 };
 #endif
 /**

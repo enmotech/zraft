@@ -147,6 +147,13 @@ RAFT_API int raft_configuration_encode(const struct raft_configuration *c,
 				       struct raft_buffer *buf);
 
 /**
+ * Decode configuration from the given buf.
+ *
+ * The memory of configuration.servers is allocated using raft_malloc().
+ */
+RAFT_API int raft_configuration_decode(const struct raft_buffer *buf,
+				struct raft_configuration *c);
+/**
  * Hash function which outputs a 64-bit value based on a text and a number.
  *
  * This can be used to generate a unique ID for a new server being added, for

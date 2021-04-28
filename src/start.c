@@ -129,6 +129,7 @@ static int maybeSelfElect(struct raft *r)
 struct loadData {
 	struct raft *raft;
 	struct raft_io_load req;
+	struct raft_start *start;
 };
 
 static void raftLoadCb(struct raft_io_load *req,
@@ -143,7 +144,8 @@ static void raftLoadCb(struct raft_io_load *req,
 	raft_index start_index;
 	struct raft_entry *entries;
 	size_t n_entries;
-	int rv;
+	int rv = status;
+	struct raft_start *start = request->start;
 
 	if(status == 0) {
 		if(load) {
@@ -218,9 +220,14 @@ err:
 	}
 
 	raft_free(request);
+
+	// invoke astart callback
+	start->cb(start, rv);
 }
 
-int raft_astart(struct raft *r)
+int raft_astart(struct raft *r,
+		struct raft_start *req,
+		raft_start_cb cb)
 {
 	struct loadData *request;
 	int rv;
@@ -240,6 +247,9 @@ int raft_astart(struct raft *r)
 	request = raft_malloc(sizeof *request);
 	request->raft = r;
 	request->req.data = request;
+
+	req->cb = cb;
+	request->start = req;
 
 	rv = r->io->aload(r->io, &request->req, raftLoadCb);
 

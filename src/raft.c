@@ -164,7 +164,7 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
     return 0;
 }
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
-int raft_aboostrap(struct raft *r,
+int raft_abootstrap(struct raft *r,
 		   struct raft_io_bootstrap *req,
 		   const struct raft_configuration *conf,
 		   raft_io_bootstrap_cb cb)

@@ -485,6 +485,8 @@ struct raft_io_load
 	raft_io_load_cb cb; /* Request callback */
 };
 
+struct raft;
+
 struct raft_io_bootstrap;
 typedef void (*raft_io_bootstrap_cb)(struct raft_io_bootstrap *req,
 				     int status);
@@ -493,6 +495,22 @@ struct raft_io_bootstrap
 	void *data;         	 /* User data */
 	raft_io_bootstrap_cb cb; /* Request callback */
 };
+
+RAFT_API int raft_abootstrap(struct raft *r,
+			     struct raft_io_bootstrap *req,
+			     const struct raft_configuration *conf,
+			     raft_io_bootstrap_cb cb);
+
+struct raft_start;
+typedef void (*raft_start_cb)(struct raft_start *req, int status);
+struct raft_start
+{
+	void *data;       /* User data */
+	raft_start_cb cb; /* Request callback */
+};
+RAFT_API int raft_astart(struct raft *r,
+			 struct raft_start *req,
+			 raft_start_cb cb);
 #endif
 /**
  * Callback invoked by the I/O implementation when an RPC message is received.

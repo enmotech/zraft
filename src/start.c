@@ -212,13 +212,12 @@ static void raftLoadCb(struct raft_io_load *req,
 			if (rv != 0) {
 				goto err;
 			}
-err:
-			raft_free(load);
 		}
 	} else {
 		ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
 	}
 
+err:
 	raft_free(request);
 
 	// invoke astart callback

@@ -128,7 +128,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 {
 	int rv = 0;
 
-	int match;
+	int match = 0;
 	raft_term term = 0;
 
 	if (message->type < RAFT_IO_APPEND_ENTRIES ||
@@ -138,7 +138,27 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 	}
 
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
-	recvCheckMatchingTerms(r, term, &match);
+	switch(message->type) {
+	case RAFT_IO_APPEND_ENTRIES:
+		term = message->append_entries.term;
+		recvCheckMatchingTerms(r, term, &match);
+		break;
+	case RAFT_IO_APPEND_ENTRIES_RESULT:
+		term = message->append_entries_result.term;
+		recvCheckMatchingTerms(r, term, &match);
+		break;
+	case RAFT_IO_INSTALL_SNAPSHOT:
+		term = message->install_snapshot.term;
+		recvCheckMatchingTerms(r, term, &match);
+		break;
+	case RAFT_IO_TIMEOUT_NOW:
+		term = message->timeout_now.term;
+		recvCheckMatchingTerms(r, term, &match);
+		break;
+	default:
+		break;
+	}
+
 	if(match > 0) {
 		switch(message->type) {
 		case RAFT_IO_APPEND_ENTRIES:

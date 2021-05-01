@@ -52,7 +52,7 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 		convertToFollower(r);
 	}
 
-	reqs = raft_malloc(sizeof *req);
+	reqs = raft_malloc(sizeof *reqs);
 	if (reqs == NULL) {
 		convertToUnavailable(r);
 		goto err;

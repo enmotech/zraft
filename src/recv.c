@@ -79,6 +79,8 @@ int recvSetMeta(struct raft *r,
 		strcat(msg, " and step down");
 	}
 
+	tracef("%s", msg);
+
 	request = raft_malloc(sizeof *request);
 	if (request == NULL) {
 		rv = RAFT_NOMEM;
@@ -96,7 +98,9 @@ int recvSetMeta(struct raft *r,
 			rv = RAFT_NOMEM;
 			goto err1;
 		}
+
 		request->message = *message;
+
 		strcpy(address, message->server_address);
 		request->message.server_address = address;
 	}
@@ -128,8 +132,8 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 {
 	int rv = 0;
 
-	int match = 0;
-	raft_term term = 0;
+	int match;
+	raft_term term;
 
 	if (message->type < RAFT_IO_APPEND_ENTRIES ||
 	    message->type > RAFT_IO_TIMEOUT_NOW) {
@@ -138,60 +142,41 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 	}
 
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
-	switch(message->type) {
+	raft_id voted_for;
+
+	/* check and asynchronously bump term */
+	switch (message->type) {
 	case RAFT_IO_APPEND_ENTRIES:
 		term = message->append_entries.term;
+		voted_for = message->server_id;
 		recvCheckMatchingTerms(r, term, &match);
 		break;
 	case RAFT_IO_APPEND_ENTRIES_RESULT:
 		term = message->append_entries_result.term;
+		voted_for = 0;
 		recvCheckMatchingTerms(r, term, &match);
 		break;
 	case RAFT_IO_INSTALL_SNAPSHOT:
 		term = message->install_snapshot.term;
+		voted_for = message->server_id;
 		recvCheckMatchingTerms(r, term, &match);
 		break;
 	case RAFT_IO_TIMEOUT_NOW:
 		term = message->timeout_now.term;
+		voted_for = message->server_id;
 		recvCheckMatchingTerms(r, term, &match);
 		break;
 	default:
+		match = 0;
 		break;
 	}
 
 	if(match > 0) {
-		switch(message->type) {
-		case RAFT_IO_APPEND_ENTRIES:
-			return recvSetMeta(r,
-					 message,
-					 message->append_entries.term,
-					 message->server_id,
-					 recvBumpTermIOCb);
-			break;
-		case RAFT_IO_APPEND_ENTRIES_RESULT:
-			return recvSetMeta(r,
-					 message,
-					 message->append_entries_result.term,
-					 0,
-					 recvBumpTermIOCb);
-			break;
-		case RAFT_IO_INSTALL_SNAPSHOT:
-			return recvSetMeta(r,
-					   message,
-					   message->install_snapshot.term,
-					   message->server_id,
-					   recvBumpTermIOCb);
-			break;
-		case RAFT_IO_TIMEOUT_NOW:
-			return recvSetMeta(r,
-					   message,
-					   message->timeout_now.term,
-					   message->server_id,
-					   recvBumpTermIOCb);
-			break;
-			default:
-			break;
-		}
+		return recvSetMeta(r,
+				 message,
+				 term,
+				 voted_for,
+				 recvBumpTermIOCb);
 	}
 #endif
 	/* tracef("%s from server %ld", message_descs[message->type - 1],

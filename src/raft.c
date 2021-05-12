@@ -83,6 +83,11 @@ err:
     return rv;
 }
 
+int raft_io_state(struct raft_io *io)
+{
+	return io->state;
+}
+
 static void ioCloseCb(struct raft_io *io)
 {
     struct raft *r = io->data;
@@ -208,6 +213,12 @@ const char *raft_strerror(int errnum)
 void raft_configuration_init(struct raft_configuration *c)
 {
     configurationInit(c);
+}
+
+int raft_configuration_get(const struct raft *r, struct raft_configuration *c)
+{
+	assert(c);
+	return configurationCopy(&(r->configuration), c);
 }
 
 void raft_configuration_close(struct raft_configuration *c)

@@ -136,6 +136,9 @@ void convertToFollower(struct raft *r)
 
     r->follower_state.current_leader.id = 0;
     r->follower_state.current_leader.address = NULL;
+    /* notify the user */
+    if(r->state_change_cb != NULL)
+	    r->state_change_cb(r, RAFT_FOLLOWER);
 }
 
 int convertToCandidate(struct raft *r, bool disrupt_leader)
@@ -175,6 +178,9 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
         raft_free(r->candidate_state.votes);
         return rv;
     }
+    /* notify the user */
+    if(r->state_change_cb != NULL)
+	    r->state_change_cb(r, RAFT_CANDIDATE);
 
     return 0;
 }
@@ -206,6 +212,10 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
 
+    /* notify the user */
+    if(r->state_change_cb != NULL)
+	    r->state_change_cb(r, RAFT_LEADER);
+
     return 0;
 }
 
@@ -217,6 +227,10 @@ void convertToUnavailable(struct raft *r)
     }
     convertClear(r);
     convertSetState(r, RAFT_UNAVAILABLE);
+
+    /* notify the user */
+    if(r->state_change_cb != NULL)
+	    r->state_change_cb(r, RAFT_UNAVAILABLE);
 }
 
 #undef tracef

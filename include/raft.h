@@ -647,6 +647,11 @@ struct raft; /* Forward declaration. */
  * has fired.
  */
 typedef void (*raft_close_cb)(struct raft *raft);
+/**
+ * state change callback.
+ * notify the user the state has changed
+ */
+typedef void (*raft_state_change_cb)(struct raft *raft, int state);
 
 struct raft_change;   /* Forward declaration */
 struct raft_transfer; /* Forward declaration */
@@ -815,6 +820,10 @@ struct raft
 	raft_close_cb close_cb;
 
 	/*
+	 * Callback to invoke once the state has changed.
+	 */
+	raft_state_change_cb state_change_cb;
+	/*
      * Human-readable message providing diagnostic information about the last
      * error occurred.
      */
@@ -848,6 +857,13 @@ RAFT_API void raft_close(struct raft *r, raft_close_cb cb);
  */
 RAFT_API int raft_bootstrap(struct raft *r,
 			    const struct raft_configuration *conf);
+/**
+ * @brief raft_configuration_get get the current configuration
+ * @param
+ * @param conf a copy of current configuration
+ * @return
+ */
+RAFT_API int raft_configuration_get(const struct raft *r, struct raft_configuration *conf);
 
 /**
  * Force a new configuration in order to recover from a loss of quorum where the
@@ -945,6 +961,11 @@ RAFT_API const char *raft_errmsg(struct raft *r);
  * Return the code of the current raft state.
  */
 RAFT_API int raft_state(struct raft *r);
+
+/**
+ * Return the code of the current raft_io state.
+ */
+RAFT_API int raft_io_state(struct raft_io *io);
 
 /**
  * Return the ID and address of the current known leader, if any.

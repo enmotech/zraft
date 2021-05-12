@@ -828,6 +828,9 @@ struct raft
      * being promoted to voter. */
 	unsigned max_catch_up_rounds;
 	unsigned max_catch_up_round_duration;
+
+	/* True when a configuration change has been applied and the server was removed */
+	bool removed;
 };
 
 RAFT_API int raft_init(struct raft *r,

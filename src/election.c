@@ -180,6 +180,8 @@ int electionSetMeta(struct raft *r)
 
 	request->req.data = request;
 
+
+	r->io->state = RAFT_IO_BUSY;
 	rv = r->io->set_meta(r->io,
 			     &request->req,
 			     request->term,
@@ -187,8 +189,6 @@ int electionSetMeta(struct raft *r)
 			     electionSetMetaCb);
 	if (rv != 0)
 		goto err1;
-
-	r->io->state = RAFT_IO_BUSY;
 
 	return 0;
 

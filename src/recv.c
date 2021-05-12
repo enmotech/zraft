@@ -105,6 +105,7 @@ int recvSetMeta(struct raft *r,
 		request->message.server_address = address;
 	}
 
+	r->io->state = RAFT_IO_BUSY;
 	rv = r->io->set_meta(r->io,
 			     &request->req,
 			     term,
@@ -113,7 +114,7 @@ int recvSetMeta(struct raft *r,
 	if (rv != 0)
 		goto err;
 
-	r->io->state = RAFT_IO_BUSY;
+
 
 	return 0;
 

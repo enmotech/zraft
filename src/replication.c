@@ -1397,6 +1397,7 @@ static void applyBarrier(struct raft *r, const raft_index index)
 static void applyChange(struct raft *r, const raft_index index)
 {
     struct raft_change *req;
+    const struct raft_server *server;
 
     assert(index > 0);
 
@@ -1411,7 +1412,6 @@ static void applyChange(struct raft *r, const raft_index index)
     r->configuration_index = index;
 
     if (r->state == RAFT_LEADER) {
-        const struct raft_server *server;
         req = r->leader_state.change;
         r->leader_state.change = NULL;
 
@@ -1426,11 +1426,19 @@ static void applyChange(struct raft *r, const raft_index index)
         server = configurationGet(&r->configuration, r->id);
         if (server == NULL) {
             convertToFollower(r);
+	    r->removed = true;
         }
 
         if (req != NULL && req->cb != NULL) {
             req->cb(req, 0);
         }
+    } else {
+	    /* if we are removed from the configuration,
+	     * set flag so that the owner could relase the instance
+	     */
+	    server = configurationGet(&r->configuration, r->id);
+	    if (server == NULL)
+		    r->removed = true;
     }
 }
 

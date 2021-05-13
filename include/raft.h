@@ -866,6 +866,13 @@ RAFT_API int raft_bootstrap(struct raft *r,
 RAFT_API int raft_configuration_get(const struct raft *r, struct raft_configuration *conf);
 
 /**
+ * @brief raft_set_state_change_cb
+ * @param r
+ * @param cb
+ */
+void raft_set_state_change_cb(struct raft *r, raft_state_change_cb cb);
+
+/**
  * Force a new configuration in order to recover from a loss of quorum where the
  * current configuration cannot be restored, such as when a majority of servers
  * die at the same time.

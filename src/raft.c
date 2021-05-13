@@ -83,6 +83,11 @@ err:
     return rv;
 }
 
+void raft_set_state_change_cb(struct raft *r, raft_state_change_cb cb)
+{
+	r->state_change_cb = cb;
+}
+
 int raft_io_state(struct raft_io *io)
 {
 	return io->state;

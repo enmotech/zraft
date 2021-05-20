@@ -118,7 +118,7 @@ int recvAppendEntries(struct raft *r,
         return 0;
     }
 
-    rv = replicationAppend(r, args, &result->rejected, &async);
+	rv = replicationAppend(r, args, &result->rejected, &async);
     if (rv != 0) {
         return rv;
     }

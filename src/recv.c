@@ -14,6 +14,8 @@
 #include "recv_timeout_now.h"
 #include "string.h"
 #include "tracing.h"
+#include "replication.h"
+
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -221,6 +223,16 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 	case RAFT_IO_TIMEOUT_NOW:
 		rv = recvTimeoutNow(r, message->server_id, message->server_address,
 				    &message->timeout_now);
+		break;
+	case RAFT_IO_PGREP_COPY_CHUNKS:
+		r->io->pgrep_recv_copy_chunks(r->io, message->copy_chunks, r->current_term);
+		break;
+	case RAFT_IO_PGREP_COPY_CHUNKS_RESULT:
+		r->io->pgrep_recv_copy_chunks_result(
+			r->io, message->copy_chunks_result.cklist,
+			message->copy_chunks_result.status);
+		/* Try to apply some log entries. */
+		replicationApply(r, NULL);
 		break;
 	};
 

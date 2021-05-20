@@ -71,7 +71,8 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 static int sendAppendEntries(struct raft *r,
                              const unsigned i,
                              const raft_index prev_index,
-                             const raft_term prev_term)
+                             const raft_term prev_term,
+							 struct pgrep_permit_info pi)
 {
     struct raft_server *server = &r->configuration.servers[i];
     struct raft_message message;
@@ -83,12 +84,27 @@ static int sendAppendEntries(struct raft *r,
     args->term = r->current_term;
     args->prev_log_index = prev_index;
     args->prev_log_term = prev_term;
+	args->pi = pi;
 
-    /* TODO: implement a limit to the total size of the entries being sent */
-    rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries);
-    if (rv != 0) {
-        goto err;
-    }
+
+	/* Pgrep:
+     *
+	 *  If in pgrep progress, obtain a section of log entries and send to the catch-up
+	 *  followers.
+     */
+	if (args->pi.permit) {
+		/* Pgerp is replicating, just get a section of entries. */
+		rv = logAcquireSection(&r->log, next_index, r->last_applied, &args->entries, &args->n_entries);
+		if (rv != 0) {
+			goto err;
+		}
+	} else {
+		/* TODO: implement a limit to the total size of the entries being sent */
+		rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries);
+		if (rv != 0) {
+			goto err;
+		}
+	}
 
     /* From Section 3.5:
      *
@@ -287,13 +303,100 @@ err:
     return rv;
 }
 
-int replicationProgress(struct raft *r, unsigned i)
+
+/* Pgrep:
+ *
+ *   Tick pgrep, and deal with various conidtion, send section log entries
+ *   or just send heart beat.
+ */
+int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi) 
+{
+	struct raft_server *server = &r->configuration.servers[i];
+	bool sendSectionLogs = false;
+	uint16_t rep_state = PGREP_RND_ING;
+
+	pi.replicating = rep_state;
+
+	if (!pi.permit) {
+		/* To ask pgerp permission. */
+		r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
+		if (!pi.permit) {
+			goto __heart_beat;
+		}
+	}
+
+	/* Check if peer server is the destination. */
+	if (i != r->pgrep_id) {
+		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+		return -1;
+	}
+
+
+	/* Send tick message, and handle all status. */
+	int status = r->io->pgrep_tick(r->io, r->id, server->id, r->current_term);
+
+	switch (status) {
+	case PGREP_TICK_SUC:
+		/* Update pgrep prev_applied_index to cur_applied_index */
+		progressUpdateAppliedIndex(r, i, r->last_applied);
+		rep_state = PGREP_RND_BGN;
+		break;
+	case PGREP_TICK_RUN:
+		sendSectionLogs = pi.permit;
+		if (sendSectionLogs) {
+			/* There are some entries need to sending. */
+			raft_index prev_applied_index = progressGetAppliedIndex(r, i);
+			sendSectionLogs = sendSectionLogs && r->last_applied > prev_applied_index;
+		}
+		break;
+	case PGREP_TICK_FIN:
+	case PGREP_TICK_ABD:
+	case PGREP_TICK_DLT:
+		/* Notify others who intersting with this event. */
+		progressSetPgreplicating(r, i, false);
+		progressUpdateAppliedIndex(r, i, 0);
+		rep_state = status == PGREP_TICK_FIN ? PGREP_RND_DON : PGREP_RND_ABD;
+		break;
+	case PGREP_TICK_FAL:
+		/* May exceed the maximum limit, just send heartbeat. */
+		break;
+	default:
+		assert(0);
+	}
+
+	pi.replicating = rep_state;
+
+	if (sendSectionLogs) {
+		/* Send (prev, cur] log entries. */
+		struct raft_progress *p = &r->leader_state.progress[i];
+		raft_index prev_index = p->prev_applied_index;
+		raft_term prev_term = logTermOf(&r->log, prev_index);
+
+		return sendAppendEntries(r, i, prev_index, prev_term, pi);
+	}
+
+__heart_beat:
+	if (pi.permit && pi.replicating != PGREP_RND_BGN) {
+		/* If permit granted, and there has no log entries, release the permit. */
+		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+		pi.permit = false;
+	}
+
+	/* Just send empty heartbeat.*/
+	raft_index prev_index = logLastIndex(&r->log);
+	raft_term prev_term = logLastTerm(&r->log);
+
+	return sendAppendEntries(r, i, prev_index, prev_term, pi);
+}
+
+int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
 {
     struct raft_server *server = &r->configuration.servers[i];
     raft_index snapshot_index = logSnapshotIndex(&r->log);
     raft_index next_index = progressNextIndex(r, i);
     raft_index prev_index;
     raft_term prev_term;
+	bool copy_chunks;
 
     assert(r->state == RAFT_LEADER);
     assert(server->id != r->id);
@@ -302,6 +405,19 @@ int replicationProgress(struct raft *r, unsigned i)
     if (!progressShouldReplicate(r, i)) {
         return 0;
     }
+
+	if (pi.permit) {
+		/* Pgrep:
+		 *
+		 *   Called from replicationApply which checked server i is in pg replicating.
+		 */
+		goto pgrep;
+	}
+
+	copy_chunks = progressPgreplicating(r, i);
+	if (copy_chunks) {
+		goto pgrep;
+	}
 
     /* From Section 3.5:
      *
@@ -323,7 +439,8 @@ int replicationProgress(struct raft *r, unsigned i)
         if (snapshot_index > 0) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
-            goto send_snapshot;
+			copy_chunks = true;
+            //goto send_snapshot;
         }
         prev_index = 0;
         prev_term = 0;
@@ -336,14 +453,29 @@ int replicationProgress(struct raft *r, unsigned i)
         if (prev_term == 0) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
-            goto send_snapshot;
+			copy_chunks = true;
+            //goto send_snapshot;
         }
     }
 
-    return sendAppendEntries(r, i, prev_index, prev_term);
+	/* Pgrep:
+     *
+	 *   Trigger pg replicating progress.
+     */
+	if (copy_chunks && progressSetPgreplicating(r, i, true) == 0) {
+		goto pgrep;
+	}
 
-send_snapshot:
-    return sendSnapshot(r, i);
+	pi.permit = false;
+	pi.replicating = PGREP_RND_NML;
+    return sendAppendEntries(r, i, prev_index, prev_term, pi);
+
+pgrep:
+	return sendPgrepTickMessage(r, i, pi);
+
+//send_snapshot:
+//    return sendSnapshot(r, i);
+	(void)sendSnapshot;
 }
 
 /* Possibly trigger I/O requests for newly appended log entries or heartbeats.
@@ -369,7 +501,11 @@ static int triggerAll(struct raft *r)
             server->id != r->leader_state.promotee_id) {
             continue;
         }
-        rv = replicationProgress(r, i);
+
+		struct pgrep_permit_info pi;
+		pi.permit = false;
+		pi.replicating = PGREP_RND_NML;
+        rv = replicationProgress(r, i, pi);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
             tracef("failed to send append entries to server %u: %s (%d)",
@@ -508,7 +644,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     /* Check if we can commit some new entries. */
     replicationQuorum(r, r->last_stored);
 
-    rv = replicationApply(r);
+    rv = replicationApply(r, NULL);
     if (rv != 0) {
         /* TODO: just log the error? */
     }
@@ -678,7 +814,10 @@ int replicationUpdate(struct raft *r,
         if (retry) {
             /* Retry, ignoring errors. */
             tracef("log mismatch -> send old entries to %u", server->id);
-            replicationProgress(r, i);
+			struct pgrep_permit_info pi;
+			pi.permit = false;
+			pi.replicating = PGREP_RND_NML;
+            replicationProgress(r, i, pi);
         }
         return 0;
     }
@@ -733,7 +872,7 @@ int replicationUpdate(struct raft *r,
     /* Check if we can commit some new entries. */
     replicationQuorum(r, r->last_stored);
 
-    rv = replicationApply(r);
+    rv = replicationApply(r, NULL);
     if (rv != 0) {
         /* TODO: just log the error? */
     }
@@ -761,7 +900,10 @@ int replicationUpdate(struct raft *r,
         }
         /* If this follower is in pipeline mode, send it more entries. */
         if (progressState(r, i) == PROGRESS__PIPELINE) {
-            replicationProgress(r, i);
+			struct pgrep_permit_info pi;
+			pi.permit = false;
+			pi.replicating = PGREP_RND_NML;
+            replicationProgress(r, i, pi);
         }
     }
 
@@ -873,7 +1015,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
      */
     if (args->leader_commit > r->commit_index) {
         r->commit_index = min(args->leader_commit, r->last_stored);
-        rv = replicationApply(r);
+        rv = replicationApply(r, NULL);
         if (rv != 0) {
             goto out;
         }
@@ -1067,7 +1209,7 @@ int replicationAppend(struct raft *r,
     if (n == 0) {
         if (args->leader_commit > r->commit_index) {
             r->commit_index = min(args->leader_commit, logLastIndex(&r->log));
-            rv = replicationApply(r);
+            rv = replicationApply(r, NULL);
             if (rv != 0) {
                 return rv;
             }
@@ -1302,40 +1444,105 @@ err:
     return rv;
 }
 
+
+void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
+{
+	/* Pgrep:
+	 *
+	 * After fsm applied all entries, call back to here, we still holding the pgrep permit.
+	 * If there are a gap between prev_applied_index and last_applied, to starting a relicatingProgress.
+	 */
+
+	if (r->state != RAFT_LEADER || r->pgrep_id == (unsigned)-1 || 
+		progressGetAppliedIndex(r, r->pgrep_id) == r->last_applied) {
+		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+		pi.permit = false;
+		return;
+	}
+
+	replicationProgress(r, r->pgrep_id, pi);
+}
+
+void replicationApplyFollowerCb(
+	struct raft *r,
+	void *extra)
+{
+	if (!extra)
+		return;
+
+	struct appendFollower *request = extra;
+    struct raft_append_entries *args = &request->args;
+    struct raft_append_entries_result result;
+
+	result.last_log_index = r->last_applied;
+	result.rejected = 0;
+	result.pi = args->pi;
+	result.term = r->current_term;
+	
+	sendAppendEntriesResult(r, &result);
+
+	raft_free(extra);
+}
+
 #if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
 /* Context for a write log entries request that was submitted by a leader. */
 struct applyLog
 {
     struct raft *raft;          /* Instance that has submitted the request */
     raft_index index;           /* Index of the first entry in the request. */
+	raft_index expect_index;	/* Index of the expect index to notify. */
+	void *extra;				/* Extra params passed if reuqired. */
+	struct pgrep_permit_info pi;/* Pgrep permit info. */
     struct raft_fsm_apply req;
 };
-static void applyCommandCb(struct raft_fsm_apply *req,
-                                void *result,
-                                int status)
+
+static void applySectionCallbackCheck(
+	struct raft *r,
+	raft_index expect_index,
+	struct pgrep_permit_info pi,
+	void *extra
+	)
 {
-    struct applyLog *request = req->data;
-    struct raft_apply *req1;
-    struct raft *r = request->raft;
-    raft_index index = request->index;
+	if (r->last_applied == expect_index) {
+		if (pi.permit) {
+			replicationApplyLeaderCb(r, pi);
+		} else {
+			replicationApplyFollowerCb(r, extra);
+		}
+	}
+}
 
-    assert((r->last_applied + 1) == index);
+static void applyCommandCb(struct raft_fsm_apply *req,
+						   void *result,
+						   int status)
+{
+	struct applyLog *request = req->data;
+	struct raft_apply *req1;
+	struct raft *r = request->raft;
+	raft_index index = request->index;
 
-    req1 = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
-    if (req1 != NULL && req1->cb != NULL) {
-        req1->cb(req1, status, result);
-    }
+	assert((r->last_applied + 1) == index);
 
-    r->last_applied = index;
+	req1 = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
+	if (req1 != NULL && req1->cb != NULL) {
+		req1->cb(req1, status, result);
+	}
 
-    raft_free(request);
+	r->last_applied = index;
+
+	applySectionCallbackCheck(r, request->expect_index, request->pi, request->extra);
+
+	raft_free(request);
 }
 #endif
 
 /* Apply a RAFT_COMMAND entry that has been committed. */
 static int applyCommand(struct raft *r,
                         const raft_index index,
-                        const struct raft_buffer *buf)
+                        const struct raft_buffer *buf,
+						struct pgrep_permit_info pi,
+						raft_index expect_index,
+						void *extra)
 {
     int rv;
     #if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
@@ -1350,6 +1557,9 @@ static int applyCommand(struct raft *r,
 
     request->raft = r;
     request->index = index;
+	request->expect_index = expect_index;
+	request->pi = pi;
+	request->extra = extra;
     request->req.data = request;
 
     rv = r->fsm->apply(r->fsm,
@@ -1460,6 +1670,13 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
+    /* pgrep: Can not delete log entries after prev_applied_index  */
+    if (r->pgrep_id != (unsigned)-1 &&
+        r->leader_state.progress[r->pgrep_id].prev_applied_index -
+		r->log.snapshot.last_index < r->snapshot.threshold) {
+		return false;
+	}
+
     return true;
 }
 
@@ -1534,10 +1751,12 @@ abort:
     return rv;
 }
 
-int replicationApply(struct raft *r)
+int replicationApply(struct raft *r, void *extra)
 {
     raft_index index;
     int rv = 0;
+	struct pgrep_permit_info pi = {0};
+
 
     assert(r->state == RAFT_LEADER || r->state == RAFT_FOLLOWER);
     assert(r->last_applied <= r->commit_index);
@@ -1547,6 +1766,8 @@ int replicationApply(struct raft *r)
         return 0;
     }
 
+
+
     for (index = r->last_applying + 1; index <= r->commit_index; index++) {
         const struct raft_entry *entry = logGet(&r->log, index);
 
@@ -1555,7 +1776,7 @@ int replicationApply(struct raft *r)
 
         switch (entry->type) {
             case RAFT_COMMAND:
-                rv = applyCommand(r, index, &entry->buf);
+                rv = applyCommand(r, index, &entry->buf, pi, r->commit_index, extra);
                 break;
             case RAFT_BARRIER:
                 if(r->last_applying < r->last_applied)
@@ -1563,6 +1784,7 @@ int replicationApply(struct raft *r)
                 applyBarrier(r, index);
                 rv = 0;
                 r->last_applied = index;
+				applySectionCallbackCheck(r, r->commit_index, pi, extra);
                 break;
             case RAFT_CHANGE:
                 if(r->last_applying < r->last_applied)
@@ -1570,6 +1792,7 @@ int replicationApply(struct raft *r)
                 applyChange(r, index);
                 rv = 0;
                 r->last_applied = index;
+				applySectionCallbackCheck(r, r->commit_index, pi, extra);
                 break;
             default:
                 rv = 0; /* For coverity. This case can't be taken. */

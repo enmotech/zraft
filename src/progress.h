@@ -101,4 +101,18 @@ bool progressMaybeDecrement(struct raft *r,
 /* Return true if match_index is equal or higher than the snapshot_index. */
 bool progressSnapshotDone(struct raft *r, unsigned i);
 
+
+/* Update pgrep prev_applied index to cur_applied_index. */
+void progressUpdateAppliedIndex(struct raft *r, unsigned i, raft_index last_applied);
+
+/* Get pgrep prev_applied index. */
+raft_index progressGetAppliedIndex(struct raft *r, unsigned i);
+
+/* Check if pgrep is replicating. */
+bool progressPgreplicating(struct raft *r, unsigned i);
+
+
+/* Set pgrep is relicating. */
+int progressSetPgreplicating(struct raft *r, unsigned i, bool value);
+
 #endif /* PROGRESS_H_ */

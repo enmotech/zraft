@@ -193,6 +193,16 @@ struct copy_chunk_posi {
 #define PGREP_RND_DON ((uint16_t)3) /* Pg relicating finish. */
 #define PGREP_RND_ABD ((uint16_t)4) /* Pg relicating finish failed. */
 
+
+#define __init_permit_info(pi) \
+do { \
+	(pi).replicating = 0; \
+	(pi).time = 0; \
+	(pi).permit = false; \
+	(pi).ck_posi.obj_id = -1; \
+	(pi).ck_posi.chunk_id = -1; \
+} while (0);
+
 struct pgrep_permit_info {
 	uint32_t replicating;           /* The replicating round count. */
 	uint64_t time;					/* The time of permit granted. */

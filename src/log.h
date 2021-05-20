@@ -71,6 +71,12 @@ int logAcquire(struct raft_log *l,
                raft_index index,
                struct raft_entry *entries[],
                unsigned *n);
+int logAcquireSection(
+	struct raft_log *l,
+	raft_index index,
+	raft_index to_index,
+	struct raft_entry *entries[],
+	unsigned *n);
 
 /* Release a previously acquired array of entries. */
 void logRelease(struct raft_log *l,
@@ -88,6 +94,9 @@ void logTruncate(struct raft_log *l, const raft_index index);
  * released. This is called as part of error handling, when reverting the effect
  * of previous logAppend calls. */
 void logDiscard(struct raft_log *l, const raft_index index);
+
+/* Remove all in-memory log entries. */
+void logRemoveAll(struct raft_log *l);
 
 /* To be called when taking a new snapshot. The log must contain an entry at
  * last_index, which is the index of the last entry included in the

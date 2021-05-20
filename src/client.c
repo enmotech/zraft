@@ -302,7 +302,10 @@ int raft_assign(struct raft *r,
     r->leader_state.round_start = r->io->time(r->io);
 
     /* Immediately initiate an AppendEntries request. */
-    rv = replicationProgress(r, server_index);
+    struct pgrep_permit_info pi;
+	pi.permit = false;
+    pi.replicating = PGREP_RND_NML;
+    rv = replicationProgress(r, server_index, pi);
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* This error is not fatal. */
         tracef("failed to send append entries to server %u: %s (%d)",

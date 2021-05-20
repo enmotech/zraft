@@ -712,6 +712,71 @@ int logAcquire(struct raft_log *l,
     return 0;
 }
 
+
+/* Pgrep:
+ *
+ *  TODO: Bad smell, this fucntion is most dupicated from  logAcquire. 
+ */
+int logAcquireSection(
+	struct raft_log *l,
+	const raft_index index,
+	const raft_index to_index,
+	struct raft_entry *entries[],
+	unsigned *n)
+{
+	unsigned realn = (unsigned)(to_index - index);
+    size_t i;
+    size_t j;
+
+	assert(to_index > index);
+    assert(l != NULL);
+    assert(index > 0);
+    assert(entries != NULL);
+    assert(n != NULL);
+
+    /* Get the array index of the first entry to acquire. */
+    i = locateEntry(l, index);
+
+    if (i == l->size) {
+        *n = 0;
+        *entries = NULL;
+        return 0;
+    }
+
+    if (i < l->back) {
+        /* The last entry does not wrap with respect to i, so the number of
+         * entries is simply the length of the range [i...l->back). */
+        *n = (unsigned)(l->back - i);
+    } else {
+        /* The last entry wraps with respect to i, so the number of entries is
+         * the sum of the lengths of the ranges [i...l->size) and [0...l->back),
+         * which is l->size - i + l->back.*/
+        *n = (unsigned)(l->size - i + l->back);
+    }
+
+    assert(*n > 0);
+
+    *entries = raft_calloc(realn, sizeof **entries);
+    if (*entries == NULL) {
+        return RAFT_NOMEM;
+    }
+
+	unsigned cnt = 0;
+
+    for (j = 0; j < *n; j++) {
+        size_t k = (i + j) % l->size;
+        struct raft_entry *entry = &(*entries)[j];
+        *entry = l->entries[k];
+        refsIncr(l, entry->term, index + j);
+		if (++cnt == realn)
+			break;
+    }
+
+	*n = realn;
+
+    return 0;
+}
+
 /* Return true if the given batch is referenced by any entry currently in the
  * log. */
 static bool isBatchReferenced(struct raft_log *l, const void *batch)
@@ -884,6 +949,11 @@ static void removePrefix(struct raft_log *l, const raft_index index)
     }
 
     clearIfEmpty(l);
+}
+
+void logRemoveAll(struct raft_log *l)
+{
+	removePrefix(l, logLastIndex(l));
 }
 
 void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)

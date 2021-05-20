@@ -29,6 +29,8 @@ static void initProgress(struct raft_progress *p, raft_index last_index)
     p->last_send = 0;
     p->recent_recv = false;
     p->state = PROGRESS__PROBE;
+	p->replicating = false;
+	p->prev_applied_index = 0;
 }
 
 int progressBuildArray(struct raft *r)
@@ -283,6 +285,43 @@ bool progressSnapshotDone(struct raft *r, const unsigned i)
     struct raft_progress *p = &r->leader_state.progress[i];
     assert(p->state == PROGRESS__SNAPSHOT);
     return p->match_index >= p->snapshot_index;
+}
+
+void progressUpdateAppliedIndex(struct raft *r, unsigned i, raft_index last_applied)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	p->prev_applied_index = last_applied;
+}
+
+raft_index progressGetAppliedIndex(struct raft *r, unsigned i)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	return p->prev_applied_index;
+}
+
+bool progressPgreplicating(struct raft *r, unsigned i)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	return p->replicating;
+}
+
+int progressSetPgreplicating(struct raft *r, unsigned i, bool value)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	int res = 0;
+
+	if (value) {
+		res = __sync_bool_compare_and_swap(&r->pgrep_id, (unsigned)-1, i);
+	} else {
+		res = __sync_bool_compare_and_swap(&r->pgrep_id, i, (unsigned)-1);
+	}
+
+	if (res != 0) {
+		p->replicating = value;
+		return 0;
+	}
+
+	return -1;
 }
 
 #undef tracef

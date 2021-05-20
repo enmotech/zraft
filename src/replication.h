@@ -39,7 +39,7 @@ int replicationTrigger(struct raft *r, raft_index index);
      index onward (possibly zero).
  *
  * This function must be called only by leaders. */
-int replicationProgress(struct raft *r, unsigned i);
+int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi);
 
 /* Update the replication state (match and next indexes) for the given server
  * using the given AppendEntries RPC result.
@@ -76,10 +76,13 @@ int replicationInstallSnapshot(struct raft *r,
                                raft_index *rejected,
                                bool *async);
 
+/* Called when replicationApply applied to fsm. */
+void (*replicationApplyCb)(struct raft *r);
+
 /* Apply any committed entry that was not applied yet.
  *
  * It must be called by leaders or followers. */
-int replicationApply(struct raft *r);
+int replicationApply(struct raft *r, void *extra);
 
 /* Check if a quorum has been reached for the given log index, and update the
  * commit index accordingly if so.

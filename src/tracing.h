@@ -4,6 +4,9 @@
 #define TRACING_H_
 
 #include "../include/raft.h"
+#include "../../../infrastructure/zlog/logger.h"
+
+extern struct zlogger *gzlog;
 
 /* Default no-op tracer. */
 extern struct raft_tracer NoopTracer;

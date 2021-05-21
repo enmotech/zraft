@@ -39,6 +39,8 @@ int recvAppendEntries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
+	ZSINFO(gzlog, "[raft][%d]recvAppendEntries: replicating[%d] permit[%d]", r->state, args->pi.replicating, args->pi.permit);
+
     result->rejected = args->prev_log_index;
     result->last_log_index = logLastIndex(&r->log);
 
@@ -132,6 +134,17 @@ int recvAppendEntries(struct raft *r,
 
 reply:
     result->term = r->current_term;
+	result->pi = args->pi;
+
+	/* Pgrep:
+     *
+	 *   If it's pgrep progress, should not reject the request. And the log must
+	 *   be matched.
+     */
+	if (args->pi.replicating) {
+		result->rejected = 0;
+		result->last_log_index = args->prev_log_index;
+	}
 
     /* Free the entries batch, if any. */
     if (args->n_entries > 0 && args->entries[0].batch != NULL) {

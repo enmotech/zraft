@@ -18,6 +18,7 @@
 #include "snapshot.h"
 #include "tracing.h"
 
+
 /* Set to 1 to enable tracing. */
 #if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -963,6 +964,8 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
     tracef("I/O completed on follower: status %d", status);
 
+	ZSINFO(gzlog, "[raft][%d]appendFollowerCb: replicating[%d] permit[%d]", r->state, args->pi.replicating, args->pi.permit);
+
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
@@ -1015,8 +1018,12 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
      */
     if (args->leader_commit > r->commit_index) {
         r->commit_index = min(args->leader_commit, r->last_stored);
-        rv = replicationApply(r, NULL);
-        if (rv != 0) {
+		rv = replicationApply(r, args->pi.replicating ? request : NULL);
+		if (args->pi.replicating && rv == 0) {
+			request = NULL;
+			goto out;
+		}
+		if (rv != 0) {
             goto out;
         }
     }
@@ -1030,13 +1037,25 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
 respond:
     result.last_log_index = r->last_stored;
+	result.pi = args->pi;
+
+	/* Pgrep:
+     *
+	 *  If in pgrep progress, should not reject, and reply old applied_index
+	 *  when failure.
+     */
+	if (args->pi.replicating) {
+		result.last_log_index = args->prev_log_index;
+	}
+
     sendAppendEntriesResult(r, &result);
 
 out:
     logRelease(&r->log, request->index, request->args.entries,
                request->args.n_entries);
 
-    raft_free(request);
+	if (request)
+		raft_free(request);
 }
 
 /* Check the log matching property against an incoming AppendEntries request.
@@ -1158,6 +1177,7 @@ static int deleteConflictingEntries(struct raft *r,
     return 0;
 }
 
+
 int replicationAppend(struct raft *r,
                       const struct raft_append_entries *args,
                       raft_index *rejected,
@@ -1180,18 +1200,30 @@ int replicationAppend(struct raft *r,
     *rejected = args->prev_log_index;
     *async = false;
 
-    /* Check the log matching property. */
-    match = checkLogMatchingProperty(r, args);
-    if (match != 0) {
-        assert(match == 1 || match == -1);
-        return match == 1 ? 0 : RAFT_SHUTDOWN;
-    }
+	ZSINFO(gzlog, "[raft][%d]replicationAppend: replicating[%d] permit[%d]", r->state, args->pi.replicating, args->pi.permit);
 
-    /* Delete conflicting entries. */
-    rv = deleteConflictingEntries(r, args, &i);
-    if (rv != 0) {
-        return rv;
-    }
+	/* Pgrep:
+     *
+	 *  Skip original cheking log match && delete confilicts when pgrep progress.
+	 *  But checking log match use our new rules. 
+     */
+
+	if (!args->pi.replicating) {
+		/* Check the log matching property. */
+		match = checkLogMatchingProperty(r, args);
+		if (match != 0) {
+			assert(match == 1 || match == -1);
+			return match == 1 ? 0 : RAFT_SHUTDOWN;
+		}
+
+		/* Delete conflicting entries. */
+		rv = deleteConflictingEntries(r, args, &i);
+		if (rv != 0) {
+			return rv;
+		}
+	} else {
+		i = 0;
+	}
 
     *rejected = 0;
 
@@ -1206,7 +1238,13 @@ int replicationAppend(struct raft *r,
      *   commitIndex, set commitIndex = min(leaderCommit, index of last new
      *   entry).
      */
-    if (n == 0) {
+
+	/* Pgrep:
+     *
+	 *  When pgrep progress, every append rpc which has log entries must applied to
+	 *  fsm simultaneously.
+     */
+    if (!args->pi.replicating && n == 0) {
         if (args->leader_commit > r->commit_index) {
             r->commit_index = min(args->leader_commit, logLastIndex(&r->log));
             rv = replicationApply(r, NULL);
@@ -1218,6 +1256,9 @@ int replicationAppend(struct raft *r,
         return 0;
     }
 
+	if (n == 0)
+		return 0;
+
     *async = true;
 
     request = raft_malloc(sizeof *request);
@@ -1225,6 +1266,21 @@ int replicationAppend(struct raft *r,
         rv = RAFT_NOMEM;
         goto err;
     }
+
+
+	/* Pgrep:
+     *
+	 *  Do some clear work.
+     */
+	if (args->pi.replicating) {
+		assert(args->pi.permit);
+		assert(n);
+		logRemoveAll(&r->log);
+		r->last_stored = args->prev_log_index;
+		r->log.offset = args->prev_log_index;
+		r->log.snapshot.last_index = 0;
+		r->log.snapshot.last_term = 0;
+	}
 
     request->raft = r;
     request->args = *args;
@@ -1457,8 +1513,12 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 		progressGetAppliedIndex(r, r->pgrep_id) == r->last_applied) {
 		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
 		pi.permit = false;
+		ZSINFO(gzlog, "[raft][%d]replicationApplyLeaderCb: release pgrep permit.", r->state);
+		replicationApply(r, NULL);
 		return;
 	}
+
+	ZSINFO(gzlog, "[raft][%d]replicationApplyLeaderCb: start a replicationProgress pgrep_id[%d].", r->state, r->pgrep_id);
 
 	replicationProgress(r, r->pgrep_id, pi);
 }
@@ -1479,6 +1539,8 @@ void replicationApplyFollowerCb(
 	result.pi = args->pi;
 	result.term = r->current_term;
 	
+	ZSINFO(gzlog, "[raft][%d]replicationApplyFollowerCb: sendAppendEntriesResult.", r->state);
+
 	sendAppendEntriesResult(r, &result);
 
 	raft_free(extra);
@@ -1503,6 +1565,9 @@ static void applySectionCallbackCheck(
 	void *extra
 	)
 {
+	ZSINFO(gzlog, "[raft][%d]applySectionCallbackCheck: expect_index[%lld] last_applied[%lld].",
+		   r->state, expect_index, r->last_applied);
+
 	if (r->last_applied == expect_index) {
 		if (pi.permit) {
 			replicationApplyLeaderCb(r, pi);
@@ -1761,12 +1826,30 @@ int replicationApply(struct raft *r, void *extra)
     assert(r->state == RAFT_LEADER || r->state == RAFT_FOLLOWER);
     assert(r->last_applied <= r->commit_index);
 
-    if (r->last_applied == r->commit_index) {
-        /* Nothing to do. */
-        return 0;
-    }
+	/* Pgrep:
+     *
+	 * Ask permit from pgrep. Cant't apply logs if permit not granted.
+	 * If there is a gap between prev_applied_index and last_applied_index.
+	 * Start a replicationProgress.
+     */
+	if (r->state == RAFT_LEADER) {
+		r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
+		if (!pi.permit) {
+			/* Nothing to do. */
+			ZSINFO(gzlog, "[raft][%d]replicationApply: pgrep permit not granted r->commit_index[%lld].",
+				   r->state, r->commit_index);
+			return 0;
+		}
+	}
 
+	if (r->last_applying == r->commit_index || r->last_applied == r->commit_index) {
+		if (pi.permit)
+			r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+		return 0;
+	}
 
+	ZSINFO(gzlog, "[raft][%d]replicationApply: start applying permit[%d] r->commit_index[%lld] last_applied[%lld] last_applying[%lld].",
+		   r->state, pi.permit, r->commit_index, r->last_applied, r->last_applying);
 
     for (index = r->last_applying + 1; index <= r->commit_index; index++) {
         const struct raft_entry *entry = logGet(&r->log, index);

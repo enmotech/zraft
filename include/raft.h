@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #define RAFT_API __attribute__((visibility("default")))
 
@@ -165,6 +166,41 @@ RAFT_API int raft_configuration_decode(const struct raft_buffer *buf,
  */
 RAFT_API unsigned long long raft_digest(const char *text, unsigned long long n);
 
+
+/**
+ * Hold the return info of Pgrep ticking.
+ */
+#define PGREP_TICK_SUC 0
+#define PGREP_TICK_RUN 1
+#define PGREP_TICK_FIN 2
+#define PGREP_TICK_FAL -1
+#define PGREP_TICK_ABD -2
+#define PGREP_TICK_DLT -3
+
+struct copy_chunk_posi {
+	uint64_t obj_id;
+	uint32_t chunk_id;
+};
+
+/* Ask permit for send append log entries. */
+#define RAFT_APD 1
+/* Ask permit for apply log entries. */
+#define RAFT_APL 2
+
+#define PGREP_RND_NML ((uint16_t)0) /* Not pg relicating, in normal status. */
+#define PGREP_RND_ING ((uint16_t)1) /* Pg relicating. */
+#define PGREP_RND_BGN ((uint16_t)2) /* Pg relicating begin. */
+#define PGREP_RND_DON ((uint16_t)3) /* Pg relicating finish. */
+#define PGREP_RND_ABD ((uint16_t)4) /* Pg relicating finish failed. */
+
+struct pgrep_permit_info {
+	uint32_t replicating;           /* The replicating round count. */
+	uint64_t time;					/* The time of permit granted. */
+	bool permit;                    /* Permit status. */
+	struct copy_chunk_posi ck_posi; /* The position pgrep copied. */
+};
+
+
 /**
  * Log entry types.
  */
@@ -281,24 +317,24 @@ struct raft_request_vote_result
  * The AppendEntries RPC is invoked by the leader to replicate log entries. It's
  * also used as heartbeat (figure 3.1).
  */
-struct raft_append_entries
-{
-	raft_term term;             /* Leader's term. */
-	raft_index prev_log_index;  /* Index of log entry preceeding new ones. */
-	raft_term prev_log_term;    /* Term of entry at prev_log_index. */
-	raft_index leader_commit;   /* Leader's commit index. */
-	struct raft_entry *entries; /* Log entries to append. */
-	unsigned n_entries;         /* Size of the log entries array. */
+struct raft_append_entries {
+	raft_term term;                 /* Leader's term. */
+	raft_index prev_log_index;      /* Index of log entry preceeding new ones. */
+	raft_term prev_log_term;        /* Term of entry at prev_log_index. */
+	raft_index leader_commit;       /* Leader's commit index. */
+	struct pgrep_permit_info pi;    /* pgrep: The permission granted from pgrep. */
+	struct raft_entry *entries;     /* Log entries to append. */
+	unsigned n_entries;             /* Size of the log entries array. */
 };
 
 /**
  * Hold the result of an AppendEntries RPC (figure 3.1).
  */
-struct raft_append_entries_result
-{
-	raft_term term;            /* Receiver's current_term. */
-	raft_index rejected;       /* If non-zero, the index that was rejected. */
-	raft_index last_log_index; /* Receiver's last log entry index, as hint. */
+struct raft_append_entries_result {
+	raft_term term;                 /* Receiver's current_term. */
+	raft_index rejected;            /* If non-zero, the index that was rejected. */
+	raft_index last_log_index;      /* Receiver's last log entry index, as hint. */
+	struct pgrep_permit_info pi;    /* pgrep: The permission granted from pgrep. */
 };
 
 /**
@@ -328,6 +364,32 @@ struct raft_timeout_now
 };
 
 /**
+ * Hold the arguments of an Pgrep copy chunks RPC
+ */
+
+struct copy_chunk {
+	struct copy_chunk_posi posi;
+	uint32_t off;
+	uint32_t len;
+	void *buf;
+};
+
+struct raft_copy_chunks {
+	raft_term term;
+	raft_id src_server_id;
+	uint64_t send_time;
+	uint32_t num;
+	struct copy_chunk *chunks;
+};
+
+struct raft_copy_chunks_result {
+	raft_term term;
+	int status;
+	struct raft_copy_chunks cklist;
+};
+
+
+/**
  * Type codes for RPC messages.
  */
 enum {
@@ -336,14 +398,15 @@ enum {
 	RAFT_IO_REQUEST_VOTE,
 	RAFT_IO_REQUEST_VOTE_RESULT,
 	RAFT_IO_INSTALL_SNAPSHOT,
-	RAFT_IO_TIMEOUT_NOW
+	RAFT_IO_TIMEOUT_NOW,
+	RAFT_IO_PGREP_COPY_CHUNKS,
+	RAFT_IO_PGREP_COPY_CHUNKS_RESULT
 };
 
 /**
  * A single RPC message that can be sent or received over the network.
  */
-struct raft_message
-{
+struct raft_message {
 	unsigned short type;        /* RPC type code. */
 	raft_id server_id;          /* ID of sending or destination server. */
 	const char *server_address; /* Address of sending or destination server. */
@@ -354,6 +417,8 @@ struct raft_message
 		struct raft_append_entries_result append_entries_result;
 		struct raft_install_snapshot install_snapshot;
 		struct raft_timeout_now timeout_now;
+		struct raft_copy_chunks copy_chunks;
+		struct raft_copy_chunks_result copy_chunks_result;
 	};
 };
 
@@ -398,6 +463,26 @@ struct raft_io_append
 {
 	void *data;           /* User data */
 	raft_io_append_cb cb; /* Request callback */
+};
+
+/**
+ * Asynchronous request to read chunks.
+ */
+struct raft_io_read_chunks;
+typedef void (*raft_io_read_chunks_cb)(struct raft_io_read_chunks *req, int status);
+struct raft_io_read_chunks {
+	void *data;           /* User data */
+	raft_io_read_chunks_cb cb; /* Request callback */
+};
+
+/**
+ * Asynchronous request to write chunks.
+ */
+struct raft_io_copy_chunks;
+typedef void (*raft_io_copy_chunks_cb)(struct raft_io_copy_chunks *req, int status);
+struct raft_io_copy_chunks {
+	void *data;           /* User data */
+	raft_io_copy_chunks_cb cb; /* Request callback */
 };
 
 /**
@@ -524,6 +609,13 @@ struct raft_io
 	int version;
 	void *data;
 	void *impl;
+
+	/* Pgrep:
+     *
+	 *  Pgrep context.
+     */
+	void *prp_ctx;
+
 	char errmsg[RAFT_ERRMSG_BUF_SIZE];
 	int (*init)(struct raft_io *io, raft_id id, const char *address);
 	void (*close)(struct raft_io *io, raft_io_close_cb cb);
@@ -586,6 +678,58 @@ struct raft_io
 	unsigned short state;
 #endif
 
+
+	/* Pgrep:
+     *
+	 *  Pgrep handlers.
+     */
+
+	int (*pgrep_tick)(
+		struct raft_io *io,
+		raft_id src_server_id,
+		raft_id dest_server_id,
+		raft_term term
+		);
+
+	void (*pgrep_cancel)(
+		struct raft_io *io
+		);
+
+	int (*pgrep_ondelete)(
+		struct raft_io *io
+		);
+
+	void (*pgrep_raft_permit)(
+		struct raft_io *io,
+		uint16_t _type,
+		struct pgrep_permit_info *pi);
+
+	void (*pgrep_raft_unpermit)(
+		struct raft_io *io,
+		uint16_t _type,
+		const struct pgrep_permit_info *pi);
+
+	void (*pgrep_recv_copy_chunks)(
+		struct raft_io *io,
+		struct raft_copy_chunks cklist,
+		raft_term current_term);
+
+	void (*pgrep_recv_copy_chunks_result)(
+		struct raft_io *io,
+		struct raft_copy_chunks cklist,
+		int status);
+
+	int (*copy_chunks)(
+		struct raft_io *io,
+		struct raft_io_copy_chunks *req,
+		struct raft_copy_chunks *cklist,
+		raft_io_copy_chunks_cb cb);
+
+	int (*read_chunks)(
+		struct raft_io *io,
+		struct raft_io_read_chunks *req,
+		struct raft_copy_chunks *cklist,
+		raft_io_read_chunks_cb cb);
 };
 
 
@@ -628,14 +772,15 @@ enum { RAFT_UNAVAILABLE, RAFT_FOLLOWER, RAFT_CANDIDATE, RAFT_LEADER };
 /**
  * Used by leaders to keep track of replication progress for each server.
  */
-struct raft_progress
-{
-	unsigned short state;      /* Probe, pipeline or snapshot. */
-	raft_index next_index;     /* Next entry to send. */
-	raft_index match_index;    /* Highest index reported as replicated. */
-	raft_index snapshot_index; /* Last index of most recent snapshot sent. */
-	raft_time last_send;       /* Timestamp of last AppendEntries RPC. */
-	bool recent_recv;          /* A msg was received within election timeout. */
+struct raft_progress {
+	unsigned short state;           /* Probe, pipeline or snapshot. */
+	raft_index next_index;          /* Next entry to send. */
+	raft_index match_index;         /* Highest index reported as replicated. */
+	raft_index snapshot_index;      /* Last index of most recent snapshot sent. */
+	raft_index prev_applied_index;  /* Pgrep: Last applied index peer has applied. */
+	raft_time last_send;            /* Timestamp of last AppendEntries RPC. */
+	bool replicating;               /* pgerp: chunks is copying to peer. */
+	bool recent_recv;               /* A msg was received within election timeout. */
 };
 
 struct raft; /* Forward declaration. */
@@ -667,6 +812,8 @@ struct raft
 	struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
 	raft_id id;                 /* Server ID of this raft instance. */
 	char *address;              /* Server address of this raft instance. */
+
+	volatile unsigned pgrep_id;			/* The server ID that is relicating to. */
 
 	/*
      * Cache of the server's persistent state, updated on stable storage before

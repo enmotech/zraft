@@ -78,6 +78,7 @@ static int sendAppendEntries(struct raft *r,
     struct raft_append_entries *args = &message.append_entries;
     struct sendAppendEntries *req;
     raft_index next_index = prev_index + 1;
+    raft_index optimistic_next_index;
     int rv;
 
     args->term = r->current_term;
@@ -120,6 +121,7 @@ static int sendAppendEntries(struct raft *r,
     req->server_id = server->id;
 
     req->send.data = req;
+    optimistic_next_index = req->index + req->n;
     rv = r->io->send(r->io, &req->send, &message, sendAppendEntriesCb);
     if (rv != 0) {
         goto err_after_req_alloc;
@@ -127,7 +129,7 @@ static int sendAppendEntries(struct raft *r,
 
     if (progressState(r, i) == PROGRESS__PIPELINE) {
         /* Optimistically update progress. */
-        progressOptimisticNextIndex(r, i, req->index + req->n);
+        progressOptimisticNextIndex(r, i, optimistic_next_index);
     }
 
     progressUpdateLastSend(r, i);

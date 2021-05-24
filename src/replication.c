@@ -320,6 +320,9 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 
 	pi.replicating = rep_state;
 
+
+	ZSINFO(gzlog, "[raft][%d]sendPgrepTickMessage: server i[%d] replicating[%d]. ", r->state, i, pi.replicating);
+
 	if (!pi.permit) {
 		/* To ask pgerp permission. */
 		r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
@@ -399,7 +402,7 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
     raft_index next_index = progressNextIndex(r, i);
     raft_index prev_index;
     raft_term prev_term;
-	bool copy_chunks;
+	bool pg_replicating;
 
     assert(r->state == RAFT_LEADER);
     assert(server->id != r->id);
@@ -409,18 +412,37 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
         return 0;
     }
 
+	/* Pgrep:
+	 *
+	 *   1. Called from replicationApply which checked server i is
+	 *   in pg replicating.
+	 *   2. If pg is replicating status, goto pgrep and send pgrep
+	 *   tick message.
+	 *   3. If server role is standby and update replicating status
+	 *   successful, goto pgrep and send pgrep tick message.
+	 */
 	if (pi.permit) {
-		/* Pgrep:
-		 *
-		 *   Called from replicationApply which checked server i is in pg replicating.
-		 */
+		assert(progressPgreplicating(r, i));
 		goto pgrep;
 	}
 
-	copy_chunks = progressPgreplicating(r, i);
-	if (copy_chunks) {
+	pg_replicating = progressPgreplicating(r, i);
+	if (pg_replicating) {
+		assert(server->role == RAFT_STANDBY);
 		goto pgrep;
 	}
+
+	if (server->role == RAFT_STANDBY &&
+		progressSetPgreplicating(r, i, true) == 0) {
+		goto pgrep;
+	}
+
+	/* For pgrep testing, assume server 2 always standby. */
+//	if (i == 2 && progressSetPgreplicating(r, i, true) == 0) {
+//		ZSINFO(gzlog, "[raft][%d]replicationProgress: set server i[%d] pgreplicating ok. ", r->state, i);
+//		goto pgrep;
+//	}
+
 
     /* From Section 3.5:
      *
@@ -442,8 +464,7 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
         if (snapshot_index > 0) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
-			copy_chunks = true;
-            //goto send_snapshot;
+            goto set_spare;
         }
         prev_index = 0;
         prev_term = 0;
@@ -456,18 +477,9 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
         if (prev_term == 0) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
-			copy_chunks = true;
-            //goto send_snapshot;
+            goto set_spare;
         }
     }
-
-	/* Pgrep:
-     *
-	 *   Trigger pg replicating progress.
-     */
-	if (copy_chunks && progressSetPgreplicating(r, i, true) == 0) {
-		goto pgrep;
-	}
 
 	pi.permit = false;
 	pi.replicating = PGREP_RND_NML;
@@ -475,6 +487,13 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
 
 pgrep:
 	return sendPgrepTickMessage(r, i, pi);
+
+set_spare:
+	/* Pgrep:
+     *
+	 *   TODO: To set the server spare.
+     */
+	return 0;
 
 //send_snapshot:
 //    return sendSnapshot(r, i);
@@ -1043,11 +1062,11 @@ respond:
 
 	/* Pgrep:
      *
-	 *  If in pgrep progress, should not reject, and reply old applied_index
-	 *  when failure.
+	 *  If in pgrep progress, reply in replicationApply is ecpected.
+	 *  So here just return error.
      */
 	if (args->pi.replicating) {
-		result.last_log_index = args->prev_log_index;
+		result.pi.replicating = PGREP_RND_ERR;
 	}
 
     sendAppendEntriesResult(r, &result);
@@ -1183,7 +1202,8 @@ static int deleteConflictingEntries(struct raft *r,
 int replicationAppend(struct raft *r,
                       const struct raft_append_entries *args,
                       raft_index *rejected,
-                      bool *async)
+                      bool *async,
+					  struct pgrep_permit_info *pi)
 {
     struct appendFollower *request;
     int match;
@@ -1271,12 +1291,28 @@ int replicationAppend(struct raft *r,
 
 
 	/* Pgrep:
-     *
-	 *  Do some clear work.
-     */
+	 *
+	 *  Check if pgrep can going on or break.
+	 */
 	if (args->pi.replicating) {
 		assert(args->pi.permit);
 		assert(n);
+
+		if (args->prev_log_index > r->last_stored) {
+			/* The replicating progress can't going on, tell leader to set me spare. */
+			pi->replicating = PGREP_RND_BRK;
+			async = false;
+			return 0;
+		} else {
+			i = r->last_stored - args->prev_log_index;
+			n = args->n_entries - i;
+		}
+
+		if (n <= 0) {
+			async = false;
+			return 0;
+		}
+
 		logRemoveAll(&r->log);
 		r->last_stored = args->prev_log_index;
 		r->log.offset = args->prev_log_index;
@@ -1535,6 +1571,8 @@ void replicationApplyFollowerCb(
 	struct appendFollower *request = extra;
     struct raft_append_entries *args = &request->args;
     struct raft_append_entries_result result;
+
+	r->pi = args->pi;
 
 	result.last_log_index = r->last_applied;
 	result.rejected = 0;

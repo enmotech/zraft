@@ -225,7 +225,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 				    &message->timeout_now);
 		break;
 	case RAFT_IO_PGREP_COPY_CHUNKS:
-		r->io->pgrep_recv_copy_chunks(r->io, message->copy_chunks, r->current_term);
+		r->io->pgrep_recv_copy_chunks(r->io, message->copy_chunks, r->current_term, r->pi);
 		break;
 	case RAFT_IO_PGREP_COPY_CHUNKS_RESULT:
 		r->io->pgrep_recv_copy_chunks_result(

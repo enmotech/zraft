@@ -192,6 +192,8 @@ struct copy_chunk_posi {
 #define PGREP_RND_BGN ((uint16_t)2) /* Pg relicating begin. */
 #define PGREP_RND_DON ((uint16_t)3) /* Pg relicating finish. */
 #define PGREP_RND_ABD ((uint16_t)4) /* Pg relicating finish failed. */
+#define PGREP_RND_BRK ((uint16_t)5) /* Pg relicating break, to start new pgrep. */
+#define PGREP_RND_ERR ((uint16_t)6) /* Pg relicating meet some error. */
 
 
 #define __init_permit_info(pi) \
@@ -722,7 +724,8 @@ struct raft_io
 	void (*pgrep_recv_copy_chunks)(
 		struct raft_io *io,
 		struct raft_copy_chunks cklist,
-		raft_term current_term);
+		raft_term current_term,
+		struct pgrep_permit_info pi);
 
 	void (*pgrep_recv_copy_chunks_result)(
 		struct raft_io *io,
@@ -997,6 +1000,9 @@ struct raft
 
 	/* True when a configuration change has been applied and the server was removed */
 	bool removed;
+
+	/* To save last pgrep info. */
+	struct pgrep_permit_info pi;  
 };
 
 RAFT_API int raft_init(struct raft *r,

@@ -34,6 +34,8 @@ int recvAppendEntries(struct raft *r,
     bool async;
     int rv;
 
+	struct pgrep_permit_info pi = args->pi;
+
     assert(r != NULL);
     assert(id > 0);
     assert(args != NULL);
@@ -120,7 +122,7 @@ int recvAppendEntries(struct raft *r,
         return 0;
     }
 
-	rv = replicationAppend(r, args, &result->rejected, &async);
+	rv = replicationAppend(r, args, &result->rejected, &async, &pi);
     if (rv != 0) {
         return rv;
     }
@@ -134,16 +136,17 @@ int recvAppendEntries(struct raft *r,
 
 reply:
     result->term = r->current_term;
-	result->pi = args->pi;
+	result->pi = pi;
 
 	/* Pgrep:
      *
-	 *   If it's pgrep progress, should not reject the request. And the log must
-	 *   be matched.
+	 *   If it's pgrep progress, should not reject the request.
      */
 	if (args->pi.replicating) {
 		result->rejected = 0;
-		result->last_log_index = args->prev_log_index;
+		if (rv) {
+			result->pi.replicating = PGREP_RND_ERR;
+		}
 	}
 
     /* Free the entries batch, if any. */

@@ -69,7 +69,8 @@ int replicationUpdate(struct raft *r,
 int replicationAppend(struct raft *r,
                       const struct raft_append_entries *args,
                       raft_index *rejected,
-                      bool *async);
+                      bool *async,
+					  struct pgrep_permit_info *pi);
 
 int replicationInstallSnapshot(struct raft *r,
                                const struct raft_install_snapshot *args,

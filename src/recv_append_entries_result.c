@@ -33,14 +33,19 @@ int recvAppendEntriesResult(struct raft *r,
 
 	/* Pgrep:
      *
-	 * Release the pgrep permit. If the returned last_log_index not equals to r->last_applied,
-	 * means Catch-up failed applied the log entries, so here cancel pgrep to cause a pgrep failure.
+	 * Release the pgrep permit. And check the returned status.
      */
 	if (result->pi.permit) {
 		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &result->pi);
 
-		if (result->pi.replicating == PGREP_RND_ING &&
-			result->last_log_index != r->last_applied) {
+		/* Catch-up say replicating can't going on, so set it spare. */
+		if (result->pi.replicating == PGREP_RND_BRK) {
+			/* TODO:  */
+			r->io->pgrep_cancel(r->io);
+		}
+
+		/* Catch-up meet some error. */
+		if (result->pi.replicating == PGREP_RND_ERR) {
 			r->io->pgrep_cancel(r->io);
 		}
 	}
@@ -82,7 +87,7 @@ int recvAppendEntriesResult(struct raft *r,
     }
 
 	/* Update pgrep prev_applied_index to cur_applied_index. */
-	if (result->pi.permit) {
+	if (result->pi.permit && result->pi.replicating == PGREP_RND_ING) {
 		unsigned i = configurationIndexOf(&r->configuration, id);
 		progressUpdateAppliedIndex(r, i, r->last_applied);
 	}

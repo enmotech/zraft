@@ -1,4 +1,6 @@
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "assert.h"
 #include "configuration.h"
@@ -83,9 +85,11 @@ static int sendAppendEntries(struct raft *r,
     raft_index optimistic_next_index;
     int rv;
 
+	args->pkt = rand();
     args->term = r->current_term;
     args->prev_log_index = prev_index;
     args->prev_log_term = prev_term;
+	args->src_server = r->id;
 	args->pi = pi;
 
 
@@ -96,8 +100,17 @@ static int sendAppendEntries(struct raft *r,
      */
 	if (args->pi.permit) {
 		/* Pgerp is replicating, just get a section of entries. */
-		rv = logAcquireSection(&r->log, next_index, r->last_applied, &args->entries, &args->n_entries);
+		if (pi.replicating == PGREP_RND_BGN) {
+			rv = 0;
+			args->n_entries = 0;
+			args->entries = NULL;
+		} else {
+			rv = logAcquireSection(&r->log, next_index, r->last_applied, &args->entries, &args->n_entries);
+			//rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries);
+		}
 		if (rv != 0) {
+			ZSINFO(gzlog, "[raft][%d][%d]sendAppendEntries: logAcquireSection failed rv[%d].",
+				   rkey(r), r->state, rv);
 			goto err;
 		}
 	} else {
@@ -118,8 +131,8 @@ static int sendAppendEntries(struct raft *r,
      */
     args->leader_commit = r->commit_index;
 
-    tracef("send %u entries starting at %llu to server %u (last index %llu)",
-           args->n_entries, args->prev_log_index, server->id,
+    ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]sendAppendEntries: send %u entries starting at %llu to server %llu (last index %llu)",
+		   rkey(r), r->state, args->pkt, args->n_entries, args->prev_log_index, server->id,
            logLastIndex(&r->log));
 
     message.type = RAFT_IO_APPEND_ENTRIES;
@@ -315,25 +328,34 @@ err:
 int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi) 
 {
 	struct raft_server *server = &r->configuration.servers[i];
+	struct raft_progress *p = &r->leader_state.progress[i];
 	bool sendSectionLogs = false;
 	uint16_t rep_state = PGREP_RND_ING;
 
 	pi.replicating = rep_state;
 
 
-	ZSINFO(gzlog, "[raft][%d]sendPgrepTickMessage: server i[%d] replicating[%d]. ", r->state, i, pi.replicating);
+	ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: server i[%d] replicating[%d] permit[%d].",
+		   rkey(r), r->state, i, pi.replicating, pi.permit);
 
 	if (!pi.permit) {
 		/* To ask pgerp permission. */
 		r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
 		if (!pi.permit) {
+			ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: pgrep permit not granted.",
+				   rkey(r), r->state);
 			goto __heart_beat;
 		}
+
+		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: pgrep permit granted.",
+			   rkey(r), r->state);
 	}
 
 	/* Check if peer server is the destination. */
 	if (i != r->pgrep_id) {
 		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: pgrep permit released because destination conflicts.",
+			   rkey(r), r->state);
 		return -1;
 	}
 
@@ -372,9 +394,12 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 
 	pi.replicating = rep_state;
 
-	if (sendSectionLogs) {
+	ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: tick status[%d] replicating[%d] \
+		   prev_applied_index[%lld] last_applied[%lld] sendSectionLogs[%d]. ",
+		   rkey(r), r->state, status, pi.replicating, p->prev_applied_index, r->last_applied, sendSectionLogs);
+
+	if (sendSectionLogs || pi.replicating == PGREP_RND_BGN) {
 		/* Send (prev, cur] log entries. */
-		struct raft_progress *p = &r->leader_state.progress[i];
 		raft_index prev_index = p->prev_applied_index;
 		raft_term prev_term = logTermOf(&r->log, prev_index);
 
@@ -382,15 +407,19 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	}
 
 __heart_beat:
-	if (pi.permit && pi.replicating != PGREP_RND_BGN) {
+	if (pi.permit) {
 		/* If permit granted, and there has no log entries, release the permit. */
 		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
 		pi.permit = false;
+
+		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: pgrep permit released because just heart beat.",
+			   rkey(r), r->state);
 	}
 
 	/* Just send empty heartbeat.*/
 	raft_index prev_index = logLastIndex(&r->log);
 	raft_term prev_term = logLastTerm(&r->log);
+	pi.replicating = PGREP_RND_HRT;
 
 	return sendAppendEntries(r, i, prev_index, prev_term, pi);
 }
@@ -408,7 +437,9 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
     assert(server->id != r->id);
     assert(next_index >= 1);
 
-    if (!progressShouldReplicate(r, i)) {
+	if (!pi.permit && !progressShouldReplicate(r, i)) {
+		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: progressShouldReplicate[1] return.",
+			   rkey(r), r->state);
         return 0;
     }
 
@@ -423,12 +454,16 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
 	 */
 	if (pi.permit) {
 		assert(progressPgreplicating(r, i));
+		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: permit[1] goto pgrep.",
+			   rkey(r), r->state);
 		goto pgrep;
 	}
 
 	pg_replicating = progressPgreplicating(r, i);
 	if (pg_replicating) {
 		assert(server->role == RAFT_STANDBY);
+		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: server i[%d] already in pgreplicating state permit[%d].",
+			   rkey(r), r->state, i, pi.permit);
 		goto pgrep;
 	}
 
@@ -438,10 +473,13 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
 	}
 
 	/* For pgrep testing, assume server 2 always standby. */
-//	if (i == 2 && progressSetPgreplicating(r, i, true) == 0) {
-//		ZSINFO(gzlog, "[raft][%d]replicationProgress: set server i[%d] pgreplicating ok. ", r->state, i);
-//		goto pgrep;
-//	}
+	if (i == 2 &&
+		configurationIndexOf(&r->configuration, r->id) != 2 &&
+		progressSetPgreplicating(r, i, true) == 0) {
+		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server i[%d] to pgreplicating state. ", rkey(r), r->state, i);
+		server->role = RAFT_STANDBY;
+		goto pgrep;
+	}
 
 
     /* From Section 3.5:
@@ -582,6 +620,8 @@ static size_t updateLastStored(struct raft *r,
     }
 
     r->last_stored += i;
+	ZSINFO(gzlog, "[raft][%d][%d]updateLastStored, last_stored[%lld] added[%ld]",
+		   rkey(r), r->state, r->last_stored, i);
     return i;
 }
 
@@ -941,7 +981,8 @@ static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
 
 static void sendAppendEntriesResult(
     struct raft *r,
-    const struct raft_append_entries_result *result)
+    const struct raft_append_entries_result *result,
+	struct raft_append_entries *args)
 {
     struct raft_message message;
     struct raft_io_send *req;
@@ -951,6 +992,13 @@ static void sendAppendEntriesResult(
     message.server_id = r->follower_state.current_leader.id;
     message.server_address = r->follower_state.current_leader.address;
     message.append_entries_result = *result;
+
+	if (args->src_server != (raft_id)-1 &&
+		args->src_server != message.server_id) {
+		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]sendAppendEntriesResult: leader changed, discard this packet.",
+			   rkey(r), r->state, args->pkt);
+		return;
+	}
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
@@ -985,7 +1033,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
     tracef("I/O completed on follower: status %d", status);
 
-	ZSINFO(gzlog, "[raft][%d]appendFollowerCb: replicating[%d] permit[%d]", r->state, args->pi.replicating, args->pi.permit);
+	ZSINFO(gzlog, "[raft][%d][%d]appendFollowerCb: replicating[%d] permit[%d]", rkey(r), r->state, args->pi.replicating, args->pi.permit);
 
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
@@ -1058,6 +1106,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
 respond:
     result.last_log_index = r->last_stored;
+	result.pkt = args->pkt;
 	result.pi = args->pi;
 
 	/* Pgrep:
@@ -1069,14 +1118,14 @@ respond:
 		result.pi.replicating = PGREP_RND_ERR;
 	}
 
-    sendAppendEntriesResult(r, &result);
+	sendAppendEntriesResult(r, &result, args);
 
 out:
-    logRelease(&r->log, request->index, request->args.entries,
-               request->args.n_entries);
-
-	if (request)
+	if (request) {
+		logRelease(&r->log, request->index, request->args.entries,
+				   request->args.n_entries);
 		raft_free(request);
+	}
 }
 
 /* Check the log matching property against an incoming AppendEntries request.
@@ -1180,6 +1229,8 @@ static int deleteConflictingEntries(struct raft *r,
             /* Drop information about previously stored entries that have just
              * been discarded. */
             if (r->last_stored >= entry_index) {
+				ZSINFO(gzlog, "[raft][%d][%d]deleteConflictingEntries, last_stored[%lld] vs new last_stored[%lld]",
+					   rkey(r), r->state, r->last_stored, entry_index - 1);
                 r->last_stored = entry_index - 1;
             }
 
@@ -1222,7 +1273,10 @@ int replicationAppend(struct raft *r,
     *rejected = args->prev_log_index;
     *async = false;
 
-	ZSINFO(gzlog, "[raft][%d]replicationAppend: replicating[%d] permit[%d]", r->state, args->pi.replicating, args->pi.permit);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicationAppend: replicating[%d] permit[%d] \
+		   last_applying[%lld] last_applied[%lld] last_stored[%lld]",
+		   rkey(r), r->state, args->pkt, args->pi.replicating, args->pi.permit,
+		   r->last_applying, r->last_applied, r->last_stored);
 
 	/* Pgrep:
      *
@@ -1301,7 +1355,9 @@ int replicationAppend(struct raft *r,
 		if (args->prev_log_index > r->last_stored) {
 			/* The replicating progress can't going on, tell leader to set me spare. */
 			pi->replicating = PGREP_RND_BRK;
-			async = false;
+			*async = false;
+			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicationAppend: PGREP_RND_BRK prev_log_index[%lld] last_stored[%lld] n[%d].",
+				   rkey(r), r->state, args->pkt, args->prev_log_index, r->last_stored, args->n_entries);
 			return 0;
 		} else {
 			i = r->last_stored - args->prev_log_index;
@@ -1309,15 +1365,26 @@ int replicationAppend(struct raft *r,
 		}
 
 		if (n <= 0) {
-			async = false;
+			*async = false;
+			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicationAppend: n:%ld <= 0  prev_log_index[%lld] last_stored[%lld] n_entries[%d].",
+				   rkey(r), r->state, args->pkt, n, args->prev_log_index, r->last_stored, args->n_entries);
 			return 0;
 		}
 
-		logRemoveAll(&r->log);
+		ZSINFO(gzlog, "[raft][%d][%d]deleteEntries which applied last time, last_stored[%lld]",
+			   rkey(r), r->state, r->last_stored);
+
 		r->last_stored = args->prev_log_index;
 		r->log.offset = args->prev_log_index;
 		r->log.snapshot.last_index = 0;
 		r->log.snapshot.last_term = 0;
+		logRemoveAll(&r->log);
+
+		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicationAppend: logRemoveAll, \
+		   last_applying[%lld] last_applied[%lld] last_stored[%lld] r->log.offset[%lld]",
+			   rkey(r), r->state, args->pkt,
+			   r->last_applying, r->last_applied, r->last_stored, r->log.offset);
+
 	}
 
     request->raft = r;
@@ -1384,6 +1451,8 @@ err_after_request_alloc:
 
 err:
     assert(rv != 0);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicationAppend error[%d].",
+				   rkey(r), r->state, args->pkt, rv);
     return rv;
 }
 
@@ -1447,7 +1516,7 @@ discard:
 respond:
     if (r->state != RAFT_UNAVAILABLE) {
         result.last_log_index = r->last_stored;
-        sendAppendEntriesResult(r, &result);
+        sendAppendEntriesResult(r, &result, NULL);
     }
 
     raft_free(request);
@@ -1551,12 +1620,13 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 		progressGetAppliedIndex(r, r->pgrep_id) == r->last_applied) {
 		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
 		pi.permit = false;
-		ZSINFO(gzlog, "[raft][%d]replicationApplyLeaderCb: release pgrep permit.", r->state);
+		ZSINFO(gzlog, "[raft][%d][%d]replicationApplyLeaderCb: release pgrep permit.", rkey(r), r->state);
 		replicationApply(r, NULL);
 		return;
 	}
 
-	ZSINFO(gzlog, "[raft][%d]replicationApplyLeaderCb: start a replicationProgress pgrep_id[%d].", r->state, r->pgrep_id);
+	ZSINFO(gzlog, "[raft][%d][%d]replicationApplyLeaderCb: start a replicationProgress pgrep_id[%d] permit[%d].",
+		   rkey(r), r->state, r->pgrep_id, pi.permit);
 
 	replicationProgress(r, r->pgrep_id, pi);
 }
@@ -1572,16 +1642,20 @@ void replicationApplyFollowerCb(
     struct raft_append_entries *args = &request->args;
     struct raft_append_entries_result result;
 
+	logRelease(&r->log, request->index, request->args.entries,
+			   request->args.n_entries);
+
 	r->pi = args->pi;
 
 	result.last_log_index = r->last_applied;
 	result.rejected = 0;
 	result.pi = args->pi;
 	result.term = r->current_term;
+	result.pkt = args->pkt;
 	
-	ZSINFO(gzlog, "[raft][%d]replicationApplyFollowerCb: sendAppendEntriesResult.", r->state);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicationApplyFollowerCb: sendAppendEntriesResult.", rkey(r), r->state, args->pkt);
 
-	sendAppendEntriesResult(r, &result);
+	sendAppendEntriesResult(r, &result, args);
 
 	raft_free(extra);
 }
@@ -1605,8 +1679,8 @@ static void applySectionCallbackCheck(
 	void *extra
 	)
 {
-	ZSINFO(gzlog, "[raft][%d]applySectionCallbackCheck: expect_index[%lld] last_applied[%lld].",
-		   r->state, expect_index, r->last_applied);
+	ZSINFO(gzlog, "[raft][%d][%d]applySectionCallbackCheck: expect_index[%lld] last_applied[%lld].",
+		   rkey(r), r->state, expect_index, r->last_applied);
 
 	if (r->last_applied == expect_index) {
 		if (pi.permit) {
@@ -1634,6 +1708,9 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 	}
 
 	r->last_applied = index;
+
+	ZSINFO(gzlog, "[raft][%d][%d]applyCommandCb: permit[%d].",
+		   rkey(r), r->state, request->pi.permit);
 
 	applySectionCallbackCheck(r, request->expect_index, request->pi, request->extra);
 
@@ -1876,20 +1953,26 @@ int replicationApply(struct raft *r, void *extra)
 		r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
 		if (!pi.permit) {
 			/* Nothing to do. */
-			ZSINFO(gzlog, "[raft][%d]replicationApply: pgrep permit not granted r->commit_index[%lld].",
-				   r->state, r->commit_index);
+			ZSINFO(gzlog, "[raft][%d][%d]replicationApply: pgrep permit not granted r->commit_index[%lld].",
+				   rkey(r), r->state, r->commit_index);
 			return 0;
 		}
+
+		ZSINFO(gzlog, "[raft][%d][%d]replicationApply: pgrep permit granted r->commit_index[%lld].",
+				   rkey(r), r->state, r->commit_index);
 	}
 
 	if (r->last_applying == r->commit_index || r->last_applied == r->commit_index) {
-		if (pi.permit)
+		if (pi.permit) {
 			r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+			ZSINFO(gzlog, "[raft][%d][%d]replicationApply: pgrep permit released because no logs need apply.",
+				   rkey(r), r->state);
+		}
 		return 0;
 	}
 
-	ZSINFO(gzlog, "[raft][%d]replicationApply: start applying permit[%d] r->commit_index[%lld] last_applied[%lld] last_applying[%lld].",
-		   r->state, pi.permit, r->commit_index, r->last_applied, r->last_applying);
+	ZSINFO(gzlog, "[raft][%d][%d]replicationApply: start applying permit[%d] r->commit_index[%lld] last_applied[%lld] last_applying[%lld].",
+		   rkey(r), r->state, pi.permit, r->commit_index, r->last_applied, r->last_applying);
 
     for (index = r->last_applying + 1; index <= r->commit_index; index++) {
         const struct raft_entry *entry = logGet(&r->log, index);

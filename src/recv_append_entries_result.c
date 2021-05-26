@@ -25,11 +25,15 @@ int recvAppendEntriesResult(struct raft *r,
 
     assert(r != NULL);
     assert(id > 0);
-    assert(address != NULL);
+    //assert(address != NULL);
     assert(result != NULL);
+
+	unsigned i = configurationIndexOf(&r->configuration, id);
+
+	(void)(address);
 	
-    ZSINFO(gzlog, "[raft][%d]recvAppendEntriesResult: replicating[%d] permit[%d]",
-           r->state, result->pi.replicating, result->pi.permit);
+    ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntriesResult: peer[%d], replicating[%d] permit[%d] rejected[%lld] last_log_index[%lld]",
+		   rkey(r), r->state, result->pkt, i, result->pi.replicating, result->pi.permit, result->rejected, result->last_log_index);
 
 	/* Pgrep:
      *
@@ -37,6 +41,9 @@ int recvAppendEntriesResult(struct raft *r,
      */
 	if (result->pi.permit) {
 		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &result->pi);
+
+		ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult: pgrep permit released.",
+				   rkey(r), r->state);
 
 		/* Catch-up say replicating can't going on, so set it spare. */
 		if (result->pi.replicating == PGREP_RND_BRK) {
@@ -87,10 +94,11 @@ int recvAppendEntriesResult(struct raft *r,
     }
 
 	/* Update pgrep prev_applied_index to cur_applied_index. */
-	if (result->pi.permit && result->pi.replicating == PGREP_RND_ING) {
-		unsigned i = configurationIndexOf(&r->configuration, id);
+	if (result->pi.permit && result->pi.replicating == PGREP_RND_ING)
 		progressUpdateAppliedIndex(r, i, r->last_applied);
-	}
+
+	if (result->pi.replicating == PGREP_RND_HRT)
+		return 0;
 
     /* Update the progress of this server, possibly sending further entries. */
     rv = replicationUpdate(r, server, result);

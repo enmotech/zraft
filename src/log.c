@@ -737,7 +737,7 @@ int logAcquireSection(
     /* Get the array index of the first entry to acquire. */
     i = locateEntry(l, index);
 
-    if (i == l->size) {
+    if (i == l->size || !realn) {
         *n = 0;
         *entries = NULL;
         return 0;

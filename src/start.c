@@ -93,6 +93,10 @@ static int restoreEntries(struct raft *r,
 			goto err;
 		}
 	}
+
+	ZSINFO(gzlog, "[raft][%d][%d]restoreEntries, last_stored[%lld]",
+		   rkey(r), r->state, r->last_stored);
+
 	raft_free(entries);
 	return 0;
 

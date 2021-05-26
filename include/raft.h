@@ -43,6 +43,10 @@
 #define RAFT_NOSPACE 22      /* Not enough space on disk */
 #define RAFT_TOOMANY 23      /* Some system or raft limit was hit */
 
+/* Id of a raft group. */
+#define rkey(r) ((r)->io->raft_key((r)->io))
+
+
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
 #define RAFT_IOAGAIN 24	/* storage is busy and trying to finish previous requests */
 #endif
@@ -170,9 +174,9 @@ RAFT_API unsigned long long raft_digest(const char *text, unsigned long long n);
 /**
  * Hold the return info of Pgrep ticking.
  */
-#define PGREP_TICK_SUC 0
-#define PGREP_TICK_RUN 1
-#define PGREP_TICK_FIN 2
+#define PGREP_TICK_SUC 1
+#define PGREP_TICK_RUN 2
+#define PGREP_TICK_FIN 3
 #define PGREP_TICK_FAL -1
 #define PGREP_TICK_ABD -2
 #define PGREP_TICK_DLT -3
@@ -187,18 +191,20 @@ struct copy_chunk_posi {
 /* Ask permit for apply log entries. */
 #define RAFT_APL 2
 
+
 #define PGREP_RND_NML ((uint16_t)0) /* Not pg relicating, in normal status. */
-#define PGREP_RND_ING ((uint16_t)1) /* Pg relicating. */
-#define PGREP_RND_BGN ((uint16_t)2) /* Pg relicating begin. */
+#define PGREP_RND_BGN ((uint16_t)1) /* Pg relicating begin. */
+#define PGREP_RND_ING ((uint16_t)2) /* Pg relicating. */
 #define PGREP_RND_DON ((uint16_t)3) /* Pg relicating finish. */
-#define PGREP_RND_ABD ((uint16_t)4) /* Pg relicating finish failed. */
-#define PGREP_RND_BRK ((uint16_t)5) /* Pg relicating break, to start new pgrep. */
-#define PGREP_RND_ERR ((uint16_t)6) /* Pg relicating meet some error. */
+#define PGREP_RND_HRT ((uint16_t)4) /* Pg relicating heart beat. */
+#define PGREP_RND_ERR ((uint16_t)-1) /* Pg relicating meet some error. */
+#define PGREP_RND_ABD ((uint16_t)-2) /* Pg relicating finish failed. */
+#define PGREP_RND_BRK ((uint16_t)-3) /* Pg relicating break, to start new pgrep. */
 
 
 #define __init_permit_info(pi) \
 do { \
-	(pi).replicating = 0; \
+	(pi).replicating = PGREP_RND_NML; \
 	(pi).time = 0; \
 	(pi).permit = false; \
 	(pi).ck_posi.obj_id = -1; \
@@ -330,10 +336,12 @@ struct raft_request_vote_result
  * also used as heartbeat (figure 3.1).
  */
 struct raft_append_entries {
+	int pkt;						/* Packket id. */
 	raft_term term;                 /* Leader's term. */
 	raft_index prev_log_index;      /* Index of log entry preceeding new ones. */
 	raft_term prev_log_term;        /* Term of entry at prev_log_index. */
 	raft_index leader_commit;       /* Leader's commit index. */
+	raft_id src_server;				/* The request from. */
 	struct pgrep_permit_info pi;    /* pgrep: The permission granted from pgrep. */
 	struct raft_entry *entries;     /* Log entries to append. */
 	unsigned n_entries;             /* Size of the log entries array. */
@@ -343,6 +351,7 @@ struct raft_append_entries {
  * Hold the result of an AppendEntries RPC (figure 3.1).
  */
 struct raft_append_entries_result {
+	int pkt;						/* Packket id. */
 	raft_term term;                 /* Receiver's current_term. */
 	raft_index rejected;            /* If non-zero, the index that was rejected. */
 	raft_index last_log_index;      /* Receiver's last log entry index, as hint. */
@@ -695,6 +704,9 @@ struct raft_io
      *
 	 *  Pgrep handlers.
      */
+
+	uint32_t (*raft_key)(
+		struct raft_io *io);
 
 	int (*pgrep_tick)(
 		struct raft_io *io,

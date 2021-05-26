@@ -41,13 +41,16 @@ int recvAppendEntries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-	ZSINFO(gzlog, "[raft][%d]recvAppendEntries: replicating[%d] permit[%d]", r->state, args->pi.replicating, args->pi.permit);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntries: replicating[%d] permit[%d]",
+		   rkey(r), r->state, args->pkt, args->pi.replicating, args->pi.permit);
 
     result->rejected = args->prev_log_index;
     result->last_log_index = logLastIndex(&r->log);
 
     rv = recvEnsureMatchingTerms(r, args->term, &match);
     if (rv != 0) {
+		ZSINFO(gzlog, "[raft][%d][%d]recvEnsureMatchingTerms failed!",
+			   rkey(r), r->state);
         return rv;
     }
 
@@ -57,7 +60,8 @@ int recvAppendEntries(struct raft *r,
      *   currentTerm.
      */
     if (match < 0) {
-        tracef("local term is higher -> reject ");
+		ZSINFO(gzlog, "[raft][%d][%d]recvEnsureMatchingTerms local term is higher -> reject!",
+			   rkey(r), r->state);
         goto reply;
     }
 
@@ -97,7 +101,8 @@ int recvAppendEntries(struct raft *r,
         /* The current term and the peer one must match, otherwise we would have
          * either rejected the request or stepped down to followers. */
         assert(match == 0);
-        tracef("discovered leader -> step down ");
+		ZSINFO(gzlog, "[raft][%d][%d]discovered leader -> step down!",
+			   rkey(r), r->state);
         convertToFollower(r);
     }
 
@@ -107,6 +112,8 @@ int recvAppendEntries(struct raft *r,
      * date. */
     rv = recvUpdateLeader(r, id, address);
     if (rv != 0) {
+		ZSINFO(gzlog, "[raft][%d][%d]recvUpdateLeader failed!",
+			   rkey(r), r->state);
         return rv;
     }
 
@@ -117,13 +124,16 @@ int recvAppendEntries(struct raft *r,
      * something smarter, e.g. buffering the entries in the I/O backend, which
      * should be in charge of serializing everything. */
     if (r->snapshot.put.data != NULL && args->n_entries > 0) {
-        tracef("ignoring AppendEntries RPC during snapshot install");
+		ZSINFO(gzlog, "[raft][%d][%d]ignoring AppendEntries RPC during snapshot install!",
+			   rkey(r), r->state);
         entryBatchesDestroy(args->entries, args->n_entries);
         return 0;
     }
 
 	rv = replicationAppend(r, args, &result->rejected, &async, &pi);
     if (rv != 0) {
+		ZSINFO(gzlog, "[raft][%d][%d]replicationAppend failed!",
+			   rkey(r), r->state);
         return rv;
     }
 
@@ -171,6 +181,8 @@ reply:
     rv = r->io->send(r->io, req, &message, recvSendAppendEntriesResultCb);
     if (rv != 0) {
         raft_free(req);
+		ZSINFO(gzlog, "[raft][%d][%d]send failed!",
+			   rkey(r), r->state);
         return rv;
     }
 

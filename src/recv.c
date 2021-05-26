@@ -139,7 +139,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 	raft_term term;
 
 	if (message->type < RAFT_IO_APPEND_ENTRIES ||
-	    message->type > RAFT_IO_TIMEOUT_NOW) {
+	    message->type > RAFT_IO_PGREP_COPY_CHUNKS_RESULT) {
 		tracef("received unknown message type type: %d", message->type);
 		return 0;
 	}

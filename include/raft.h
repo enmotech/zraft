@@ -91,6 +91,7 @@ struct raft_buffer
  * Server role codes.
  */
 
+#define RAFT_UNKNOW -1 /* For pgrep use for role changing period. */
 #define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
 #define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
 #define RAFT_SPARE 2   /* Does not replicate log, or participate in quorum. */
@@ -103,6 +104,7 @@ struct raft_server
 	raft_id id;    /* Server ID, must be greater than zero. */
 	char *address; /* Server address. User defined. */
 	int role;      /* Server role. */
+	int pre_role;  /* Server role temporarily. */
 };
 
 /**
@@ -195,10 +197,8 @@ struct copy_chunk_posi {
 #define PGREP_RND_NML ((uint16_t)0) /* Not pg relicating, in normal status. */
 #define PGREP_RND_BGN ((uint16_t)1) /* Pg relicating begin. */
 #define PGREP_RND_ING ((uint16_t)2) /* Pg relicating. */
-#define PGREP_RND_DON ((uint16_t)3) /* Pg relicating finish. */
 #define PGREP_RND_HRT ((uint16_t)4) /* Pg relicating heart beat. */
 #define PGREP_RND_ERR ((uint16_t)-1) /* Pg relicating meet some error. */
-#define PGREP_RND_ABD ((uint16_t)-2) /* Pg relicating finish failed. */
 #define PGREP_RND_BRK ((uint16_t)-3) /* Pg relicating break, to start new pgrep. */
 
 

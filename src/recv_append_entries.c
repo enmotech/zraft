@@ -120,6 +120,10 @@ int recvAppendEntries(struct raft *r,
     /* Reset the election timer. */
     r->election_timer_start = r->io->time(r->io);
 
+	if (args->pi.replicating == PGREP_RND_HRT) {
+		goto reply;
+	}
+
     /* If we are installing a snapshot, ignore these entries. TODO: we should do
      * something smarter, e.g. buffering the entries in the I/O backend, which
      * should be in charge of serializing everything. */

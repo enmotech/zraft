@@ -724,7 +724,7 @@ int logAcquireSection(
 	struct raft_entry *entries[],
 	unsigned *n)
 {
-	unsigned realn = (unsigned)(to_index - index);
+	unsigned realn = (unsigned)(to_index - index + 1);
     size_t i;
     size_t j;
 

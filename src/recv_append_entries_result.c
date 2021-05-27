@@ -94,8 +94,11 @@ int recvAppendEntriesResult(struct raft *r,
     }
 
 	/* Update pgrep prev_applied_index to cur_applied_index. */
-	if (result->pi.permit && result->pi.replicating == PGREP_RND_ING)
+	if (result->pi.permit && result->pi.replicating == PGREP_RND_ING) {
+		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntriesResult: progressUpdateAppliedIndex to[%lld].",
+			   rkey(r), r->state, result->pkt, r->last_applied);
 		progressUpdateAppliedIndex(r, i, r->last_applied);
+	}
 
 	if (result->pi.replicating == PGREP_RND_HRT)
 		return 0;

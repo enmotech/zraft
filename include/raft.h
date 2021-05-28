@@ -46,6 +46,13 @@
 /* Id of a raft group. */
 #define rkey(r) ((r)->io->raft_key((r)->io))
 
+#ifndef max
+#define max(a, b) ((a) < (b) ? (b) : (a))
+#endif
+
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
 #define RAFT_IOAGAIN 24	/* storage is busy and trying to finish previous requests */

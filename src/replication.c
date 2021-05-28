@@ -28,14 +28,6 @@
 #define tracef(...)
 #endif
 
-#ifndef max
-#define max(a, b) ((a) < (b) ? (b) : (a))
-#endif
-
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
 /* Context of a RAFT_IO_APPEND_ENTRIES request that was submitted with
  * raft_io_>send(). */
 struct sendAppendEntries
@@ -1040,10 +1032,10 @@ static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
     HeapFree(req);
 }
 
-static void sendAppendEntriesResult(
+void sendAppendEntriesResult(
     struct raft *r,
     const struct raft_append_entries_result *result,
-	struct raft_append_entries *args)
+	const struct raft_append_entries *args)
 {
     struct raft_message message;
     struct raft_io_send *req;
@@ -1066,6 +1058,9 @@ static void sendAppendEntriesResult(
         return;
     }
     req->data = r;
+
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]sendAppendEntriesResult.",
+		   rkey(r), r->state, args->pkt);
 
     rv = r->io->send(r->io, req, &message, sendAppendEntriesResultCb);
     if (rv != 0) {
@@ -1311,6 +1306,20 @@ static int deleteConflictingEntries(struct raft *r,
 }
 
 
+#define __sync_pgrep_index(void) \
+do { \
+	r->last_stored = args->prev_log_index; \
+	r->log.offset = args->prev_log_index; \
+	r->last_applied = args->prev_log_index; \
+	r->last_applying = args->prev_log_index; \
+	r->log.snapshot.last_index = args->prev_log_index; \
+	r->log.snapshot.last_term = args->prev_log_index; \
+	r->pi.permit = true; \
+	r->pi.ck_posi.obj_id = (uint64_t)-1; \
+	r->pi.ck_posi.chunk_id = (uint32_t)-1; \
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] __sync_pgrep_index.", rkey(r), r->state, args->pkt); \
+} while (0);
+
 static int replicatingCheck(
 	struct raft *r,
 	const struct raft_append_entries *args,
@@ -1319,7 +1328,6 @@ static int replicatingCheck(
 	size_t *n,
 	struct pgrep_permit_info *pi)
 {
-	(void)async;
 	(void)pi;
 
 	if (args->pi.replicating) {
@@ -1329,27 +1337,20 @@ static int replicatingCheck(
 			   rkey(r), r->state, args->pkt, r->last_stored, r->last_applied, r->last_applying,
 			   args->prev_log_index, args->n_entries);
 
-		logRemoveAll(&r->log);
+		if (args->pi.replicating == PGREP_RND_BGN) {
 
-		if (args->pi.replicating == PGREP_RND_BGN ||
-			args->prev_log_index > r->last_stored) {
-
-			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicatingCheck: replicatingCheck pgrep break, initial restart,\
-				   prev_log_index[%lld], last_stored[%lld]",
-				   rkey(r), r->state, args->pkt, args->prev_log_index, r->last_stored);
-
-			r->last_stored = args->prev_log_index;
-			r->log.offset = args->prev_log_index;
-			r->last_applied = args->prev_log_index;
-			r->last_applying = args->prev_log_index;
-			r->log.snapshot.last_index = args->prev_log_index;
-			r->log.snapshot.last_term = args->prev_log_index;
-
-			if (args->pi.replicating != PGREP_RND_BGN) {
-				r->pi.permit = false;
-				r->pi.ck_posi.obj_id = (uint64_t)-1;
-				r->pi.ck_posi.chunk_id = (uint32_t)-1;
+			if (r->last_stored == 0) {
+				logRemoveAll(&r->log);
+				__sync_pgrep_index();
 			}
+
+			*async = false;
+			return 0;
+		}
+
+		if (args->prev_log_index > r->last_stored) {
+			logRemoveAll(&r->log);
+			__sync_pgrep_index();
 		}
 
 		*i = r->last_stored - args->prev_log_index;
@@ -1452,7 +1453,7 @@ int replicationAppend(struct raft *r,
         return 0;
     }
 
-	if (n == 0)
+	if (!args->pi.replicating && n == 0)
 		return 0;
 
     *async = true;

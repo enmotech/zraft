@@ -728,11 +728,18 @@ int logAcquireSection(
     size_t i;
     size_t j;
 
-	assert(to_index > index);
     assert(l != NULL);
     assert(index > 0);
     assert(entries != NULL);
     assert(n != NULL);
+
+	if (to_index < index) {
+		*n = 0;
+        *entries = NULL;
+        return 0;
+	}
+
+	realn = min(realn, 10);
 
     /* Get the array index of the first entry to acquire. */
     i = locateEntry(l, index);

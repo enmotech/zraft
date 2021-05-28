@@ -16,20 +16,19 @@
 #define tracef(...)
 #endif
 
-static void recvSendAppendEntriesResultCb(struct raft_io_send *req, int status)
-{
-    (void)status;
-    HeapFree(req);
-}
+
+void sendAppendEntriesResult(
+	struct raft *r,
+	const struct raft_append_entries_result *result,
+	const struct raft_append_entries *args);
+
 
 int recvAppendEntries(struct raft *r,
                       raft_id id,
                       const char *address,
                       const struct raft_append_entries *args)
 {
-    struct raft_io_send *req;
-    struct raft_message message;
-    struct raft_append_entries_result *result = &message.append_entries_result;
+	struct raft_append_entries_result result;
     int match;
     bool async;
     int rv;
@@ -44,8 +43,8 @@ int recvAppendEntries(struct raft *r,
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntries: replicating[%d] permit[%d]",
 		   rkey(r), r->state, args->pkt, args->pi.replicating, args->pi.permit);
 
-    result->rejected = args->prev_log_index;
-    result->last_log_index = logLastIndex(&r->log);
+    result.rejected = args->prev_log_index;
+    result.last_log_index = logLastIndex(&r->log);
 
     rv = recvEnsureMatchingTerms(r, args->term, &match);
     if (rv != 0) {
@@ -134,7 +133,7 @@ int recvAppendEntries(struct raft *r,
         return 0;
     }
 
-	rv = replicationAppend(r, args, &result->rejected, &async, &pi);
+	rv = replicationAppend(r, args, &result.rejected, &async, &pi);
     if (rv != 0) {
 		ZSINFO(gzlog, "[raft][%d][%d]replicationAppend failed!",
 			   rkey(r), r->state);
@@ -146,20 +145,21 @@ int recvAppendEntries(struct raft *r,
     }
 
     /* Echo back to the leader the point that we reached. */
-    result->last_log_index = r->last_stored;
+    result.last_log_index = r->last_stored;
 
 reply:
-    result->term = r->current_term;
-	result->pi = pi;
+    result.term = r->current_term;
+	result.pi = pi;
+	result.pkt = args->pkt;
 
 	/* Pgrep:
      *
 	 *   If it's pgrep progress, should not reject the request.
      */
 	if (args->pi.replicating) {
-		result->rejected = 0;
+		result.rejected = 0;
 		if (rv) {
-			result->pi.replicating = PGREP_RND_ERR;
+			result.pi.replicating = PGREP_RND_ERR;
 		}
 	}
 
@@ -172,23 +172,7 @@ reply:
         raft_free(args->entries);
     }
 
-    message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
-    message.server_id = id;
-    message.server_address = address;
-
-    req = HeapMalloc(sizeof *req);
-    if (req == NULL) {
-        return RAFT_NOMEM;
-    }
-    req->data = r;
-
-    rv = r->io->send(r->io, req, &message, recvSendAppendEntriesResultCb);
-    if (rv != 0) {
-        raft_free(req);
-		ZSINFO(gzlog, "[raft][%d][%d]send failed!",
-			   rkey(r), r->state);
-        return rv;
-    }
+	sendAppendEntriesResult(r, &result, args);
 
     return 0;
 }

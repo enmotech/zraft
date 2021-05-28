@@ -21,7 +21,9 @@ int recvAppendEntriesResult(struct raft *r,
 {
     int match;
     const struct raft_server *server;
-    int rv;
+    int rv = 0;
+
+	bool pgrep_proc = false;
 
     assert(r != NULL);
     assert(id > 0);
@@ -35,41 +37,19 @@ int recvAppendEntriesResult(struct raft *r,
     ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntriesResult: peer[%d], replicating[%d] permit[%d] rejected[%lld] last_log_index[%lld]",
 		   rkey(r), r->state, result->pkt, i, result->pi.replicating, result->pi.permit, result->rejected, result->last_log_index);
 
-	/* Pgrep:
-     *
-	 * Release the pgrep permit. And check the returned status.
-     */
-	if (result->pi.permit) {
-		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &result->pi);
-
-		ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult: pgrep permit released.",
-				   rkey(r), r->state);
-
-		/* Catch-up say replicating can't going on, so set it spare. */
-		if (result->pi.replicating == PGREP_RND_BRK) {
-			/* TODO:  */
-			r->io->pgrep_cancel(r->io);
-		}
-
-		/* Catch-up meet some error. */
-		if (result->pi.replicating == PGREP_RND_ERR) {
-			r->io->pgrep_cancel(r->io);
-		}
-	}
-
     if (r->state != RAFT_LEADER) {
         tracef("local server is not leader -> ignore");
-        return 0;
+        goto __pgrep_prco;
     }
 
     rv = recvEnsureMatchingTerms(r, result->term, &match);
     if (rv != 0) {
-        return rv;
+        goto __pgrep_prco;
     }
 
     if (match < 0) {
         tracef("local term is higher -> ignore ");
-        return 0;
+        goto __pgrep_prco;
     }
 
     /* If we have stepped down, abort here.
@@ -81,7 +61,7 @@ int recvAppendEntriesResult(struct raft *r,
      */
     if (match > 0) {
         assert(r->state == RAFT_FOLLOWER);
-        return 0;
+        goto __pgrep_prco;
     }
 
     assert(result->term == r->current_term);
@@ -90,26 +70,64 @@ int recvAppendEntriesResult(struct raft *r,
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         tracef("unknown server -> ignore");
-        return 0;
+        goto __pgrep_prco;
     }
 
-	/* Update pgrep prev_applied_index to cur_applied_index. */
-	if (result->pi.permit && result->pi.replicating == PGREP_RND_ING) {
-		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntriesResult: progressUpdateAppliedIndex to[%lld].",
-			   rkey(r), r->state, result->pkt, r->last_applied);
-		progressUpdateAppliedIndex(r, i, r->last_applied);
-	}
-
 	if (result->pi.replicating == PGREP_RND_HRT)
-		return 0;
+		goto __pgrep_prco;
 
     /* Update the progress of this server, possibly sending further entries. */
     rv = replicationUpdate(r, server, result);
     if (rv != 0) {
-        return rv;
+        goto __pgrep_prco;
     }
 
-    return 0;
+	pgrep_proc = true;
+
+__pgrep_prco:
+
+	/* Pgrep:
+	 *
+	 * Release the pgrep permit. And check the returned status.
+	 */
+	if (result->pi.permit) {
+
+		raft_index prev_applied_index = min(
+			max(result->last_log_index, r->log.offset), r->last_applied);
+		bool unpermit = false;
+
+		if (!pgrep_proc) {
+			unpermit = true;
+			r->io->pgrep_cancel(r->io);
+		} else {
+
+			/* Catch-up meet some error. */
+			if (result->pi.replicating == PGREP_RND_ERR) {
+				unpermit = true;
+				r->io->pgrep_cancel(r->io);
+
+			} else  if (result->pi.replicating == PGREP_RND_BGN ||
+						result->pi.replicating == PGREP_RND_ING) {
+
+				progressUpdateAppliedIndex(r, i, prev_applied_index);
+
+				if (r->last_applied > prev_applied_index && i == r->pgrep_id)
+					replicationProgress(r, r->pgrep_id, result->pi);
+				else {
+					unpermit = true;
+				}
+			}
+
+		}
+
+		if (unpermit) {
+			r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &result->pi);
+			ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult: pgrep permit released.",
+				   rkey(r), r->state);
+		}
+	}
+
+    return rv;
 }
 
 #undef tracef

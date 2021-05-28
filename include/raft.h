@@ -112,6 +112,7 @@ struct raft_server
 	char *address; /* Server address. User defined. */
 	int role;      /* Server role. */
 	int pre_role;  /* Server role temporarily. */
+	bool pgrep_tested;
 };
 
 /**

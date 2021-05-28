@@ -91,12 +91,15 @@ static int sendAppendEntries(struct raft *r,
 	 *  followers.
      */
 	if (args->pi.permit) {
-		/* Pgerp is replicating, just get a section of entries. */
+		assert(pi.replicating == PGREP_RND_BGN ||
+			   pi.replicating == PGREP_RND_ING);
+		/* The first pgrep message, to send 0 entries for argree the index only. */
 		if (pi.replicating == PGREP_RND_BGN) {
 			rv = 0;
 			args->n_entries = 0;
 			args->entries = NULL;
 		} else {
+			/* Send the section log entries bettwen prev_applied_index and last_applied_index. */
 			rv = logAcquireSection(&r->log, next_index, r->last_applied, &args->entries, &args->n_entries);
 		}
 		if (rv != 0) {
@@ -358,7 +361,7 @@ static void assignRole(struct raft *r, struct raft_server *server, int role)
 	_req->data = _result;
 	_req->cb = assignRoleCb;
 
-	ZSINFO(gzlog, "[raft][%d][%d]assignRole: server[%lld] role:[%d] return.",
+	ZSINFO(gzlog, "[raft][%d][%d]assignRole: server[%lld] role:[%d] .",
 		   rkey(r), r->state, server->id, role);
 
 	_rv = raft_assign(r, _req, server->id, role, assignRoleCb);
@@ -383,9 +386,16 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 
 	pi.replicating = rep_state;
 
-
 	ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: server i[%d] replicating[%d] permit[%d].",
 		   rkey(r), r->state, i, pi.replicating, pi.permit);
+
+	if (server->role != RAFT_STANDBY) {
+		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: not standby yet, goto heatbeat.",
+			   rkey(r), r->state);
+		goto __heart_beat;
+	}
+
+	assert(i == r->pgrep_id);
 
 	/* Send tick message, and handle all status. */
 	int status = r->io->pgrep_tick(r->io, r->id, server->id, r->current_term);
@@ -402,15 +412,6 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: pgrep permit granted.",
 			   rkey(r), r->state);
 	}
-
-	/* Check if peer server is the destination. */
-	if (i != r->pgrep_id || server->pre_role == RAFT_VOTER) {
-		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
-		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: pgrep permit released because destination conflicts.",
-			   rkey(r), r->state);
-		goto __heart_beat;
-	}
-
 
 	switch (status) {
 	case PGREP_TICK_SUC:
@@ -429,11 +430,16 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	case PGREP_TICK_FIN:
 	case PGREP_TICK_ABD:
 	case PGREP_TICK_DLT:
-		/* Notify others who intersting with this event. */
 		progressSetPgreplicating(r, i, false);
 		progressUpdateAppliedIndex(r, i, 0);
-		if (status == PGREP_TICK_FIN)
+		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: pgrep over status[%d] pgrep_id[%d] replicating[%d].",
+			   rkey(r), r->state, status, r->pgrep_id, p->replicating);
+		if (status == PGREP_TICK_FIN) {
+			r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+			pi.permit = false;
 			assignRole(r, server, RAFT_VOTER);
+			return 0;
+		}
 		goto __heart_beat;
 		break;
 	case PGREP_TICK_FAL:
@@ -475,6 +481,55 @@ __heart_beat:
 
 	return sendAppendEntries(r, i, prev_index, prev_term, pi);
 }
+
+
+/* Pgrep:
+ *
+ *   1. Called from replicationApply which checked server i is
+ *   in pg replicating.
+ *   2. If pg is replicating status, goto pgrep and send pgrep
+ *   tick message.
+ *   3. If server role is standby and update replicating status
+ *   successful, goto pgrep and send pgrep tick message.
+ */
+static bool enterPgrepicating(struct raft *r, unsigned i, struct pgrep_permit_info pi)
+{
+	struct raft_server *server = &r->configuration.servers[i];
+
+	if (pi.permit) {
+		assert(progressPgreplicating(r, i));
+		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: permit[1] goto pgrep.",
+			   rkey(r), r->state);
+		return true;
+	}
+
+	if (progressPgreplicating(r, i)) {
+		assert(server->role == RAFT_STANDBY);
+		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: server i[%d] already in pgreplicating state permit[%d].",
+			   rkey(r), r->state, i, pi.permit);
+		return true;
+	}
+
+	if (server->pre_role != RAFT_VOTER &&
+		(server->role == RAFT_STANDBY || server->pre_role == RAFT_STANDBY)) {
+		if (server->role == RAFT_STANDBY)
+			progressSetPgreplicating(r, i, true);
+		return true;
+	}
+
+	/* For pgrep testing, assume server 2 always standby. */
+	//if (i == 2 && !server->pgrep_tested && rkey(r) == 0 && r->state == 3 &&
+	if (i == 2 && r->state == 3 &&
+		configurationIndexOf(&r->configuration, r->id) != 2 &&
+		server->role != RAFT_STANDBY) {
+		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server i[%d] RAFT_STANDBY state. ", rkey(r), r->state, i);
+		assignRole(r, server, RAFT_STANDBY);
+		server->pgrep_tested = true;
+		return true;
+	}
+
+	return false;
+}
                         
 int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
 {
@@ -483,7 +538,7 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
     raft_index next_index = progressNextIndex(r, i);
     raft_index prev_index;
     raft_term prev_term;
-	bool pg_replicating;
+
 
     assert(r->state == RAFT_LEADER);
     assert(server->id != r->id);
@@ -495,43 +550,9 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
         return 0;
     }
 
-	/* Pgrep:
-	 *
-	 *   1. Called from replicationApply which checked server i is
-	 *   in pg replicating.
-	 *   2. If pg is replicating status, goto pgrep and send pgrep
-	 *   tick message.
-	 *   3. If server role is standby and update replicating status
-	 *   successful, goto pgrep and send pgrep tick message.
-	 */
-	if (pi.permit) {
-		assert(progressPgreplicating(r, i));
-		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: permit[1] goto pgrep.",
-			   rkey(r), r->state);
+	/* pgrep: check if need pgrep ticking. */
+	if (enterPgrepicating(r, i, pi))
 		goto pgrep;
-	}
-
-	pg_replicating = progressPgreplicating(r, i);
-	if (pg_replicating) {
-		assert(server->role == RAFT_STANDBY);
-		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: server i[%d] already in pgreplicating state permit[%d].",
-			   rkey(r), r->state, i, pi.permit);
-		goto pgrep;
-	}
-
-	if (server->role == RAFT_STANDBY || server->pre_role == RAFT_STANDBY) {
-		if (server->role == RAFT_STANDBY)
-			progressSetPgreplicating(r, i, true);
-		goto pgrep;
-	}
-
-	/* For pgrep testing, assume server 2 always standby. */
-	if (i == 2 && configurationIndexOf(&r->configuration, r->id) != 2 &&
-		server->role != RAFT_STANDBY) {
-		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server i[%d] RAFT_STANDBY state. ", rkey(r), r->state, i);
-		assignRole(r, server, RAFT_STANDBY);
-		goto pgrep;
-	}
 
 
     /* From Section 3.5:
@@ -575,19 +596,19 @@ int replicationProgress(struct raft *r, unsigned i, struct pgrep_permit_info pi)
 	pi.replicating = PGREP_RND_NML;
     return sendAppendEntries(r, i, prev_index, prev_term, pi);
 
+
 pgrep:
 	return sendPgrepTickMessage(r, i, pi);
 
+/* Pgrep:
+ *
+ *   Chage server role to standby.
+ */
 change_standby:
-	/* Pgrep:
-     *
-	 *   Chage server role to standby.
-     */
+	ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server i[%d] RAFT_STANDBY state. ", rkey(r), r->state, i);
 	assignRole(r, server, RAFT_STANDBY);
 	return 0;
 
-//send_snapshot:
-//    return sendSnapshot(r, i);
 	(void)sendSnapshot;
 }
 
@@ -1337,8 +1358,10 @@ static int replicatingCheck(
 			   rkey(r), r->state, args->pkt, r->last_stored, r->last_applied, r->last_applying,
 			   args->prev_log_index, args->n_entries);
 
+		/* If it's the first message, just reply the last_stored index. */
 		if (args->pi.replicating == PGREP_RND_BGN) {
 
+			/* If it's new pg with no data, sync indices with the leader for restart pgrep. */
 			if (r->last_stored == 0) {
 				logRemoveAll(&r->log);
 				__sync_pgrep_index();
@@ -1348,6 +1371,7 @@ static int replicatingCheck(
 			return 0;
 		}
 
+		/* If I can't catchup the leader, sync indices with the leader for restart pgrep. */
 		if (args->prev_log_index > r->last_stored) {
 			logRemoveAll(&r->log);
 			__sync_pgrep_index();
@@ -1361,6 +1385,7 @@ static int replicatingCheck(
 			   rkey(r), r->state, args->pkt, r->last_stored, r->last_applied, r->last_applying,
 			   args->prev_log_index, args->n_entries);
 
+		/* The leader's send log entries behind me, just reply success. */
 		if (args->prev_log_index + args->n_entries <= r->last_stored) {
 			*async = false;
 			*n = 0;
@@ -1539,7 +1564,7 @@ err_after_request_alloc:
 err:
     assert(rv != 0);
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicationAppend error[%d].",
-				   rkey(r), r->state, args->pkt, rv);
+		   rkey(r), r->state, args->pkt, rv);
     return rv;
 }
 
@@ -1703,8 +1728,9 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 	 * If there are a gap between prev_applied_index and last_applied, to starting a relicatingProgress.
 	 */
 
-	if (r->state != RAFT_LEADER || r->pgrep_id == (unsigned)-1 || 
+	if (r->state != RAFT_LEADER || r->pgrep_id == (unsigned)-1 ||
 		progressGetAppliedIndex(r, r->pgrep_id) == r->last_applied) {
+
 		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
 		pi.permit = false;
 		ZSINFO(gzlog, "[raft][%d][%d]replicationApplyLeaderCb: release pgrep permit.", rkey(r), r->state);
@@ -1798,9 +1824,6 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 	}
 
 	r->last_applied = index;
-
-	ZSINFO(gzlog, "[raft][%d][%d]applyCommandCb: permit[%d].",
-		   rkey(r), r->state, request->pi.permit);
 
 	applySectionCallbackCheck(r, request->expect_index, request->pi, request->extra);
 
@@ -2042,17 +2065,17 @@ int replicationApply(struct raft *r, void *extra)
 	if (r->state == RAFT_LEADER) {
 		r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
 		if (!pi.permit) {
-			/* Nothing to do. */
 			ZSINFO(gzlog, "[raft][%d][%d]replicationApply: pgrep permit not granted r->commit_index[%lld].",
 				   rkey(r), r->state, r->commit_index);
 			return 0;
 		}
 
 		ZSINFO(gzlog, "[raft][%d][%d]replicationApply: pgrep permit granted r->commit_index[%lld].",
-				   rkey(r), r->state, r->commit_index);
+			   rkey(r), r->state, r->commit_index);
 	}
 
-	if (r->last_applying == r->commit_index || r->last_applied == r->commit_index) {
+	if (r->last_applying == r->commit_index ||
+		r->last_applied == r->commit_index) {
 		if (pi.permit) {
 			r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
 			ZSINFO(gzlog, "[raft][%d][%d]replicationApply: pgrep permit released because no logs need apply.",

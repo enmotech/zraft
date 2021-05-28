@@ -95,9 +95,6 @@ void logTruncate(struct raft_log *l, const raft_index index);
  * of previous logAppend calls. */
 void logDiscard(struct raft_log *l, const raft_index index);
 
-/* Remove all in-memory log entries. */
-void logRemoveAll(struct raft_log *l);
-
 /* To be called when taking a new snapshot. The log must contain an entry at
  * last_index, which is the index of the last entry included in the
  * snapshot. The function will update the last snapshot information and delete

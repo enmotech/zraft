@@ -221,7 +221,7 @@ do { \
 
 struct pgrep_permit_info {
 	uint32_t replicating;           /* The replicating round count. */
-	uint64_t time;					/* The time of permit granted. */
+	int64_t time;					/* The time of permit granted. */
 	bool permit;                    /* Permit status. */
 	struct copy_chunk_posi ck_posi; /* The position pgrep copied. */
 };
@@ -406,7 +406,7 @@ struct copy_chunk {
 struct raft_copy_chunks {
 	raft_term term;
 	raft_id src_server_id;
-	uint64_t send_time;
+	int64_t send_time;
 	uint32_t num;
 	struct copy_chunk *chunks;
 };
@@ -639,12 +639,6 @@ struct raft_io
 	void *data;
 	void *impl;
 
-	/* Pgrep:
-     *
-	 *  Pgrep context.
-     */
-	void *prp_ctx;
-
 	char errmsg[RAFT_ERRMSG_BUF_SIZE];
 	int (*init)(struct raft_io *io, raft_id id, const char *address);
 	void (*close)(struct raft_io *io, raft_io_close_cb cb);
@@ -710,8 +704,11 @@ struct raft_io
 
 	/* Pgrep:
      *
-	 *  Pgrep handlers.
+	 *  Pgrep context && handlers.
      */
+
+	void *prp_ctx;
+
 
 	uint32_t (*raft_key)(
 		struct raft_io *io);
@@ -720,7 +717,8 @@ struct raft_io
 		struct raft_io *io,
 		raft_id src_server_id,
 		raft_id dest_server_id,
-		raft_term term
+		raft_term term,
+		struct pgrep_permit_info *pi
 		);
 
 	void (*pgrep_cancel)(
@@ -1022,7 +1020,9 @@ struct raft
 	bool removed;
 
 	/* To save last pgrep info. */
-	struct pgrep_permit_info pi;  
+	struct pgrep_permit_info pi;
+
+	int64_t last_append_time;
 };
 
 RAFT_API int raft_init(struct raft *r,

@@ -75,6 +75,7 @@ int raft_init(struct raft *r,
     r->pi.time = 0;
     r->pi.ck_posi.obj_id = (uint64_t)-1;
     r->pi.ck_posi.chunk_id = (uint32_t)-1;
+	r->last_append_time = 0;
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");

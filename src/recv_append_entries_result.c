@@ -100,24 +100,26 @@ __pgrep_prco:
 			unpermit = true;
 			r->io->pgrep_cancel(r->io);
 		} else {
-
-			/* Catch-up meet some error. */
-			if (result->pi.replicating == PGREP_RND_ERR) {
+			if (i != r->pgrep_id) {
+				/* i is't the pgrep destination. */
+				unpermit = true;
+			} else if (result->pi.replicating == PGREP_RND_ERR) {
+				/* Catch-up meet some error. */
 				unpermit = true;
 				r->io->pgrep_cancel(r->io);
-
 			} else  if (result->pi.replicating == PGREP_RND_BGN ||
 						result->pi.replicating == PGREP_RND_ING) {
-
+				/* Update the prev_applied_index and check to start a new relication. */
 				progressUpdateAppliedIndex(r, i, prev_applied_index);
-
-				if (r->last_applied > prev_applied_index && i == r->pgrep_id)
-					replicationProgress(r, r->pgrep_id, result->pi);
-				else {
+				if (r->last_applied > prev_applied_index) {
+					struct pgrep_permit_info pi;
+					pi.permit = true;
+					r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
+					replicationProgress(r, r->pgrep_id, pi);
+				} else {
 					unpermit = true;
 				}
 			}
-
 		}
 
 		if (unpermit) {

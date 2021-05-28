@@ -739,7 +739,7 @@ int logAcquireSection(
         return 0;
 	}
 
-	realn = min(realn, 10);
+	realn = min(realn, 50);
 
     /* Get the array index of the first entry to acquire. */
     i = locateEntry(l, index);
@@ -956,11 +956,6 @@ static void removePrefix(struct raft_log *l, const raft_index index)
     }
 
     clearIfEmpty(l);
-}
-
-void logRemoveAll(struct raft_log *l)
-{
-	removePrefix(l, logLastIndex(l));
 }
 
 void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)

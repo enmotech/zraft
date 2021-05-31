@@ -1342,9 +1342,7 @@ do { \
 	r->last_applying = r->log.offset; \
 	r->log.snapshot.last_index = r->log.offset; \
 	r->log.snapshot.last_term = r->log.offset; \
-	r->pi.permit = true; \
-	r->pi.ck_posi.obj_id = (uint64_t)-1; \
-	r->pi.ck_posi.chunk_id = (uint32_t)-1; \
+	r->io->pgrep_init(r->io); \
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] __sync_pgrep_index.", rkey(r), r->state, args->pkt); \
 } while (0);
 
@@ -1396,7 +1394,7 @@ static int replicatingCheck(
 
 		/* If I can't catchup the leader, sync indices with the leader for restart pgrep. */
 		if (args->prev_log_index > r->last_stored) {
-			logTruncate(&r->log, 1);
+			logTruncate(&r->log, r->log.offset + 1);
 			__sync_pgrep_index();
 		}
 
@@ -1415,6 +1413,8 @@ static int replicatingCheck(
 			return 0;
 		}
 	} else {
+		/* As i received normal append message, initial pgrep infomation. */
+		r->io->pgrep_init(r->io);
 		r->last_append_time = args->pi.time;
 		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] update last_append_time[%ld].",
 			   rkey(r), r->state, args->pkt, r->last_append_time);
@@ -1792,13 +1792,6 @@ void replicationApplyFollowerCb(
 	struct raft_append_entries *args = &request->args;
 	struct raft_append_entries_result result;
 
-
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicationApplyFollowerCb: update pi[%ld][%d] new pi[%ld][%d].",
-		   rkey(r), r->state, args->pkt, r->pi.ck_posi.obj_id, r->pi.ck_posi.chunk_id,
-		   args->pi.ck_posi.obj_id, args->pi.ck_posi.chunk_id);
-
-	r->pi = args->pi;
-
 	result.last_log_index = r->last_applied;
 	result.rejected = 0;
 	result.pi = args->pi;
@@ -1817,11 +1810,13 @@ void replicationApplyFollowerCb(
 #if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
 /* Context for a write log entries request that was submitted by a leader. */
 struct applyLog {
-	struct raft *raft;          /* Instance that has submitted the request */
-	raft_index index;           /* Index of the first entry in the request. */
-	raft_index expect_index;    /* Index of the expect index to notify. */
-	void *extra;                /* Extra params passed if reuqired. */
-	struct pgrep_permit_info pi; /* Pgrep permit info. */
+	struct raft *raft;          	/* Instance that has submitted the request */
+	raft_index index;           	/* Index of the first entry in the request. */
+	raft_index expect_index;    	/* Index of the expect index to notify. */
+	void *extra;                	/* Extra params passed if reuqired. */
+	struct pgrep_permit_info pi; 	/* Indicate pgrep permit granted. */
+	bool permit;					/* Indicate if fsm skip apply after ck_posi. */
+	struct copy_chunk_posi ck_posi; /* The pgrep's current position. */
 	struct raft_fsm_apply req;
 };
 
@@ -1879,6 +1874,7 @@ static int applyCommand(struct raft *r,
 	int rv;
 #if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
 	struct applyLog *request;
+	struct appendFollower *req_af = extra;
 
 	request = raft_malloc(sizeof*request);
 
@@ -1891,8 +1887,17 @@ static int applyCommand(struct raft *r,
 	request->index = index;
 	request->expect_index = expect_index;
 	request->pi = pi;
+	request->permit = false;
+	request->ck_posi = r->io->pgrep_boundary(r->io);
 	request->extra = extra;
 	request->req.data = request;
+
+	if (extra)
+		request->permit = req_af->args.pi.permit;
+
+	ZSINFO(gzlog, "[raft][%d][%d]applyCommand: permit[%d] skip apply[%d] boundary[%ld][%d].",
+		   rkey(r), r->state, pi.permit, request->permit,
+		   request->ck_posi.obj_id, request->ck_posi.chunk_id);
 
 	rv = r->fsm->apply(r->fsm,
 					   &request->req,

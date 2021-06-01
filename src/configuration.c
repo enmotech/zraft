@@ -152,7 +152,6 @@ int configurationAdd(struct raft_configuration *c,
     strcpy(server->address, address);
     server->role = role;
     server->pre_role = RAFT_UNKNOW;
-    server->pgrep_tested = false;
 
     c->n++;
 

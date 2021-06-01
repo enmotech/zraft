@@ -112,7 +112,6 @@ struct raft_server
 	char *address; /* Server address. User defined. */
 	int role;      /* Server role. */
 	int pre_role;  /* Server role temporarily. */
-	bool pgrep_tested;
 };
 
 /**
@@ -709,7 +708,7 @@ struct raft_io
 	void *prp_ctx;
 
 
-	int (*pgrep_init)(
+	void (*pgrep_reset_ckposi)(
 		struct raft_io *io);
 
 	uint32_t (*raft_key)(

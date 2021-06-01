@@ -389,12 +389,12 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	struct raft_server *server = &r->configuration.servers[i];
 	struct raft_progress *p = &r->leader_state.progress[i];
 	bool sendSectionLogs = false;
+	int status = 0;
 	uint16_t rep_state = PGREP_RND_ING;
 
-	pi.replicating = rep_state;
 
-	ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: server i[%d] replicating[%d] permit[%d].",
-		   rkey(r), r->state, i, pi.replicating, pi.permit);
+	ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: server i[%d] permit[%d].",
+		   rkey(r), r->state, i, pi.permit);
 
 	if (server->role != RAFT_STANDBY) {
 		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: not standby yet, goto heatbeat.",
@@ -405,7 +405,7 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	assert(i == r->pgrep_id);
 
 	/* Send tick message, and handle all status. */
-	int status = r->io->pgrep_tick(r->io, r->id, server->id, r->current_term, &pi);
+	status = r->io->pgrep_tick(r->io, r->id, server->id, r->current_term, &pi);
 
 	switch (status) {
 	case PGREP_TICK_SUC:
@@ -486,6 +486,9 @@ __heart_beat:
 	raft_term prev_term = logLastTerm(&r->log);
 	pi.replicating = PGREP_RND_HRT;
 
+	ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: tick status[%d] just heart beat .",
+		   rkey(r), r->state, status);
+
 	return sendAppendEntries(r, i, prev_index, prev_term, pi);
 }
 
@@ -523,15 +526,19 @@ static bool enterPgrepicating(struct raft *r, unsigned i, struct pgrep_permit_in
 		return true;
 	}
 
+	static bool pgrep_tested = false;
+	static bool tested[100] = {false};
+
 	/* For pgrep testing, assume server 2 always standby. */
-	//if (i == 2 && !server->pgrep_tested && rkey(r) == 0 && r->state == 3 &&
-	if (i == 2 && r->state == 3 &&
+	//if (i == 2 && !pgrep_tested && rkey(r) == 0 && r->state == 3 &&
+	if (i == 2 && r->state == 3 && !tested[rkey(r)] &&
 		configurationIndexOf(&r->configuration, r->id) != 2 &&
 		server->role != RAFT_STANDBY) {
 		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server role[%d] i[%d] RAFT_STANDBY state. ",
 			   rkey(r), r->state, server->role, i);
 		assignRole(r, server, RAFT_STANDBY);
-		server->pgrep_tested = true;
+		tested[rkey(r)] = true;
+		pgrep_tested = true;
 		return true;
 	}
 
@@ -1342,7 +1349,7 @@ do { \
 	r->last_applying = r->log.offset; \
 	r->log.snapshot.last_index = r->log.offset; \
 	r->log.snapshot.last_term = r->log.offset; \
-	r->io->pgrep_init(r->io); \
+	r->io->pgrep_reset_ckposi(r->io); \
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] __sync_pgrep_index.", rkey(r), r->state, args->pkt); \
 } while (0);
 
@@ -1414,7 +1421,7 @@ static int replicatingCheck(
 		}
 	} else {
 		/* As i received normal append message, initial pgrep infomation. */
-		r->io->pgrep_init(r->io);
+		r->io->pgrep_reset_ckposi(r->io);
 		r->last_append_time = args->pi.time;
 		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] update last_append_time[%ld].",
 			   rkey(r), r->state, args->pkt, r->last_append_time);
@@ -1550,16 +1557,10 @@ int replicationAppend(struct raft *r,
 			goto err_after_request_alloc;
 		}
 
-		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]logAppend offset[%lld] last_index[%lld].",
-			   rkey(r), r->state, args->pkt, r->log.offset, logLastIndex(&r->log));
-
 		rv = logAppend(&r->log, copy.term, copy.type, &copy.buf, NULL);
 		if (rv != 0) {
 			goto err_after_request_alloc;
 		}
-
-		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]logAppend after offset[%lld] last_index[%lld].",
-			   rkey(r), r->state, args->pkt, r->log.offset, logLastIndex(&r->log));
 	}
 
 	/* Acquire the relevant entries from the log. */
@@ -2138,6 +2139,9 @@ int replicationApply(struct raft *r, void *extra)
 
 		assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
 			   entry->type == RAFT_CHANGE);
+
+		ZSINFO(gzlog, "[raft][%d][%d]apply entry, type[%d] index[%lld].",
+			   rkey(r), r->state, entry->type, index);
 
 		switch (entry->type) {
 		case RAFT_COMMAND:

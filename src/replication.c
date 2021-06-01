@@ -115,6 +115,8 @@ static int sendAppendEntries(struct raft *r,
 				   rkey(r), r->state, rv);
 			goto err;
 		}
+		/* To updating the permit. */
+		r->io->pgrep_raft_permit(r->io, RAFT_APD, &args->pi);
 	} else {
 		/* TODO: implement a limit to the total size of the entries being sent */
 		rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries);
@@ -122,6 +124,8 @@ static int sendAppendEntries(struct raft *r,
 			goto err;
 		}
 		args->pi.time = raft_tick_count_ns();
+		ZSINFO(gzlog, "[raft][%d][%d]sendAppendEntries: pi.time[%ld].",
+			   rkey(r), r->state, args->pi.time);
 	}
 
 	/* From Section 3.5:
@@ -526,19 +530,17 @@ static bool enterPgrepicating(struct raft *r, unsigned i, struct pgrep_permit_in
 		return true;
 	}
 
-	static bool pgrep_tested = false;
 	static bool tested[100] = {false};
 
 	/* For pgrep testing, assume server 2 always standby. */
-	//if (i == 2 && !pgrep_tested && rkey(r) == 0 && r->state == 3 &&
-	if (i == 2 && r->state == 3 && !tested[rkey(r)] &&
+	if (i == 2 && r->state == 3 && rkey(r) == 0 && !tested[rkey(r)] && r->last_applied > 400 &&
+	//if (i == 2 && r->state == 3 && !tested[rkey(r)] &&
 		configurationIndexOf(&r->configuration, r->id) != 2 &&
 		server->role != RAFT_STANDBY) {
 		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server role[%d] i[%d] RAFT_STANDBY state. ",
 			   rkey(r), r->state, server->role, i);
 		assignRole(r, server, RAFT_STANDBY);
 		tested[rkey(r)] = true;
-		pgrep_tested = true;
 		return true;
 	}
 
@@ -1372,9 +1374,8 @@ static int replicatingCheck(
 			   args->prev_log_index, args->n_entries);
 
 		if (args->pi.time < r->last_append_time) {
-
-			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] message out of date time[%ld] last_append_time[%ld].",
-				   rkey(r), r->state, args->pkt, args->pi.time, r->last_append_time);
+			ZSWARNING(gzlog, "[raft][%d][%d][pkt:%d] message out of date time[%ld] last_append_time[%ld].",
+					  rkey(r), r->state, args->pkt, args->pi.time, r->last_append_time);
 			return -1;
 		}
 
@@ -1384,13 +1385,14 @@ static int replicatingCheck(
 
 		/* If it's the first message, just reply the last_stored index. */
 		if (args->pi.replicating == PGREP_RND_BGN) {
+			raft_index trunc_index = max(r->last_applied, r->last_applying) + 1;
 
-			logTruncate(&r->log, r->last_applied + 1);
-			r->last_stored = r->last_applied;
-			r->commit_index = r->last_applied;
+			logTruncate(&r->log, trunc_index);
+			r->last_stored = trunc_index - 1;
+			r->commit_index = trunc_index - 1;
 
 			/* If it's new pg with no data, sync indices with the leader for restart pgrep. */
-			if (r->last_applied == 1) {
+			if (trunc_index == 1) {
 				logTruncate(&r->log, 1);
 				__sync_pgrep_index();
 			}
@@ -1401,8 +1403,23 @@ static int replicatingCheck(
 
 		/* If I can't catchup the leader, sync indices with the leader for restart pgrep. */
 		if (args->prev_log_index > r->last_stored) {
+
+			/* There are some entries applying, can not truncate log. */
+			if (r->last_applying != r->last_applied) {
+				ZSWARNING(gzlog, "[raft][%d][%d][pkt:%d] There are some entries applying, can not truncate log.",
+						  rkey(r), r->state, args->pkt);
+				*async = false;
+				return -1;
+			}
+
+			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] logTruncate to [%lld] nums[%ld].",
+				   rkey(r), r->state, args->pkt, r->log.offset + 1, logNumEntries(&r->log));
+
 			logTruncate(&r->log, r->log.offset + 1);
 			__sync_pgrep_index();
+
+			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] logTruncate to [%lld] after nums[%ld].",
+				   rkey(r), r->state, args->pkt, r->log.offset + 1, logNumEntries(&r->log));
 		}
 
 		*i = r->last_stored - args->prev_log_index;
@@ -1816,8 +1833,6 @@ struct applyLog {
 	raft_index expect_index;    	/* Index of the expect index to notify. */
 	void *extra;                	/* Extra params passed if reuqired. */
 	struct pgrep_permit_info pi; 	/* Indicate pgrep permit granted. */
-	bool permit;					/* Indicate if fsm skip apply after ck_posi. */
-	struct copy_chunk_posi ck_posi; /* The pgrep's current position. */
 	struct raft_fsm_apply req;
 };
 
@@ -1884,21 +1899,24 @@ static int applyCommand(struct raft *r,
 		goto err;
 	}
 
+	struct copy_chunk_posi bd = r->io->pgrep_boundary(r->io);
+
 	request->raft = r;
 	request->index = index;
 	request->expect_index = expect_index;
 	request->pi = pi;
-	request->permit = false;
-	request->ck_posi = r->io->pgrep_boundary(r->io);
+	request->req.permit = false;
+	request->req.obj_id = bd.obj_id;
+	request->req.chunk_id = bd.chunk_id;
 	request->extra = extra;
 	request->req.data = request;
 
 	if (extra)
-		request->permit = req_af->args.pi.permit;
+		request->req.permit = req_af->args.pi.permit;
 
 	ZSINFO(gzlog, "[raft][%d][%d]applyCommand: permit[%d] skip apply[%d] boundary[%ld][%d].",
-		   rkey(r), r->state, pi.permit, request->permit,
-		   request->ck_posi.obj_id, request->ck_posi.chunk_id);
+		   rkey(r), r->state, pi.permit, request->req.permit,
+		   request->req.obj_id, request->req.chunk_id);
 
 	rv = r->fsm->apply(r->fsm,
 					   &request->req,

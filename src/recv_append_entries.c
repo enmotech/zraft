@@ -134,11 +134,12 @@ int recvAppendEntries(struct raft *r,
     }
 
 	rv = replicationAppend(r, args, &result.rejected, &async, &pi);
-    if (rv != 0) {
+	if (rv != 0) {
 		ZSINFO(gzlog, "[raft][%d][%d]replicationAppend failed!",
 			   rkey(r), r->state);
-        return rv;
-    }
+		if (!args->pi.permit)
+			return rv;
+	}
 
     if (async) {
         return 0;

@@ -43,6 +43,9 @@
 #define RAFT_NOSPACE 22      /* Not enough space on disk */
 #define RAFT_TOOMANY 23      /* Some system or raft limit was hit */
 
+#define RAFT_DISCARD 1001
+#define RAFT_APPLY_BUSY 1002
+
 /* Id of a raft group. */
 #define rkey(r) ((r)->io->raft_key((r)->io))
 

@@ -34,8 +34,10 @@ int recvAppendEntriesResult(struct raft *r,
 
 	(void)(address);
 	
-    ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntriesResult: peer[%d], replicating[%d] permit[%d] rejected[%lld] last_log_index[%lld]",
-		   rkey(r), r->state, result->pkt, i, result->pi.replicating, result->pi.permit, result->rejected, result->last_log_index);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntriesResult: peer[%d], \
+		   replicating[%d] permit[%d] rejected[%lld] last_log_index[%lld]",
+		   rkey(r), r->state, result->pkt, i, result->pi.replicating,
+		   result->pi.permit, result->rejected, result->last_log_index);
 
     if (r->state != RAFT_LEADER) {
         tracef("local server is not leader -> ignore");

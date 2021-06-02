@@ -48,8 +48,8 @@ int recvAppendEntries(struct raft *r,
 
     rv = recvEnsureMatchingTerms(r, args->term, &match);
     if (rv != 0) {
-		ZSINFO(gzlog, "[raft][%d][%d]recvEnsureMatchingTerms failed!",
-			   rkey(r), r->state);
+		ZSERROR(gzlog, "[raft][%d][%d]recvEnsureMatchingTerms failed!",
+				rkey(r), r->state);
         return rv;
     }
 
@@ -59,8 +59,8 @@ int recvAppendEntries(struct raft *r,
      *   currentTerm.
      */
     if (match < 0) {
-		ZSINFO(gzlog, "[raft][%d][%d]recvEnsureMatchingTerms local term is higher -> reject!",
-			   rkey(r), r->state);
+		ZSWARNING(gzlog, "[raft][%d][%d]recvEnsureMatchingTerms local term is higher -> reject!",
+				  rkey(r), r->state);
         goto reply;
     }
 
@@ -100,8 +100,8 @@ int recvAppendEntries(struct raft *r,
         /* The current term and the peer one must match, otherwise we would have
          * either rejected the request or stepped down to followers. */
         assert(match == 0);
-		ZSINFO(gzlog, "[raft][%d][%d]discovered leader -> step down!",
-			   rkey(r), r->state);
+		ZSWARNING(gzlog, "[raft][%d][%d]discovered leader -> step down!",
+				  rkey(r), r->state);
         convertToFollower(r);
     }
 
@@ -111,8 +111,8 @@ int recvAppendEntries(struct raft *r,
      * date. */
     rv = recvUpdateLeader(r, id, address);
     if (rv != 0) {
-		ZSINFO(gzlog, "[raft][%d][%d]recvUpdateLeader failed!",
-			   rkey(r), r->state);
+		ZSERROR(gzlog, "[raft][%d][%d]recvUpdateLeader failed!",
+				rkey(r), r->state);
         return rv;
     }
 
@@ -127,17 +127,17 @@ int recvAppendEntries(struct raft *r,
      * something smarter, e.g. buffering the entries in the I/O backend, which
      * should be in charge of serializing everything. */
     if (r->snapshot.put.data != NULL && args->n_entries > 0) {
-		ZSINFO(gzlog, "[raft][%d][%d]ignoring AppendEntries RPC during snapshot install!",
-			   rkey(r), r->state);
+		ZSWARNING(gzlog, "[raft][%d][%d]ignoring AppendEntries RPC during snapshot install!",
+				  rkey(r), r->state);
         entryBatchesDestroy(args->entries, args->n_entries);
         return 0;
     }
 
 	rv = replicationAppend(r, args, &result.rejected, &async, &pi);
 	if (rv != 0) {
-		ZSINFO(gzlog, "[raft][%d][%d]replicationAppend failed!",
-			   rkey(r), r->state);
-		if (!args->pi.permit)
+		ZSERROR(gzlog, "[raft][%d][%d]replicationAppend failed rv[%d]!",
+				rkey(r), r->state, rv);
+		if (rv != RAFT_APPLY_BUSY)
 			return rv;
 	}
 

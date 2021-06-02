@@ -530,17 +530,17 @@ static bool enterPgrepicating(struct raft *r, unsigned i, struct pgrep_permit_in
 	}
 
 	/* For pgrep testing, assume server 2 always standby. */
-	static bool tested[100] = {false};
-	//if (i == 2 && r->state == 3 && rkey(r) == 0 && !tested[rkey(r)] &&
-	if (i == 2 && r->state == 3 && !tested[rkey(r)] &&
-		configurationIndexOf(&r->configuration, r->id) != 2 &&
-		server->role != RAFT_STANDBY) {
-		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server role[%d] i[%d] RAFT_STANDBY state. ",
-			   rkey(r), r->state, server->role, i);
-		assignRole(r, server, RAFT_STANDBY);
-		tested[rkey(r)] = true;
-		return true;
-	}
+//	static bool tested[100] = {false};
+//	//if (i == 2 && r->state == 3 && rkey(r) == 0 && !tested[rkey(r)] &&
+//	if (i == 2 && r->state == 3 && !tested[rkey(r)] &&
+//		configurationIndexOf(&r->configuration, r->id) != 2 &&
+//		server->role != RAFT_STANDBY) {
+//		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server role[%d] i[%d] RAFT_STANDBY state. ",
+//			   rkey(r), r->state, server->role, i);
+//		assignRole(r, server, RAFT_STANDBY);
+//		tested[rkey(r)] = true;
+//		return true;
+//	}
 
 	return false;
 }

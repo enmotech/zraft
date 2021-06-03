@@ -709,6 +709,7 @@ struct raft_io
      */
 
 	void *prp_ctx;
+	int64_t io_tick;
 
 
 	void (*pgrep_reset_ckposi)(

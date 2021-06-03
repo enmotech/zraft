@@ -123,7 +123,7 @@ static int sendAppendEntries(struct raft *r,
 		if (rv != 0) {
 			goto err;
 		}
-		args->pi.time = raft_tick_count_ns();
+		args->pi.time = ++r->io->io_tick;
 		ZSINFO(gzlog, "[raft][%d][%d]sendAppendEntries: initial pi.time[%ld].",
 			   rkey(r), r->state, args->pi.time);
 	}
@@ -529,18 +529,18 @@ static bool enterPgrepicating(struct raft *r, unsigned i, struct pgrep_permit_in
 		return true;
 	}
 
-//	/* For pgrep testing, assume server 2 always standby. */
-//	static bool tested[100] = {false};
-//	//if (i == 2 && r->state == 3 && rkey(r) == 0 && !tested[rkey(r)] && r->last_applied > 400 &&
-//	if (i == 2 && r->state == 3 && !tested[rkey(r)] && r->last_applied > 300 &&
-//		configurationIndexOf(&r->configuration, r->id) != 2 &&
-//		server->role != RAFT_STANDBY) {
-//		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server role[%d] i[%d] RAFT_STANDBY state. ",
-//			   rkey(r), r->state, server->role, i);
-//		assignRole(r, server, RAFT_STANDBY);
-//		tested[rkey(r)] = true;
-//		return true;
-//	}
+	/* For pgrep testing, assume server 2 always standby. */
+	static bool tested[100] = {false};
+	//if (i == 2 && r->state == 3 && rkey(r) == 0 && !tested[rkey(r)] && r->last_applied > 400 &&
+	if (i == 2 && r->state == 3 && !tested[rkey(r)] && r->last_applied > 300 &&
+		configurationIndexOf(&r->configuration, r->id) != 2 &&
+		server->role != RAFT_STANDBY) {
+		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server role[%d] i[%d] RAFT_STANDBY state. ",
+			   rkey(r), r->state, server->role, i);
+		assignRole(r, server, RAFT_STANDBY);
+		tested[rkey(r)] = true;
+		return true;
+	}
 
 	return false;
 }
@@ -1368,7 +1368,7 @@ static int checkPgreplicating(
 			   r->last_stored, r->last_applied, r->last_applying,
 			   args->prev_log_index, args->n_entries);
 
-		if (args->pi.time < r->last_append_time) {
+		if (args->pi.time <= r->last_append_time) {
 			ZSWARNING(gzlog, "[raft][%d][%d][pkt:%d] message out of date time[%ld] last_append_time[%ld].",
 					  rkey(r), r->state, args->pkt, args->pi.time, r->last_append_time);
 			return RAFT_DISCARD;

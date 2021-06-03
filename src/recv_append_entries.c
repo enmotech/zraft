@@ -53,6 +53,9 @@ int recvAppendEntries(struct raft *r,
         return rv;
     }
 
+	if (args->term > r->current_term)
+		r->last_append_time = 0;
+
     /* From Figure 3.1:
      *
      *   AppendEntries RPC: Receiver implementation: Reply false if term <
@@ -130,7 +133,11 @@ int recvAppendEntries(struct raft *r,
 		ZSWARNING(gzlog, "[raft][%d][%d]ignoring AppendEntries RPC during snapshot install!",
 				  rkey(r), r->state);
         entryBatchesDestroy(args->entries, args->n_entries);
-        return 0;
+		if (args->pi.replicating) {
+			rv = -1;
+			goto reply;
+		}
+		return 0;
     }
 
 	rv = replicationAppend(r, args, &result.rejected, &async, &pi);

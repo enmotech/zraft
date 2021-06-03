@@ -376,6 +376,8 @@ static void assignRole(struct raft *r, struct raft_server *server, int role)
 
 	_rv = raft_assign(r, _req, server->id, role, assignRoleCb);
 	if (_rv) {
+		ZSINFO(gzlog, "[raft][%d][%d]assignRole: server[%lld] role:[%d] failed[%d].",
+			   rkey(r), r->state, server->id, role, _rv);
 		server->pre_role = RAFT_UNKNOW;
 		raft_free(_result);
 		raft_free(_req);
@@ -399,9 +401,9 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: server i[%d] permit[%d].",
 		   rkey(r), r->state, i, pi.permit);
 
-	if (server->role != RAFT_STANDBY || i != r->pgrep_id) {
-		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: role[%d] pgrep_id[%d], goto heatbeat.",
-			   rkey(r), r->state, server->role, r->pgrep_id);
+	if (server->role != RAFT_STANDBY || server->pre_role == RAFT_STANDBY || i != r->pgrep_id) {
+		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: role[%d] pre_role[%d] pgrep_id[%d], goto heatbeat.",
+			   rkey(r), r->state, server->role,  server->pre_role, r->pgrep_id);
 		goto __heart_beat;
 	}
 
@@ -522,7 +524,7 @@ static bool enterPgrepicating(struct raft *r, unsigned i, struct pgrep_permit_in
 
 	if (server->pre_role != RAFT_VOTER &&
 		(server->role == RAFT_STANDBY || server->pre_role == RAFT_STANDBY)) {
-		if (server->role == RAFT_STANDBY)
+		if (server->role == RAFT_STANDBY && server->pre_role != RAFT_STANDBY)
 			progressSetPgreplicating(r, i, true);
 		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: i[%d] pgrep_id[%d].",
 			   rkey(r), r->state, i, r->pgrep_id);
@@ -532,7 +534,7 @@ static bool enterPgrepicating(struct raft *r, unsigned i, struct pgrep_permit_in
 	/* For pgrep testing, assume server 2 always standby. */
 	static bool tested[100] = {false};
 	//if (i == 2 && r->state == 3 && rkey(r) == 0 && !tested[rkey(r)] && r->last_applied > 400 &&
-	if (i == 2 && r->state == 3 && !tested[rkey(r)] && r->last_applied > 300 &&
+	if (i == 2 && r->state == 3 && !tested[rkey(r)] && r->last_applied > (raft_index)(rand()%800) &&
 		configurationIndexOf(&r->configuration, r->id) != 2 &&
 		server->role != RAFT_STANDBY) {
 		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server role[%d] i[%d] RAFT_STANDBY state. ",
@@ -1871,7 +1873,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 		req1->cb(req1, status, result);
 	}
 
-	r->last_applied = index;
+	r->last_applied = max(index, r->last_applied);
 
 	applySectionCallbackCheck(r, request->expect_index, request->pi, request->extra);
 
@@ -2171,7 +2173,7 @@ int replicationApply(struct raft *r, void *extra)
 				goto out;
 			applyBarrier(r, index);
 			rv = 0;
-			r->last_applied = index;
+			r->last_applied = max(index, r->last_applied);
 			applySectionCallbackCheck(r, r->commit_index, pi, request);
 			break;
 		case RAFT_CHANGE:
@@ -2179,7 +2181,7 @@ int replicationApply(struct raft *r, void *extra)
 				goto out;
 			applyChange(r, index);
 			rv = 0;
-			r->last_applied = index;
+			r->last_applied = max(index, r->last_applied);
 			applySectionCallbackCheck(r, r->commit_index, pi, request);
 			break;
 		default:
@@ -2191,6 +2193,8 @@ int replicationApply(struct raft *r, void *extra)
 			break;
 		}
 
+		ZSINFO(gzlog, "[raft][%d][%d]replicationApply update last_applying[%lld].",
+			   rkey(r), r->state, r->last_applying);
 		r->last_applying = index;
 	}
 

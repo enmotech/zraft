@@ -35,7 +35,7 @@ int recvAppendEntriesResult(struct raft *r,
 	(void)(address);
 	
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntriesResult: peer[%d], \
-		   replicating[%d] permit[%d] rejected[%lld] last_log_index[%lld]",
+		   replicating[%u] permit[%d] rejected[%lld] last_log_index[%lld]",
 		   rkey(r), r->state, result->pkt, i, result->pi.replicating,
 		   result->pi.permit, result->rejected, result->last_log_index);
 
@@ -99,6 +99,8 @@ __pgrep_prco:
 		bool unpermit = false;
 
 		if (!pgrep_proc) {
+			ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult meet some error pgrep_cancel.",
+				   rkey(r), r->state);
 			unpermit = true;
 			r->io->pgrep_cancel(r->io);
 		} else {
@@ -107,6 +109,8 @@ __pgrep_prco:
 				unpermit = true;
 			} else if (result->pi.replicating == PGREP_RND_ERR) {
 				/* Catch-up meet some error. */
+				ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult catch-up meet some error pgrep_cancel.",
+				   rkey(r), r->state);
 				unpermit = true;
 				r->io->pgrep_cancel(r->io);
 			} else  if (result->pi.replicating == PGREP_RND_BGN ||

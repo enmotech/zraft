@@ -1560,14 +1560,14 @@ int replicationApply(struct raft *r)
                 rv = applyCommand(r, index, &entry->buf);
                 break;
             case RAFT_BARRIER:
-                if(r->last_applying < r->last_applied)
+		if(r->last_applying > r->last_applied)
                     goto out;
                 applyBarrier(r, index);
                 rv = 0;
                 r->last_applied = index;
                 break;
             case RAFT_CHANGE:
-                if(r->last_applying < r->last_applied)
+		if(r->last_applying > r->last_applied)
                     goto out;
                 applyChange(r, index);
                 rv = 0;

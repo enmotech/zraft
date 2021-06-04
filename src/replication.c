@@ -403,8 +403,7 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 
 	if (server->role != RAFT_STANDBY ||
 		server->pre_role == RAFT_STANDBY ||
-		i != r->pgrep_id ||
-		r->configuration_uncommitted_index) {
+		i != r->pgrep_id) {
 		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: role[%d] pre_role[%d] pgrep_id[%d], cui[%lld] goto heatbeat.",
 			   rkey(r), r->state, server->role,  server->pre_role, r->pgrep_id,
 			   r->configuration_uncommitted_index);
@@ -2197,8 +2196,8 @@ int replicationApply(struct raft *r, void *extra)
 			rv = applyCommand(r, index, &entry->buf, pi, ab, request);
 			break;
 		case RAFT_BARRIER:
-//			if (r->last_applying > r->last_applied)
-//				goto pgrep_fail;
+			if (r->last_applying > r->last_applied)
+				goto pgrep_fail;
 			applyBarrier(r, index);
 			rv = 0;
 			r->last_applied = max(index, r->last_applied);
@@ -2206,8 +2205,8 @@ int replicationApply(struct raft *r, void *extra)
 			applySectionCallbackCheck(r, ab, pi, request);
 			break;
 		case RAFT_CHANGE:
-//			if (r->last_applying > r->last_applied)
-//				goto pgrep_fail;
+			if (r->last_applying > r->last_applied)
+				goto pgrep_fail;
 			applyChange(r, index);
 			rv = 0;
 			r->last_applied = max(index, r->last_applied);
@@ -2229,7 +2228,7 @@ int replicationApply(struct raft *r, void *extra)
 		r->last_applying = index;
 	}
 
-out:
+//out:
 
 	if (rv == 0 && r->last_applying == r->last_applied &&
 		shouldTakeSnapshot(r)) {

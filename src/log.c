@@ -812,16 +812,21 @@ int logAcquireSection(
     }
 
 	unsigned cnt = 0;
+	unsigned short type;
 
     for (j = 0; j < *n; j++) {
         size_t k = (i + j) % l->size;
         struct raft_entry *entry = &(*entries)[j];
         *entry = l->entries[k];
-        refsIncr(l, entry->term, index + j);
+		if (j && entry->type != type)
+			break;
+		type = entry->type;
+		refsIncr(l, entry->term, index + j);
 		if (++cnt == realn)
 			break;
     }
 
+	realn = cnt;
 	*n = realn;
 
 	ZSINFO(gzlog, "logAcquireSection: index[%lld] n[%d]", index, *n);

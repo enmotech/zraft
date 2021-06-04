@@ -133,10 +133,6 @@ int recvAppendEntries(struct raft *r,
 		ZSWARNING(gzlog, "[raft][%d][%d]ignoring AppendEntries RPC during snapshot install!",
 				  rkey(r), r->state);
         entryBatchesDestroy(args->entries, args->n_entries);
-		if (args->pi.replicating) {
-			rv = -1;
-			goto reply;
-		}
 		return 0;
     }
 

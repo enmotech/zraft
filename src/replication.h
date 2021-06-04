@@ -77,9 +77,6 @@ int replicationInstallSnapshot(struct raft *r,
                                raft_index *rejected,
                                bool *async);
 
-/* Called when replicationApply applied to fsm. */
-void (*replicationApplyCb)(struct raft *r);
-
 /* Apply any committed entry that was not applied yet.
  *
  * It must be called by leaders or followers. */

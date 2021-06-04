@@ -45,6 +45,7 @@
 
 #define RAFT_DISCARD 1001
 #define RAFT_APPLY_BUSY 1002
+#define RAFT_LOG_BUSY 1003
 
 /* Id of a raft group. */
 #define rkey(r) ((r)->io->raft_key((r)->io))

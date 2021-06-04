@@ -144,7 +144,8 @@ int recvAppendEntries(struct raft *r,
 	if (rv != 0) {
 		ZSERROR(gzlog, "[raft][%d][%d]replicationAppend failed rv[%d]!",
 				rkey(r), r->state, rv);
-		if (rv != RAFT_APPLY_BUSY)
+		if (rv != RAFT_APPLY_BUSY &&
+			rv != RAFT_LOG_BUSY)
 			return rv;
 	}
 

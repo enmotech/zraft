@@ -5,6 +5,7 @@
 #include "../include/raft.h"
 #include "assert.h"
 #include "configuration.h"
+#include "tracing.h"
 
 /* Calculate the reference count hash table key for the given log entry index in
  * an hash table of the given size.
@@ -279,7 +280,45 @@ static void refsIncr(struct raft_log *l,
     assert(slot != NULL);
 
     slot->count++;
+
+	ZSINFO(gzlog, "refsIncr: index[%lld] ref[%u]", index, slot->count);
 }
+
+static bool refsIf(struct raft_log *l,
+                     const raft_term term,
+                     const raft_index index)
+{
+    size_t key;                       /* Hash table key for the given index. */
+    struct raft_entry_ref *slot;      /* Slot for the given term/index */
+
+    assert(l != NULL);
+    assert(term > 0);
+    assert(index > 0);
+
+    key = refsKey(index, l->refs_size);
+
+    /* Lookup the slot associated with the given term/index, keeping track of
+     * its previous slot in the bucket list. */
+    slot = &l->refs[key];
+    while (1) {
+        assert(slot != NULL);
+        assert(slot->index == index);
+        if (slot->term == term) {
+            break;
+        }
+        slot = slot->next;
+    }
+
+	ZSINFO(gzlog, "refsIf: index[%lld] ref[%u]", index, slot->count);
+
+    if (slot->count > 1) {
+        /* The entry is still referenced. */
+        return false;
+    }
+
+    return true;
+}
+
 
 /* Decrement the refcount of the entry with the given index. Return a boolean
  * indicating whether the entry has now zero references. */
@@ -312,6 +351,8 @@ static bool refsDecr(struct raft_log *l,
     }
 
     slot->count--;
+
+	ZSINFO(gzlog, "refsDecr: index[%lld] ref[%u]", index, slot->count);
 
     if (slot->count > 0) {
         /* The entry is still referenced. */
@@ -709,6 +750,8 @@ int logAcquire(struct raft_log *l,
         refsIncr(l, entry->term, index + j);
     }
 
+	ZSINFO(gzlog, "logAcquire: index[%lld] n[%d]", index, *n);
+
     return 0;
 }
 
@@ -781,6 +824,8 @@ int logAcquireSection(
 
 	*n = realn;
 
+	ZSINFO(gzlog, "logAcquireSection: index[%lld] n[%d]", index, *n);
+
     return 0;
 }
 
@@ -813,6 +858,8 @@ void logRelease(struct raft_log *l,
 
     assert(l != NULL);
     assert((entries == NULL && n == 0) || (entries != NULL && n > 0));
+
+	ZSINFO(gzlog, "logRelease: index[%lld] n[%d]", index, n);
 
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
@@ -873,9 +920,10 @@ static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
 
 /* Core logic of @logTruncate and @logDiscard, removing all log entries from
  * @index onward. If @destroy is true, also destroy the removed entries. */
-static void removeSuffix(struct raft_log *l,
+static int removeSuffix(struct raft_log *l,
                          const raft_index index,
-                         bool destroy)
+                         bool destroy,
+						 bool decref)
 {
     size_t i;
     size_t n;
@@ -891,15 +939,25 @@ static void removeSuffix(struct raft_log *l,
     for (i = 0; i < n; i++) {
         struct raft_entry *entry;
         bool unref;
+		size_t back;
 
-        if (l->back == 0) {
-            l->back = l->size - 1;
-        } else {
-            l->back--;
-        }
+		if (l->back == 0) {
+			back = l->size - 1;
+		} else {
+			back = l->back - 1;
+		}
 
-        entry = &l->entries[l->back];
-        unref = refsDecr(l, entry->term, start + n - i - 1);
+		entry = &l->entries[back];
+		unref = refsIf(l, entry->term, start + n - i - 1);
+
+		if (!unref && !decref) {
+			ZSINFO(gzlog, "removeSuffix: failed index[%ld]", back);
+			return -1;
+		}
+
+		l->back = back;
+        
+		unref = refsDecr(l, entry->term, start + n - i - 1);
 
         if (unref && destroy) {
             destroyEntry(l, entry);
@@ -907,6 +965,8 @@ static void removeSuffix(struct raft_log *l,
     }
 
     clearIfEmpty(l);
+
+	return 0;
 }
 
 void logTruncate(struct raft_log *l, const raft_index index)
@@ -914,12 +974,25 @@ void logTruncate(struct raft_log *l, const raft_index index)
     if (logNumEntries(l) == 0) {
         return;
     }
-    removeSuffix(l, index, true);
+
+	ZSINFO(gzlog, "logTruncate: index[%lld]", index);
+
+    removeSuffix(l, index, true, true);
+}
+
+int logTruncateIf(struct raft_log *l, const raft_index index)
+{
+    if (logNumEntries(l) == 0) {
+        return 0;
+    }
+
+	ZSINFO(gzlog, "logTruncateIf: index[%lld]", index);
+    return removeSuffix(l, index, true, false);
 }
 
 void logDiscard(struct raft_log *l, const raft_index index)
 {
-    removeSuffix(l, index, false);
+    removeSuffix(l, index, false, true);
 }
 
 /* Delete all entries up to the given index (included). */

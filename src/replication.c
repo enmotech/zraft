@@ -401,9 +401,13 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: server i[%d] permit[%d].",
 		   rkey(r), r->state, i, pi.permit);
 
-	if (server->role != RAFT_STANDBY || server->pre_role == RAFT_STANDBY || i != r->pgrep_id) {
-		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: role[%d] pre_role[%d] pgrep_id[%d], goto heatbeat.",
-			   rkey(r), r->state, server->role,  server->pre_role, r->pgrep_id);
+	if (server->role != RAFT_STANDBY ||
+		server->pre_role == RAFT_STANDBY ||
+		i != r->pgrep_id ||
+		r->configuration_uncommitted_index) {
+		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: role[%d] pre_role[%d] pgrep_id[%d], cui[%lld] goto heatbeat.",
+			   rkey(r), r->state, server->role,  server->pre_role, r->pgrep_id,
+			   r->configuration_uncommitted_index);
 		goto __heart_beat;
 	}
 
@@ -531,18 +535,18 @@ static bool enterPgrepicating(struct raft *r, unsigned i, struct pgrep_permit_in
 		return true;
 	}
 
-	/* For pgrep testing, assume server 2 always standby. */
-	static bool tested[100] = {false};
-	//if (i == 2 && r->state == 3 && rkey(r) == 0 && !tested[rkey(r)] && r->last_applied > 400 &&
-	if (i == 2 && r->state == 3 && !tested[rkey(r)] && r->last_applied > (raft_index)(rand()%800) &&
-		configurationIndexOf(&r->configuration, r->id) != 2 &&
-		server->role != RAFT_STANDBY) {
-		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server role[%d] i[%d] RAFT_STANDBY state. ",
-			   rkey(r), r->state, server->role, i);
-		assignRole(r, server, RAFT_STANDBY);
-		tested[rkey(r)] = true;
-		return true;
-	}
+//	/* For pgrep testing, assume server 2 always standby. */
+//	static bool tested[100] = {false};
+//	//if (i == 2 && r->state == 3 && rkey(r) == 0 && !tested[rkey(r)] && r->last_applied > 400 &&
+//	if (i == 2 && r->state == 3 && !tested[rkey(r)] && r->last_applied > (raft_index)(rand()%800) &&
+//		configurationIndexOf(&r->configuration, r->id) != 2 &&
+//		server->role != RAFT_STANDBY) {
+//		ZSINFO(gzlog, "[raft][%d][%d]replicationProgress: set server role[%d] i[%d] RAFT_STANDBY state. ",
+//			   rkey(r), r->state, server->role, i);
+//		assignRole(r, server, RAFT_STANDBY);
+//		tested[rkey(r)] = true;
+//		return true;
+//	}
 
 	return false;
 }
@@ -1384,17 +1388,23 @@ static int checkPgreplicating(
 		if (args->pi.replicating == PGREP_RND_BGN) {
 			raft_index trunc_index = max(r->last_applied, r->last_applying) + 1;
 
-			logTruncate(&r->log, trunc_index);
+			if(logTruncateIf(&r->log, trunc_index) != 0) {
+				*async = false;
+				return RAFT_LOG_BUSY;
+			}
 			r->last_stored = trunc_index - 1;
 			r->commit_index = trunc_index - 1;
 
-			/* If it's new pg with no data, sync indices with the leader for restart pgrep. */
-			if (trunc_index == 2) {
-				ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] l->offset[%lld] is empty with 1 entry, truncate to 1.",
-					   rkey(r), r->state, args->pkt, r->log.offset);
-				logTruncate(&r->log, 1);
-				__sync_pgrep_index();
-			}
+//			/* If it's new pg with no data, sync indices with the leader for restart pgrep. */
+//			if (trunc_index == 2) {
+//				ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] l->offset[%lld] is empty with 1 entry, truncate to 1.",
+//					   rkey(r), r->state, args->pkt, r->log.offset);
+//				if (logTruncateIf(&r->log, 1) != 0) {
+//					*async = false;
+//					return RAFT_LOG_BUSY;
+//				}
+//				__sync_pgrep_index();
+//			}
 
 			*async = false;
 			return 0;
@@ -1414,7 +1424,10 @@ static int checkPgreplicating(
 			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] logTruncate to [%lld] nums[%ld].",
 				   rkey(r), r->state, args->pkt, r->log.offset + 1, logNumEntries(&r->log));
 
-			logTruncate(&r->log, r->log.offset + 1);
+			if(logTruncateIf(&r->log, r->log.offset + 1) != 0) {
+				*async = false;
+				return RAFT_LOG_BUSY;
+			}
 			__sync_pgrep_index();
 		}
 
@@ -1829,10 +1842,16 @@ void replicationApplyFollowerCb(
 
 #if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
 /* Context for a write log entries request that was submitted by a leader. */
+
+struct applyBatch {
+	int expect_num;
+	int applied_num;
+};
+
 struct applyLog {
 	struct raft *raft;          	/* Instance that has submitted the request */
 	raft_index index;           	/* Index of the first entry in the request. */
-	raft_index expect_index;    	/* Index of the expect index to notify. */
+	struct applyBatch *ab;
 	void *extra;                	/* Extra params passed if reuqired. */
 	struct pgrep_permit_info pi; 	/* Indicate pgrep permit granted. */
 	struct raft_fsm_apply req;
@@ -1840,15 +1859,16 @@ struct applyLog {
 
 static void applySectionCallbackCheck(
 	struct raft *r,
-	raft_index expect_index,
+	struct applyBatch *ab,
 	struct pgrep_permit_info pi,
 	void *extra
 	)
 {
-	ZSINFO(gzlog, "[raft][%d][%d]applySectionCallbackCheck: expect_index[%lld] last_applied[%lld].",
-		   rkey(r), r->state, expect_index, r->last_applied);
+	ZSINFO(gzlog, "[raft][%d][%d]applySectionCallbackCheck: expect_num[%d] applied_num[%d].",
+		   rkey(r), r->state, ab->expect_num, ab->applied_num);
 
-	if (r->last_applied == expect_index) {
+	if (ab->expect_num == ab->applied_num) {
+		raft_free(ab);
 		if (pi.permit) {
 			replicationApplyLeaderCb(r, pi);
 		} else {
@@ -1874,8 +1894,9 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 	}
 
 	r->last_applied = max(index, r->last_applied);
+	request->ab->applied_num++;
 
-	applySectionCallbackCheck(r, request->expect_index, request->pi, request->extra);
+	applySectionCallbackCheck(r, request->ab, request->pi, request->extra);
 
 	raft_free(request);
 }
@@ -1886,7 +1907,7 @@ static int applyCommand(struct raft *r,
 						const raft_index index,
 						const struct raft_buffer *buf,
 						struct pgrep_permit_info pi,
-						raft_index expect_index,
+						struct applyBatch *ab,
 						void *extra)
 {
 	int rv;
@@ -1905,7 +1926,7 @@ static int applyCommand(struct raft *r,
 
 	request->raft = r;
 	request->index = index;
-	request->expect_index = expect_index;
+	request->ab = ab;
 	request->pi = pi;
 	request->req.permit = false;
 	request->req.obj_id = bd.obj_id;
@@ -2155,6 +2176,13 @@ int replicationApply(struct raft *r, void *extra)
 		   r->commit_index[%lld] last_applied[%lld] last_applying[%lld].",
 		   rkey(r), r->state, pi.permit, r->commit_index, r->last_applied, r->last_applying);
 
+	struct applyBatch *ab = raft_malloc(sizeof(struct applyBatch));
+	if (!ab)
+		goto pgrep_fail;
+
+	ab->expect_num = (int)(r->commit_index - r->last_applying);
+	ab->applied_num = 0;
+
 	for (index = r->last_applying + 1; index <= r->commit_index; index++) {
 		const struct raft_entry *entry = logGet(&r->log, index);
 
@@ -2166,7 +2194,7 @@ int replicationApply(struct raft *r, void *extra)
 
 		switch (entry->type) {
 		case RAFT_COMMAND:
-			rv = applyCommand(r, index, &entry->buf, pi, r->commit_index, request);
+			rv = applyCommand(r, index, &entry->buf, pi, ab, request);
 			break;
 		case RAFT_BARRIER:
 			if (r->last_applying < r->last_applied)
@@ -2174,7 +2202,8 @@ int replicationApply(struct raft *r, void *extra)
 			applyBarrier(r, index);
 			rv = 0;
 			r->last_applied = max(index, r->last_applied);
-			applySectionCallbackCheck(r, r->commit_index, pi, request);
+			ab->applied_num++;
+			applySectionCallbackCheck(r, ab, pi, request);
 			break;
 		case RAFT_CHANGE:
 			if (r->last_applying < r->last_applied)
@@ -2182,7 +2211,8 @@ int replicationApply(struct raft *r, void *extra)
 			applyChange(r, index);
 			rv = 0;
 			r->last_applied = max(index, r->last_applied);
-			applySectionCallbackCheck(r, r->commit_index, pi, request);
+			ab->applied_num++;
+			applySectionCallbackCheck(r, ab, pi, request);
 			break;
 		default:
 			rv = 0; /* For coverity. This case can't be taken. */
@@ -2190,6 +2220,7 @@ int replicationApply(struct raft *r, void *extra)
 		}
 
 		if (rv != 0) {
+			raft_free(ab);
 			break;
 		}
 

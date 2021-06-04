@@ -2197,8 +2197,8 @@ int replicationApply(struct raft *r, void *extra)
 			rv = applyCommand(r, index, &entry->buf, pi, ab, request);
 			break;
 		case RAFT_BARRIER:
-			if (r->last_applying < r->last_applied)
-				goto out;
+//			if (r->last_applying > r->last_applied)
+//				goto pgrep_fail;
 			applyBarrier(r, index);
 			rv = 0;
 			r->last_applied = max(index, r->last_applied);
@@ -2206,8 +2206,8 @@ int replicationApply(struct raft *r, void *extra)
 			applySectionCallbackCheck(r, ab, pi, request);
 			break;
 		case RAFT_CHANGE:
-			if (r->last_applying < r->last_applied)
-				goto out;
+//			if (r->last_applying > r->last_applied)
+//				goto pgrep_fail;
 			applyChange(r, index);
 			rv = 0;
 			r->last_applied = max(index, r->last_applied);
@@ -2229,11 +2229,9 @@ int replicationApply(struct raft *r, void *extra)
 		r->last_applying = index;
 	}
 
-	if (request)
-		return rv;
-
 out:
-	if (r->last_applying == r->last_applied &&
+
+	if (rv == 0 && r->last_applying == r->last_applied &&
 		shouldTakeSnapshot(r)) {
 		rv = takeSnapshot(r);
 	}
@@ -2241,8 +2239,11 @@ out:
 	return rv;
 
 pgrep_fail:
-	if (request)
+	if (request) {
+		logRelease(&r->log, request->index, request->args.entries,
+				   request->args.n_entries);
 		raft_free(request);
+	}
 	return 0;
 }
 

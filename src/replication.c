@@ -138,8 +138,11 @@ static int sendAppendEntries(struct raft *r,
 	 */
 	args->leader_commit = r->commit_index;
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]sendAppendEntries: send %u entries starting at %llu to server %llu (last index %llu)",
-		   rkey(r), r->state, args->pkt, args->n_entries, args->prev_log_index, server->id, logLastIndex(&r->log));
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]sendAppendEntries: "
+		   "send %u entries starting at %llu to server "
+		   "%llu (last index %llu, last applied %llu)",
+		   rkey(r), r->state, args->pkt, args->n_entries, args->prev_log_index,
+		   server->id, logLastIndex(&r->log), r->last_applied);
 
 	message.type = RAFT_IO_APPEND_ENTRIES;
 	message.server_id = server->id;
@@ -340,6 +343,9 @@ static void assignRoleCb(struct raft_change *req, int status)
 	ZSINFO(gzlog, "[raft][%d][%d]assignRoleCb: server[%lld] role:[%d] return.",
 		   rkey(r), r->state, server->id, server->role);
 
+	if (server->role == RAFT_VOTER)
+		r->leader_state.promotee_id = 0;
+
 	server->pre_role = RAFT_UNKNOW;
 	raft_free(_result);
 	raft_free(req);
@@ -404,14 +410,19 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	if (server->role != RAFT_STANDBY ||
 		server->pre_role == RAFT_STANDBY ||
 		i != r->pgrep_id) {
-		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: role[%d] pre_role[%d] pgrep_id[%d], cui[%lld] goto heatbeat.",
-			   rkey(r), r->state, server->role,  server->pre_role, r->pgrep_id,
-			   r->configuration_uncommitted_index);
+		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: role[%d] pre_role[%d] pgrep_id[%d] goto heatbeat.",
+			   rkey(r), r->state, server->role,  server->pre_role, r->pgrep_id);
 		goto __heart_beat;
 	}
 
 	/* Send tick message, and handle all status. */
 	status = r->io->pgrep_tick(r->io, r->id, server->id, r->current_term, &pi);
+
+	if (r->configuration_uncommitted_index) {
+		ZSINFO(gzlog, "[raft][%d][%d]sendPgrepTickMessage: cui[%lld] goto heatbeat.",
+			   rkey(r), r->state, r->configuration_uncommitted_index);
+		goto __heart_beat;
+	}
 
 	switch (status) {
 	case PGREP_TICK_SUC:
@@ -436,6 +447,7 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 				r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
 				pi.permit = false;
 			}
+			r->leader_state.promotee_id = 0;
 			assignRole(r, server, RAFT_VOTER);
 			return 0;
 		}
@@ -879,65 +891,65 @@ int replicationTrigger(struct raft *r, raft_index index)
  * This function changes the local configuration marking the server being
  * promoted as actually voting, appends the a RAFT_CHANGE entry with the new
  * configuration to the local log and triggers its replication. */
-static int triggerActualPromotion(struct raft *r)
-{
-	raft_index index;
-	raft_term term = r->current_term;
-	size_t server_index;
-	struct raft_server *server;
-	int old_role;
-	int rv;
-
-	assert(r->state == RAFT_LEADER);
-	assert(r->leader_state.promotee_id != 0);
-
-	server_index =
-		configurationIndexOf(&r->configuration, r->leader_state.promotee_id);
-	assert(server_index < r->configuration.n);
-
-	server = &r->configuration.servers[server_index];
-
-	assert(server->role != RAFT_VOTER);
-
-	/* Update our current configuration. */
-	old_role = server->role;
-	server->role = RAFT_VOTER;
-
-	/* Index of the entry being appended. */
-	index = logLastIndex(&r->log) + 1;
-
-	/* Encode the new configuration and append it to the log. */
-	rv = logAppendConfiguration(&r->log, term, &r->configuration);
-	if (rv != 0) {
-		goto err;
-	}
-
-	/* Start writing the new log entry to disk and send it to the followers. */
-	rv = replicationTrigger(r, index);
-	if (rv != 0) {
-		goto err_after_log_append;
-	}
-
-	r->leader_state.promotee_id = 0;
-	r->configuration_uncommitted_index = logLastIndex(&r->log);
-
-	return 0;
-
-err_after_log_append:
-	logTruncate(&r->log, index);
-
-err:
-	server->role = old_role;
-
-	assert(rv != 0);
-	return rv;
-}
+//static int triggerActualPromotion(struct raft *r)
+//{
+//	raft_index index;
+//	raft_term term = r->current_term;
+//	size_t server_index;
+//	struct raft_server *server;
+//	int old_role;
+//	int rv;
+//
+//	assert(r->state == RAFT_LEADER);
+//	assert(r->leader_state.promotee_id != 0);
+//
+//	server_index =
+//		configurationIndexOf(&r->configuration, r->leader_state.promotee_id);
+//	assert(server_index < r->configuration.n);
+//
+//	server = &r->configuration.servers[server_index];
+//
+//	assert(server->role != RAFT_VOTER);
+//
+//	/* Update our current configuration. */
+//	old_role = server->role;
+//	server->role = RAFT_VOTER;
+//
+//	/* Index of the entry being appended. */
+//	index = logLastIndex(&r->log) + 1;
+//
+//	/* Encode the new configuration and append it to the log. */
+//	rv = logAppendConfiguration(&r->log, term, &r->configuration);
+//	if (rv != 0) {
+//		goto err;
+//	}
+//
+//	/* Start writing the new log entry to disk and send it to the followers. */
+//	rv = replicationTrigger(r, index);
+//	if (rv != 0) {
+//		goto err_after_log_append;
+//	}
+//
+//	r->leader_state.promotee_id = 0;
+//	r->configuration_uncommitted_index = logLastIndex(&r->log);
+//
+//	return 0;
+//
+//err_after_log_append:
+//	logTruncate(&r->log, index);
+//
+//err:
+//	server->role = old_role;
+//
+//	assert(rv != 0);
+//	return rv;
+//}
 
 int replicationUpdate(struct raft *r,
 					  const struct raft_server *server,
 					  const struct raft_append_entries_result *result)
 {
-	bool is_being_promoted;
+//	bool is_being_promoted;
 	raft_index last_index;
 	unsigned i;
 	int rv;
@@ -1008,17 +1020,17 @@ int replicationUpdate(struct raft *r,
 	/* If the server is currently being promoted and is catching with logs,
 	 * update the information about the current catch-up round, and possibly
 	 * proceed with the promotion. */
-	is_being_promoted = r->leader_state.promotee_id != 0 &&
-		r->leader_state.promotee_id == server->id;
-	if (is_being_promoted) {
-		bool is_up_to_date = membershipUpdateCatchUpRound(r);
-		if (is_up_to_date) {
-			rv = triggerActualPromotion(r);
-			if (rv != 0) {
-				return rv;
-			}
-		}
-	}
+//	is_being_promoted = r->leader_state.promotee_id != 0 &&
+//		r->leader_state.promotee_id == server->id;
+//	if (is_being_promoted) {
+//		bool is_up_to_date = membershipUpdateCatchUpRound(r);
+//		if (is_up_to_date) {
+//			rv = triggerActualPromotion(r);
+//			if (rv != 0) {
+//				return rv;
+//			}
+//		}
+//	}
 
 	/* Check if we can commit some new entries. */
 	replicationQuorum(r, r->last_stored);
@@ -1386,6 +1398,8 @@ static int checkPgreplicating(
 		/* If it's the first message, just reply the last_stored index. */
 		if (args->pi.replicating == PGREP_RND_BGN) {
 			raft_index trunc_index = max(r->last_applied, r->last_applying) + 1;
+
+			r->io->pgrep_update_lctime(r->io, args->pi.time);
 
 			if(logTruncateIf(&r->log, trunc_index) != 0) {
 				*async = false;
@@ -1889,6 +1903,8 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 
 	req1 = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
 	if (req1 != NULL && req1->cb != NULL) {
+		ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-1|%d-%lld|.",
+			   rkey(r), r->state, rkey(r), index);
 		req1->cb(req1, status, result);
 	}
 
@@ -1977,6 +1993,8 @@ static void applyBarrier(struct raft *r, const raft_index index)
 	struct raft_barrier *req;
 	req = (struct raft_barrier *)getRequest(r, index, RAFT_BARRIER);
 	if (req != NULL && req->cb != NULL) {
+		ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-1|%d-%lld|.",
+			   rkey(r), r->state, rkey(r), index);
 		req->cb(req, 0);
 	}
 }
@@ -1995,6 +2013,9 @@ static void applyChange(struct raft *r, const raft_index index)
 	 * index, since that uncommitted configuration is now committed. */
 	if (r->configuration_uncommitted_index == index) {
 		r->configuration_uncommitted_index = 0;
+		ZSINFO(gzlog, "[raft][%d][%d]applyChange index[%lld] "
+					  "set configuration_uncommitted_index = 0.",
+			   rkey(r), r->state, index);
 	}
 
 	r->configuration_index = index;
@@ -2223,9 +2244,9 @@ int replicationApply(struct raft *r, void *extra)
 			break;
 		}
 
+		r->last_applying = index;
 		ZSINFO(gzlog, "[raft][%d][%d]replicationApply update last_applying[%lld].",
 			   rkey(r), r->state, r->last_applying);
-		r->last_applying = index;
 	}
 
 //out:

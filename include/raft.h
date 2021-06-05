@@ -716,6 +716,11 @@ struct raft_io
 	void (*pgrep_reset_ckposi)(
 		struct raft_io *io);
 
+	void (*pgrep_update_lctime)(
+		struct raft_io *io,
+		int64_t time
+		);
+
 	uint32_t (*raft_key)(
 		struct raft_io *io);
 

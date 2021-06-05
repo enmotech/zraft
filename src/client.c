@@ -38,7 +38,6 @@ int raft_apply(struct raft *r,
 
     /* Index of the first entry being appended. */
     index = logLastIndex(&r->log) + 1;
-    tracef("%u commands starting at %lld", n, index);
     req->type = RAFT_COMMAND;
     req->index = index;
     req->cb = cb;
@@ -55,6 +54,10 @@ int raft_apply(struct raft *r,
     if (rv != 0) {
         goto err_after_log_append;
     }
+
+
+	ZSINFO(gzlog, "[raft][%d][%d] %u |usr-req-key-0|%d-%lld|.",
+		   rkey(r), r->state, n, rkey(r), index);
 
     return 0;
 
@@ -88,7 +91,6 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 
     /* Index of the barrier entry being appended. */
     index = logLastIndex(&r->log) + 1;
-    tracef("barrier starting at %lld", index);
     req->type = RAFT_BARRIER;
     req->index = index;
     req->cb = cb;
@@ -104,6 +106,9 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     if (rv != 0) {
         goto err_after_log_append;
     }
+
+	ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-0|%d-%lld|.",
+		   rkey(r), r->state, rkey(r), index);
 
     return 0;
 
@@ -157,6 +162,8 @@ static int clientChangeConfiguration(
     }
 
     r->configuration_uncommitted_index = index;
+	ZSINFO(gzlog, "[raft][%d][%d]clientChangeConfiguration set configuration_uncommitted_index = [%lld].",
+		   rkey(r), r->state, r->configuration_uncommitted_index);
 
     return 0;
 
@@ -297,9 +304,9 @@ int raft_assign(struct raft *r,
     r->leader_state.promotee_id = server->id;
 
     /* Initialize the first catch-up round. */
-    r->leader_state.round_number = 1;
-    r->leader_state.round_index = last_index;
-    r->leader_state.round_start = r->io->time(r->io);
+//    r->leader_state.round_number = 1;
+//    r->leader_state.round_index = last_index;
+//    r->leader_state.round_start = r->io->time(r->io);
 
     /* Immediately initiate an AppendEntries request. */
     struct pgrep_permit_info pi;

@@ -18,7 +18,7 @@ int membershipCanChangeConfiguration(struct raft *r);
  *
  * This function must be called only by leaders after a @raft_assign request
  * has been submitted. */
-bool membershipUpdateCatchUpRound(struct raft *r);
+//bool membershipUpdateCatchUpRound(struct raft *r);
 
 /* Update the local configuration replacing it with the content of the given
  * RAFT_CHANGE entry, which has just been received in as part of an

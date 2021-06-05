@@ -151,42 +151,42 @@ static int tickLeader(struct raft *r)
      *   gap. Otherwise, the leader aborts the configuration change with an
      *   error.
      */
-    if (r->leader_state.promotee_id != 0) {
-        raft_id id = r->leader_state.promotee_id;
-        unsigned server_index;
-        raft_time round_duration = now - r->leader_state.round_start;
-        bool is_too_slow;
-        bool is_unresponsive;
-
-        /* If a promotion is in progress, we expect that our configuration
-         * contains an entry for the server being promoted, and that the server
-         * is not yet considered as voting. */
-        server_index = configurationIndexOf(&r->configuration, id);
-        assert(server_index < r->configuration.n);
-        assert(r->configuration.servers[server_index].role != RAFT_VOTER);
-
-        is_too_slow = (r->leader_state.round_number == r->max_catch_up_rounds &&
-                       round_duration > r->election_timeout);
-        is_unresponsive = round_duration > r->max_catch_up_round_duration;
-
-        /* Abort the promotion if we are at the 10'th round and it's still
-         * taking too long, or if the server is unresponsive. */
-        if (is_too_slow || is_unresponsive) {
-            struct raft_change *change;
-
-            r->leader_state.promotee_id = 0;
-
-            r->leader_state.round_index = 0;
-            r->leader_state.round_number = 0;
-            r->leader_state.round_start = 0;
-
-            change = r->leader_state.change;
-            r->leader_state.change = NULL;
-            if (change != NULL && change->cb != NULL) {
-                change->cb(change, RAFT_NOCONNECTION);
-            }
-        }
-    }
+//    if (r->leader_state.promotee_id != 0) {
+//        raft_id id = r->leader_state.promotee_id;
+//        unsigned server_index;
+//        raft_time round_duration = now - r->leader_state.round_start;
+//        bool is_too_slow;
+//        bool is_unresponsive;
+//
+//        /* If a promotion is in progress, we expect that our configuration
+//         * contains an entry for the server being promoted, and that the server
+//         * is not yet considered as voting. */
+//        server_index = configurationIndexOf(&r->configuration, id);
+//        assert(server_index < r->configuration.n);
+//        assert(r->configuration.servers[server_index].role != RAFT_VOTER);
+//
+//        is_too_slow = (r->leader_state.round_number == r->max_catch_up_rounds &&
+//                       round_duration > r->election_timeout);
+//        is_unresponsive = round_duration > r->max_catch_up_round_duration;
+//
+//        /* Abort the promotion if we are at the 10'th round and it's still
+//         * taking too long, or if the server is unresponsive. */
+//        if (is_too_slow || is_unresponsive) {
+//            struct raft_change *change;
+//
+//            r->leader_state.promotee_id = 0;
+//
+//            r->leader_state.round_index = 0;
+//            r->leader_state.round_number = 0;
+//            r->leader_state.round_start = 0;
+//
+//            change = r->leader_state.change;
+//            r->leader_state.change = NULL;
+//            if (change != NULL && change->cb != NULL) {
+//                change->cb(change, RAFT_NOCONNECTION);
+//            }
+//        }
+//    }
 
     return 0;
 }

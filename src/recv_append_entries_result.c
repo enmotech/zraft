@@ -41,17 +41,17 @@ int recvAppendEntriesResult(struct raft *r,
 
     if (r->state != RAFT_LEADER) {
         tracef("local server is not leader -> ignore");
-        goto __pgrep_prco;
+        goto __pgrep_proc;
     }
 
     rv = recvEnsureMatchingTerms(r, result->term, &match);
     if (rv != 0) {
-        goto __pgrep_prco;
+        goto __pgrep_proc;
     }
 
     if (match < 0) {
         tracef("local term is higher -> ignore ");
-        goto __pgrep_prco;
+        goto __pgrep_proc;
     }
 
     /* If we have stepped down, abort here.
@@ -63,7 +63,7 @@ int recvAppendEntriesResult(struct raft *r,
      */
     if (match > 0) {
         assert(r->state == RAFT_FOLLOWER);
-        goto __pgrep_prco;
+        goto __pgrep_proc;
     }
 
     assert(result->term == r->current_term);
@@ -72,21 +72,21 @@ int recvAppendEntriesResult(struct raft *r,
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         tracef("unknown server -> ignore");
-        goto __pgrep_prco;
+        goto __pgrep_proc;
     }
 
 	if (result->pi.replicating == PGREP_RND_HRT)
-		goto __pgrep_prco;
+		goto __pgrep_proc;
 
     /* Update the progress of this server, possibly sending further entries. */
     rv = replicationUpdate(r, server, result);
     if (rv != 0) {
-        goto __pgrep_prco;
+        goto __pgrep_proc;
     }
 
 	pgrep_proc = true;
 
-__pgrep_prco:
+__pgrep_proc:
 
 	/* Pgrep:
 	 *
@@ -134,6 +134,10 @@ __pgrep_prco:
 				   rkey(r), r->state);
 		}
 	}
+
+	if (r->commit_index > r->last_applying &&
+		r->last_applied == r->last_applying)
+		replicationApply(r, NULL);
 
     return rv;
 }

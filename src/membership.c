@@ -6,6 +6,8 @@
 #include "err.h"
 #include "log.h"
 #include "progress.h"
+#include "tracing.h"
+
 
 int membershipCanChangeConfiguration(struct raft *r)
 {
@@ -47,56 +49,56 @@ err:
     return rv;
 }
 
-bool membershipUpdateCatchUpRound(struct raft *r)
-{
-    unsigned server_index;
-    raft_index match_index;
-    raft_index last_index;
-    raft_time now = r->io->time(r->io);
-    raft_time round_duration;
-    bool is_up_to_date;
-    bool is_fast_enough;
-
-    assert(r->state == RAFT_LEADER);
-    assert(r->leader_state.promotee_id != 0);
-
-    server_index =
-        configurationIndexOf(&r->configuration, r->leader_state.promotee_id);
-    assert(server_index < r->configuration.n);
-
-    match_index = progressMatchIndex(r, server_index);
-
-    /* If the server did not reach the target index for this round, it did not
-     * catch up. */
-    if (match_index < r->leader_state.round_index) {
-        return false;
-    }
-
-    last_index = logLastIndex(&r->log);
-    round_duration = now - r->leader_state.round_start;
-
-    is_up_to_date = match_index == last_index;
-    is_fast_enough = round_duration < r->election_timeout;
-
-    /* If the server's log is fully up-to-date or the round that just terminated
-     * was fast enough, then the server as caught up. */
-    if (is_up_to_date || is_fast_enough) {
-        r->leader_state.round_number = 0;
-        r->leader_state.round_index = 0;
-        r->leader_state.round_start = 0;
-
-        return true;
-    }
-
-    /* If we get here it means that this catch-up round is complete, but there
-     * are more entries to replicate, or it was not fast enough. Let's start a
-     * new round. */
-    r->leader_state.round_number++;
-    r->leader_state.round_index = last_index;
-    r->leader_state.round_start = now;
-
-    return false;
-}
+//bool membershipUpdateCatchUpRound(struct raft *r)
+//{
+//    unsigned server_index;
+//    raft_index match_index;
+//    raft_index last_index;
+//    raft_time now = r->io->time(r->io);
+//    raft_time round_duration;
+//    bool is_up_to_date;
+//    bool is_fast_enough;
+//
+//    assert(r->state == RAFT_LEADER);
+//    assert(r->leader_state.promotee_id != 0);
+//
+//    server_index =
+//        configurationIndexOf(&r->configuration, r->leader_state.promotee_id);
+//    assert(server_index < r->configuration.n);
+//
+//    match_index = progressMatchIndex(r, server_index);
+//
+//    /* If the server did not reach the target index for this round, it did not
+//     * catch up. */
+//    if (match_index < r->leader_state.round_index) {
+//        return false;
+//    }
+//
+//    last_index = logLastIndex(&r->log);
+//    round_duration = now - r->leader_state.round_start;
+//
+//    is_up_to_date = match_index == last_index;
+//    is_fast_enough = round_duration < r->election_timeout;
+//
+//    /* If the server's log is fully up-to-date or the round that just terminated
+//     * was fast enough, then the server as caught up. */
+//    if (is_up_to_date || is_fast_enough) {
+//        r->leader_state.round_number = 0;
+//        r->leader_state.round_index = 0;
+//        r->leader_state.round_start = 0;
+//
+//        return true;
+//    }
+//
+//    /* If we get here it means that this catch-up round is complete, but there
+//     * are more entries to replicate, or it was not fast enough. Let's start a
+//     * new round. */
+//    r->leader_state.round_number++;
+//    r->leader_state.round_index = last_index;
+//    r->leader_state.round_start = now;
+//
+//    return false;
+//}
 
 int membershipUncommittedChange(struct raft *r,
                                 const raft_index index,
@@ -121,6 +123,9 @@ int membershipUncommittedChange(struct raft *r,
 
     r->configuration = configuration;
     r->configuration_uncommitted_index = index;
+
+    ZSINFO(gzlog, "[raft][%d][%d]membershipUncommittedChange set configuration_uncommitted_index = [%lld].",
+           rkey(r), r->state, r->configuration_uncommitted_index);
 
     return 0;
 
@@ -155,6 +160,8 @@ int membershipRollback(struct raft *r)
     }
 
     r->configuration_uncommitted_index = 0;
+    ZSINFO(gzlog, "[raft][%d][%d]membershipRollback set configuration_uncommitted_index = [%lld].",
+           rkey(r), r->state, r->configuration_uncommitted_index);
 
     return 0;
 }

@@ -293,21 +293,35 @@ int raft_assign(struct raft *r,
     /* If we are not promoting to the voter role or if the log of this server is
      * already up-to-date, we can submit the configuration change
      * immediately. */
-    if (role != RAFT_VOTER ||
-        progressMatchIndex(r, server_index) == last_index) {
-        int old_role = r->configuration.servers[server_index].role;
-        r->configuration.servers[server_index].role = role;
+//    if (role != RAFT_VOTER ||
+//        progressMatchIndex(r, server_index) == last_index) {
+//        int old_role = r->configuration.servers[server_index].role;
+//        r->configuration.servers[server_index].role = role;
+//
+//        rv = clientChangeConfiguration(r, req, &r->configuration);
+//        if (rv != 0) {
+//            r->configuration.servers[server_index].role = old_role;
+//            return rv;
+//        }
+//
+//        return 0;
+//    }
 
-        rv = clientChangeConfiguration(r, req, &r->configuration);
-        if (rv != 0) {
-            r->configuration.servers[server_index].role = old_role;
-            return rv;
-        }
+	(void)last_index;
 
-        return 0;
-    }
+	if (role == RAFT_VOTER)
+		r->leader_state.promotee_id = server->id;
 
-    r->leader_state.promotee_id = server->id;
+	int old_role = r->configuration.servers[server_index].role;
+	r->configuration.servers[server_index].role = role;
+
+	rv = clientChangeConfiguration(r, req, &r->configuration);
+	if (rv != 0) {
+		r->configuration.servers[server_index].role = old_role;
+		return rv;
+	}
+
+	return 0;
 
     /* Initialize the first catch-up round. */
 //    r->leader_state.round_number = 1;
@@ -315,15 +329,15 @@ int raft_assign(struct raft *r,
 //    r->leader_state.round_start = r->io->time(r->io);
 
     /* Immediately initiate an AppendEntries request. */
-    struct pgrep_permit_info pi;
-	pi.permit = false;
-    pi.replicating = PGREP_RND_NML;
-    rv = replicationProgress(r, server_index, pi);
-    if (rv != 0 && rv != RAFT_NOCONNECTION) {
-        /* This error is not fatal. */
-        tracef("failed to send append entries to server %u: %s (%d)",
-               server->id, raft_strerror(rv), rv);
-    }
+//    struct pgrep_permit_info pi;
+//	pi.permit = false;
+//    pi.replicating = PGREP_RND_NML;
+//    rv = replicationProgress(r, server_index, pi);
+//    if (rv != 0 && rv != RAFT_NOCONNECTION) {
+//        /* This error is not fatal. */
+//        tracef("failed to send append entries to server %u: %s (%d)",
+//               server->id, raft_strerror(rv), rv);
+//    }
 
     return 0;
 

@@ -28,6 +28,11 @@ int membershipCanChangeConfiguration(struct raft *r)
         goto err;
     }
 
+    if (r->pgrep_id != (uint32_t)-1) {
+        rv = RAFT_CANTCHANGE;
+        goto err;
+    }
+
     /* In order to become leader at all we are supposed to have committed at
      * least the initial configuration at index 1. */
     assert(r->configuration_index > 0);

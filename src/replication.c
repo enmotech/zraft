@@ -1594,7 +1594,8 @@ int replicationAppend(struct raft *r,
 	 *  fsm simultaneously.
 	 */
 	if (!args->pi.replicating && n == 0) {
-		if (args->leader_commit > r->commit_index) {
+		if (args->leader_commit > r->commit_index ||
+			args->leader_commit > r->last_applying) {
 			r->commit_index = min(args->leader_commit, logLastIndex(&r->log));
 			rv = replicationApply(r, NULL);
 			if (rv != 0) {

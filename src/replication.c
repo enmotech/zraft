@@ -144,6 +144,32 @@ static int sendAppendEntries(struct raft *r,
 		   rkey(r), r->state, args->pkt, args->n_entries, args->prev_log_index,
 		   server->id, logLastIndex(&r->log), r->last_applied);
 
+	ZSINFO(gzlog,
+		   "dumpstatus:###"
+		   "{ \"raft\":%d, "
+		   "  \"id\":%lld,"
+		   "  \"state\":%d, "
+		   "  \"role\":%d, "
+		   "  \"pre_role\":%d, "
+		   "  \"last_index\":%llu, "
+		   "  \"last_applying\":%llu, "
+		   "  \"last_applied\":%llu, "
+		   "  \"last_stored\":%llu, "
+		   "  \"configuration_uncommitted_index\":%lld, "
+		   "  \"promotee_id\":%lld "
+		   "}###",
+		   rkey(r),
+		   r->id,
+		   r->state,
+		   configurationGet(&r->configuration, r->id)->role,
+		   configurationGet(&r->configuration, r->id)->pre_role,
+		   logLastIndex(&r->log),
+		   r->last_applying,
+		   r->last_applied,
+		   r->last_stored,
+		   r->configuration_uncommitted_index,
+		   r->leader_state.promotee_id);
+
 	message.type = RAFT_IO_APPEND_ENTRIES;
 	message.server_id = server->id;
 	message.server_address = server->address;
@@ -1110,6 +1136,32 @@ void sendAppendEntriesResult(
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]sendAppendEntriesResult.",
 		   rkey(r), r->state, args->pkt);
 
+	ZSINFO(gzlog,
+		   "dumpstatus:###"
+		   "{ \"raft\":%d, "
+		   "  \"id\":%lld,"
+		   "  \"state\":%d, "
+		   "  \"role\":%d, "
+		   "  \"pre_role\":%d, "
+		   "  \"last_index\":%llu, "
+		   "  \"last_applying\":%llu, "
+		   "  \"last_applied\":%llu, "
+		   "  \"last_stored\":%llu, "
+		   "  \"configuration_uncommitted_index\":%lld, "
+		   "  \"promotee_id\":%lld "
+		   "}###",
+		   rkey(r),
+		   r->id,
+		   r->state,
+		   configurationGet(&r->configuration, r->id)->role,
+		   configurationGet(&r->configuration, r->id)->pre_role,
+		   logLastIndex(&r->log),
+		   r->last_applying,
+		   r->last_applied,
+		   r->last_stored,
+		   r->configuration_uncommitted_index,
+		   r->leader_state.promotee_id);
+
 	rv = r->io->send(r->io, req, &message, sendAppendEntriesResultCb);
 	if (rv != 0) {
 		raft_free(req);
@@ -1903,7 +1955,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 
 	req1 = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
 	if (req1 != NULL && req1->cb != NULL) {
-		ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-1|%d-%lld|.",
+		ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-2|%d-%lld|.",
 			   rkey(r), r->state, rkey(r), index);
 		req1->cb(req1, status, result);
 	}
@@ -1993,7 +2045,7 @@ static void applyBarrier(struct raft *r, const raft_index index)
 	struct raft_barrier *req;
 	req = (struct raft_barrier *)getRequest(r, index, RAFT_BARRIER);
 	if (req != NULL && req->cb != NULL) {
-		ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-1|%d-%lld|.",
+		ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-2|%d-%lld|.",
 			   rkey(r), r->state, rkey(r), index);
 		req->cb(req, 0);
 	}

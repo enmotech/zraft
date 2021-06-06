@@ -56,10 +56,13 @@ int raft_apply(struct raft *r,
     }
 
 
-	ZSINFO(gzlog, "[raft][%d][%d] %u |usr-req-key-0|%d-%lld|.",
+	ZSINFO(gzlog, "[raft][%d][%d] %u |usr-req-key-1|%d-%lld|.",
 		   rkey(r), r->state, n, rkey(r), index);
 
-    return 0;
+	return 0;
+
+	ZSINFO(gzlog, "[raft][%d][%d] %u |usr-req-key-1|%d-%lld| failed[%d].",
+		   rkey(r), r->state, n, rkey(r), index, rv);
 
 err_after_log_append:
     logDiscard(&r->log, index);
@@ -107,10 +110,13 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
         goto err_after_log_append;
     }
 
-	ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-0|%d-%lld|.",
+	ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-1|%d-%lld|.",
 		   rkey(r), r->state, rkey(r), index);
 
     return 0;
+
+	ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-1|%d-%lld| failed[%d].",
+		   rkey(r), r->state, rkey(r), index, rv);
 
 err_after_log_append:
     logDiscard(&r->log, index);

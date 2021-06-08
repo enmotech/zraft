@@ -146,7 +146,8 @@ static int sendAppendEntries(struct raft *r,
 
 	ZSINFO(gzlog,
 		   "dumpstatus:###"
-		   "{ \"raft\":%d, "
+		   "{ \"time\":%lld, "
+		   "  \"raft\":%d, "
 		   "  \"id\":%lld,"
 		   "  \"state\":%d, "
 		   "  \"role\":%d, "
@@ -158,6 +159,7 @@ static int sendAppendEntries(struct raft *r,
 		   "  \"configuration_uncommitted_index\":%lld, "
 		   "  \"promotee_id\":%lld "
 		   "}###",
+		   r->io->time(r->io),
 		   rkey(r),
 		   r->id,
 		   r->state,
@@ -1138,7 +1140,8 @@ void sendAppendEntriesResult(
 
 	ZSINFO(gzlog,
 		   "dumpstatus:###"
-		   "{ \"raft\":%d, "
+		   "{ \"time\":%lld, "
+		   "  \"raft\":%d, "
 		   "  \"id\":%lld,"
 		   "  \"state\":%d, "
 		   "  \"role\":%d, "
@@ -1150,6 +1153,7 @@ void sendAppendEntriesResult(
 		   "  \"configuration_uncommitted_index\":%lld, "
 		   "  \"promotee_id\":%lld "
 		   "}###",
+		   r->io->time(r->io),
 		   rkey(r),
 		   r->id,
 		   r->state,
@@ -1596,7 +1600,7 @@ int replicationAppend(struct raft *r,
 	if (!args->pi.replicating && n == 0) {
 		if (args->leader_commit > r->commit_index ||
 			args->leader_commit > r->last_applying) {
-			r->commit_index = min(args->leader_commit, logLastIndex(&r->log));
+			r->commit_index = min(args->leader_commit, r->last_stored);
 			rv = replicationApply(r, NULL);
 			if (rv != 0) {
 				return rv;
@@ -2350,7 +2354,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 	}
 
 	if (votes > configurationVoterCount(&r->configuration) / 2) {
-		r->commit_index = index;
+		r->commit_index = min(index, r->last_stored);
 		tracef("new commit index %llu", r->commit_index);
 	}
 

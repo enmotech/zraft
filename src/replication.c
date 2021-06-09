@@ -146,7 +146,7 @@ static int sendAppendEntries(struct raft *r,
 
 	ZSINFO(gzlog,
 		   "dumpstatus:###"
-		   "{ \"time\":%lld, "
+		   "{ \"time\":%ld, "
 		   "  \"raft\":%d, "
 		   "  \"id\":%lld,"
 		   "  \"state\":%d, "
@@ -156,10 +156,11 @@ static int sendAppendEntries(struct raft *r,
 		   "  \"last_applying\":%llu, "
 		   "  \"last_applied\":%llu, "
 		   "  \"last_stored\":%llu, "
+		   "  \"commit_index\":%llu, "
 		   "  \"configuration_uncommitted_index\":%lld, "
 		   "  \"promotee_id\":%lld "
 		   "}###",
-		   r->io->time(r->io),
+		   raft_tick_count_ns(),
 		   rkey(r),
 		   r->id,
 		   r->state,
@@ -169,6 +170,7 @@ static int sendAppendEntries(struct raft *r,
 		   r->last_applying,
 		   r->last_applied,
 		   r->last_stored,
+		   r->commit_index,
 		   r->configuration_uncommitted_index,
 		   r->leader_state.promotee_id);
 
@@ -751,7 +753,13 @@ static size_t updateLastStored(struct raft *r,
 		assert(local_term != 0 && local_term == entry->term);
 	}
 
-	r->last_stored += i;
+	/* Pgrep may sync the last_stored to the leader. So can't add i directly. */
+	raft_index old = r->last_stored;
+	r->last_stored = max(first_index + i - 1, r->last_stored);
+
+	ZSINFO(gzlog, "[raft][%d][%d]updateLastStored first_index[%lld] old[%lld] last_stored[%lld].",
+		   rkey(r), r->state, first_index, old, r->last_stored);
+
 	return i;
 }
 
@@ -1140,7 +1148,7 @@ void sendAppendEntriesResult(
 
 	ZSINFO(gzlog,
 		   "dumpstatus:###"
-		   "{ \"time\":%lld, "
+		   "{ \"time\":%ld, "
 		   "  \"raft\":%d, "
 		   "  \"id\":%lld,"
 		   "  \"state\":%d, "
@@ -1150,10 +1158,11 @@ void sendAppendEntriesResult(
 		   "  \"last_applying\":%llu, "
 		   "  \"last_applied\":%llu, "
 		   "  \"last_stored\":%llu, "
+		   "  \"commit_index\":%llu, "
 		   "  \"configuration_uncommitted_index\":%lld, "
 		   "  \"promotee_id\":%lld "
 		   "}###",
-		   r->io->time(r->io),
+		   raft_tick_count_ns(),
 		   rkey(r),
 		   r->id,
 		   r->state,
@@ -1163,6 +1172,7 @@ void sendAppendEntriesResult(
 		   r->last_applying,
 		   r->last_applied,
 		   r->last_stored,
+		   r->commit_index,
 		   r->configuration_uncommitted_index,
 		   r->leader_state.promotee_id);
 
@@ -1194,8 +1204,8 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
 	tracef("I/O completed on follower: status %d", status);
 
-	ZSINFO(gzlog, "[raft][%d][%d]appendFollowerCb: replicating[%d] permit[%d]",
-		   rkey(r), r->state, args->pi.replicating, args->pi.permit);
+	ZSINFO(gzlog, "[raft][%d][%d]appendFollowerCb: replicating[%d] permit[%d] req_index[%lld]",
+		   rkey(r), r->state, args->pi.replicating, args->pi.permit, request->index);
 
 	assert(args->entries != NULL);
 	assert(args->n_entries > 0);
@@ -1673,8 +1683,10 @@ int replicationAppend(struct raft *r,
 
 	assert(request->args.n_entries == n);
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] will io->append n_entries[%d] n[%ld] last_index[%lld].",
-		   rkey(r), r->state, args->pkt, request->args.n_entries, n, logLastIndex(&r->log));
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] will "
+		   "io->append req_index[%lld] n_entries[%d] n[%ld] last_index[%lld].",
+		   rkey(r), r->state, args->pkt, request->index,
+		   request->args.n_entries, n, logLastIndex(&r->log));
 
 	request->req.data = request;
 	rv = r->io->append(r->io, &request->req, request->args.entries,

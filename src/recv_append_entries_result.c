@@ -119,9 +119,13 @@ __pgrep_proc:
 				progressUpdateAppliedIndex(r, i, prev_applied_index);
 				if (r->last_applied > prev_applied_index) {
 					struct pgrep_permit_info pi;
+					pi.time = result->pi.time;
 					pi.permit = true;
 					r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
-					replicationProgress(r, r->pgrep_id, pi);
+					if (!pi.permit)
+						r->io->pgrep_cancel(r->io);
+					else
+						replicationProgress(r, r->pgrep_id, pi);
 				} else {
 					unpermit = true;
 				}

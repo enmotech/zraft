@@ -117,6 +117,10 @@ static int sendAppendEntries(struct raft *r,
 		}
 		/* To updating the permit. */
 		r->io->pgrep_raft_permit(r->io, RAFT_APD, &args->pi);
+		if (!pi.permit) {
+			rv = -1;
+			goto err_after_entries_acquired;
+		}
 	} else {
 		/* TODO: implement a limit to the total size of the entries being sent */
 		rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries);
@@ -1473,17 +1477,6 @@ static int checkPgreplicating(
 			}
 			r->last_stored = trunc_index - 1;
 			r->commit_index = trunc_index - 1;
-
-//			/* If it's new pg with no data, sync indices with the leader for restart pgrep. */
-//			if (trunc_index == 2) {
-//				ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] l->offset[%lld] is empty with 1 entry, truncate to 1.",
-//					   rkey(r), r->state, args->pkt, r->log.offset);
-//				if (logTruncateIf(&r->log, 1) != 0) {
-//					*async = false;
-//					return RAFT_LOG_BUSY;
-//				}
-//				__sync_pgrep_index();
-//			}
 
 			*async = false;
 			return 0;

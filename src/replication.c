@@ -1416,6 +1416,9 @@ static int deleteConflictingEntries(struct raft *r,
 
 static int try_truncate(struct raft *r, raft_index index)
 {
+	if (index > logLastIndex(&r->log))
+		return 0;
+
 	if (isRefs(&r->log, index)) {
 		return RAFT_LOG_BUSY;
 	}
@@ -1456,10 +1459,12 @@ static int pgrep_take_snapshot(struct raft *r)
 	unsigned i;
 	int rv;
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s] at %lld.",
-		   rkey(r), r->state, __func__, r->last_applied);
-
 	snapshot = &r->snapshot.pending;
+	snapshot->index = r->log.snapshot.last_index;
+	snapshot->term = r->log.snapshot.last_term;
+
+	ZSINFO(gzlog, "[raft][%d][%d][%s] at %lld.",
+		   rkey(r), r->state, __func__, snapshot->index);
 
 	rv = configurationCopy(&r->configuration, &snapshot->configuration);
 	if (rv != 0) {
@@ -1502,9 +1507,11 @@ int sync_pgrep_index(struct raft *r,
 	int rv;
 	raft_index last_index = r->log.snapshot.last_index;
 	raft_term last_term = r->log.snapshot.last_term;
+	raft_index configuration_index = r->configuration_index;
 
 	r->log.snapshot.last_index = args->prev_log_index;
 	r->log.snapshot.last_term = args->prev_log_term;
+	r->configuration_index = 0;
 
 	rv = pgrep_take_snapshot(r);
 	if (rv)
@@ -1523,6 +1530,7 @@ roll_back:
 
 	r->log.snapshot.last_index = last_index;
 	r->log.snapshot.last_term = last_term;
+	r->configuration_index = configuration_index;
 
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s] failed[%d].", rkey(r), r->state, args->pkt, __func__, rv);
 
@@ -1604,11 +1612,11 @@ static int checkPgreplicating(
 		*i = r->last_stored - args->prev_log_index;
 		*n = args->n_entries - *i;
 
-		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]replicatingCheck dump after: "
+		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s] dump after: "
 			   "last_stored[%lld] last_applied[%lld] last_applying[%lld] "
 			   "prev_log_index[%lld] n_entries[%d]",
-			   rkey(r), r->state, args->pkt, r->last_stored, r->last_applied, 
-			   r->last_applying, args->prev_log_index, args->n_entries);
+			   rkey(r), r->state, args->pkt, __func__, r->last_stored,
+			   r->last_applied, r->last_applying, args->prev_log_index, args->n_entries);
 
 		/* The leader's send log entries behind me, just reply success. */
 		if (args->prev_log_index + args->n_entries <= r->last_stored) {
@@ -2252,7 +2260,7 @@ static int takeSnapshot(struct raft *r)
 	unsigned i;
 	int rv;
 
-	tracef("take snapshot at %lld", r->last_applied);
+	ZSINFO(gzlog, "take snapshot at %lld", r->last_applied);
 
 	snapshot = &r->snapshot.pending;
 	snapshot->index = r->last_applied;

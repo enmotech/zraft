@@ -1424,18 +1424,101 @@ static int deleteConflictingEntries(struct raft *r,
 }
 
 
-#define __sync_pgrep_index(void) \
-do { \
-	r->log.offset = args->prev_log_index; \
-	r->last_stored = r->log.offset; \
-	r->commit_index = r->log.offset; \
-	r->last_applied = r->log.offset; \
-	r->last_applying = r->log.offset; \
-	r->log.snapshot.last_index = r->log.offset; \
-	r->log.snapshot.last_term = r->log.offset; \
-	r->io->pgrep_reset_ckposi(r->io); \
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] __sync_pgrep_index.", rkey(r), r->state, args->pkt); \
-} while (0);
+static int try_truncate(struct raft *r, raft_index index)
+{
+	if (isRefs(&r->log, index)) {
+		return RAFT_LOG_BUSY;
+	}
+
+	int rv = r->io->truncate(r->io, index);
+	if (rv)
+		return rv;
+
+	logTruncate(&r->log, index);
+
+	return 0;
+}
+
+static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
+{
+	struct raft *r = req->data;
+	struct raft_snapshot *snapshot;
+
+	r->snapshot.put.data = NULL;
+	snapshot = &r->snapshot.pending;
+
+	if (status != 0) {
+		tracef("snapshot %lld at term %lld: %s", snapshot->index,
+			   snapshot->term, raft_strerror(status));
+		goto out;
+	}
+
+	logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
+
+out:
+	snapshotClose(&r->snapshot.pending);
+	r->snapshot.pending.term = 0;
+}
+
+static int pgrep_take_snapshot(struct raft *r)
+{
+	struct raft_snapshot *snapshot;
+	unsigned i;
+	int rv;
+
+	ZSINFO(gzlog, "pgrep take snapshot at %lld", r->last_applied);
+
+	snapshot = &r->snapshot.pending;
+
+	rv = configurationCopy(&r->configuration, &snapshot->configuration);
+	if (rv != 0) {
+		goto abort;
+	}
+
+	snapshot->configuration_index = r->configuration_index;
+
+	rv = r->fsm->snapshot(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
+	if (rv != 0)
+		goto abort_after_config_copy;
+
+	assert(r->snapshot.put.data == NULL);
+	r->snapshot.put.data = r;
+	rv = r->io->snapshot_put(r->io, 0, &r->snapshot.put,
+							 snapshot, takeSnapshotCb);
+	if (rv != 0) {
+		goto abort_after_fsm_snapshot;
+	}
+
+	return 0;
+
+abort_after_fsm_snapshot:
+	for (i = 0; i < snapshot->n_bufs; i++) {
+		raft_free(snapshot->bufs[i].base);
+	}
+	raft_free(snapshot->bufs);
+abort_after_config_copy:
+	raft_configuration_close(&snapshot->configuration);
+abort:
+	r->snapshot.pending.term = 0;
+	return rv;
+}
+
+int sync_pgrep_index(struct raft *r,
+					 const struct raft_append_entries *args)
+{
+	r->log.offset = args->prev_log_index;
+	r->last_stored = r->log.offset;
+	r->commit_index = r->log.offset;
+	r->last_applied = r->log.offset;
+	r->last_applying = r->log.offset;
+	r->log.snapshot.last_index = args->prev_log_index;
+	r->log.snapshot.last_term = args->prev_log_term;
+	r->io->pgrep_reset_ckposi(r->io);
+
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] sync_pgrep_index.", rkey(r), r->state, args->pkt);
+
+	return pgrep_take_snapshot(r);
+}
 
 static int checkPgreplicating(
 	struct raft *r,
@@ -1471,9 +1554,10 @@ static int checkPgreplicating(
 
 			r->io->pgrep_update_lctime(r->io, args->pi.time);
 
-			if(logTruncateIf(&r->log, trunc_index) != 0) {
+			int rv = try_truncate(r, trunc_index);
+			if(rv != 0) {
 				*async = false;
-				return RAFT_LOG_BUSY;
+				return rv;
 			}
 			r->last_stored = trunc_index - 1;
 			r->commit_index = trunc_index - 1;
@@ -1496,11 +1580,16 @@ static int checkPgreplicating(
 			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] logTruncate to [%lld] nums[%ld].",
 				   rkey(r), r->state, args->pkt, r->log.offset + 1, logNumEntries(&r->log));
 
-			if(logTruncateIf(&r->log, r->log.offset + 1) != 0) {
+			int rv = try_truncate(r, r->log.offset + 1);
+			if(rv != 0) {
 				*async = false;
-				return RAFT_LOG_BUSY;
+				return rv;
 			}
-			__sync_pgrep_index();
+
+			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] after logTruncate to [%lld] nums[%ld].",
+				   rkey(r), r->state, args->pkt, r->log.offset + 1, logNumEntries(&r->log));
+
+			sync_pgrep_index(r, args);
 		}
 
 		*i = r->last_stored - args->prev_log_index;
@@ -2139,27 +2228,6 @@ static bool shouldTakeSnapshot(struct raft *r)
 	}
 
 	return true;
-}
-
-static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
-{
-	struct raft *r = req->data;
-	struct raft_snapshot *snapshot;
-
-	r->snapshot.put.data = NULL;
-	snapshot = &r->snapshot.pending;
-
-	if (status != 0) {
-		tracef("snapshot %lld at term %lld: %s", snapshot->index,
-			   snapshot->term, raft_strerror(status));
-		goto out;
-	}
-
-	logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
-
-out:
-	snapshotClose(&r->snapshot.pending);
-	r->snapshot.pending.term = 0;
 }
 
 static int takeSnapshot(struct raft *r)

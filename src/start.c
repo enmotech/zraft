@@ -164,7 +164,7 @@ static void raftLoadCb(struct raft_io_load *req,
 
 			/* If we have a snapshot, let's restore it. */
 			if (snapshot != NULL) {
-				tracef("restore snapshot with last index %llu and last term %llu",
+				ZSINFO(gzlog, "restore snapshot with last index %llu and last term %llu",
 				       snapshot->index, snapshot->term);
 				rv = snapshotRestore(r, snapshot);
 				if (rv != 0) {
@@ -190,7 +190,7 @@ static void raftLoadCb(struct raft_io_load *req,
 
 			/* Append the entries to the log, possibly restoring the last
 	     * configuration. */
-			tracef("restore %lu entries starting at %llu", n_entries, start_index);
+			ZSINFO(gzlog, "restore %lu entries starting at %llu", n_entries, start_index);
 			rv = restoreEntries(r, snapshot_index, snapshot_term, start_index, entries,
 					    n_entries);
 			if (rv != 0) {

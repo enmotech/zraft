@@ -88,7 +88,7 @@ void logRelease(struct raft_log *l,
  * empty this is a no-op. If @index is lower than or equal to the index of the
  * first entry in the log, then the log will become empty. */
 void logTruncate(struct raft_log *l, const raft_index index);
-int logTruncateIf(struct raft_log *l, const raft_index index);
+int isRefs(struct raft_log *l, const raft_index index);
 
 /* Discard all entries from the given index (included) onwards. This is exactly
  * the same as truncate, but the memory of the entries does not gets

@@ -34,9 +34,9 @@ int recvAppendEntriesResult(struct raft *r,
 
 	(void)(address);
 	
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntriesResult: peer[%d], \
-		   replicating[%u] permit[%d] rejected[%lld] last_log_index[%lld]",
-		   rkey(r), r->state, result->pkt, i, result->pi.replicating,
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: peer[%d] replicating[%u] "
+		   "permit[%d] rejected[%lld] last_log_index[%lld]",
+		   rkey(r), r->state, result->pkt, __func__, i, result->pi.replicating,
 		   result->pi.permit, result->rejected, result->last_log_index);
 
     if (r->state != RAFT_LEADER) {
@@ -99,8 +99,8 @@ __pgrep_proc:
 		bool unpermit = false;
 
 		if (!pgrep_proc) {
-			ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult meet some error pgrep_cancel.",
-				   rkey(r), r->state);
+			ZSINFO(gzlog, "[raft][%d][%d][%s] meet some error pgrep_cancel.",
+				   rkey(r), r->state, __func__);
 			unpermit = true;
 			r->io->pgrep_cancel(r->io);
 		} else {
@@ -109,8 +109,8 @@ __pgrep_proc:
 				unpermit = true;
 			} else if (result->pi.replicating == PGREP_RND_ERR) {
 				/* Catch-up meet some error. */
-				ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult catch-up meet some error pgrep_cancel.",
-				   rkey(r), r->state);
+				ZSINFO(gzlog, "[raft][%d][%d][%s] catch-up meet some error pgrep_cancel.",
+					   rkey(r), r->state, __func__);
 				unpermit = true;
 				r->io->pgrep_cancel(r->io);
 			} else  if (result->pi.replicating == PGREP_RND_BGN ||
@@ -134,8 +134,8 @@ __pgrep_proc:
 
 		if (unpermit) {
 			r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &result->pi);
-			ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult: pgrep permit released.",
-				   rkey(r), r->state);
+			ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep permit released.",
+				   rkey(r), r->state, __func__);
 		}
 	}
 

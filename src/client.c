@@ -168,8 +168,8 @@ static int clientChangeConfiguration(
     }
 
     r->configuration_uncommitted_index = index;
-	ZSINFO(gzlog, "[raft][%d][%d]clientChangeConfiguration set configuration_uncommitted_index = [%lld].",
-		   rkey(r), r->state, r->configuration_uncommitted_index);
+	ZSINFO(gzlog, "[raft][%d][%d][%s] set configuration_uncommitted_index = [%lld].",
+		   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
 
     return 0;
 

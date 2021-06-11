@@ -40,8 +40,8 @@ int recvAppendEntries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntries: replicating[%d] permit[%d]",
-		   rkey(r), r->state, args->pkt, args->pi.replicating, args->pi.permit);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: replicating[%d] permit[%d]",
+		   rkey(r), r->state, args->pkt, __func__, args->pi.replicating, args->pi.permit);
 
     result.rejected = args->prev_log_index;
     result.last_log_index = logLastIndex(&r->log);

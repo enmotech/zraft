@@ -523,6 +523,11 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 		raft_index prev_index = p->prev_applied_index;
 		raft_term prev_term = logTermOf(&r->log, prev_index);
 
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: prev_index[%lld] prev_term[%lld] l->offset[%lld] "
+			   "l->snapshot.last_index[%lld].",
+			   rkey(r), r->state, __func__, prev_index, prev_term, r->log.offset,
+			   r->log.snapshot.last_index);
+
 		return sendAppendEntries(r, i, prev_index, prev_term, pi);
 	}
 
@@ -1463,8 +1468,8 @@ static int pgrep_take_snapshot(struct raft *r)
 	snapshot->index = r->log.snapshot.last_index;
 	snapshot->term = r->log.snapshot.last_term;
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s] at %lld.",
-		   rkey(r), r->state, __func__, snapshot->index);
+	ZSINFO(gzlog, "[raft][%d][%d][%s] at %lld %lld.",
+		   rkey(r), r->state, __func__, snapshot->term, snapshot->index);
 
 	rv = configurationCopy(&r->configuration, &snapshot->configuration);
 	if (rv != 0) {

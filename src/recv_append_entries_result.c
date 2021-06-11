@@ -95,7 +95,7 @@ __pgrep_proc:
 	if (result->pi.permit) {
 
 		raft_index prev_applied_index = min(
-			max(result->last_log_index, r->log.offset), r->last_applied);
+			max(result->last_log_index, r->log.snapshot.last_index), r->last_applied);
 		bool unpermit = false;
 
 		if (!pgrep_proc) {

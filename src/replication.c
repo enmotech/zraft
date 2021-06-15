@@ -422,6 +422,7 @@ static void assignRoleCb(struct raft_change *req, int status)
 	raft_free(_result);
 	raft_free(req);
 
+	/* Notify the upper module the role changed. */
 	if (r->role_change_cb)
 		r->role_change_cb(r, server);
 }

@@ -110,6 +110,7 @@ int membershipUncommittedChange(struct raft *r,
                                 const struct raft_entry *entry)
 {
     struct raft_configuration configuration;
+	const struct raft_server *server;
     int rv;
 
     assert(r != NULL);
@@ -131,6 +132,11 @@ int membershipUncommittedChange(struct raft *r,
 
     ZSINFO(gzlog, "[raft][%d][%d]membershipUncommittedChange set configuration_uncommitted_index = [%lld].",
            rkey(r), r->state, r->configuration_uncommitted_index);
+
+	/* Notify the upper module the role changed. */
+	server = configurationGet(&r->configuration, r->id);
+	if (server && server->role == RAFT_DYING && r->role_change_cb)
+		r->role_change_cb(r, server);
 
     return 0;
 

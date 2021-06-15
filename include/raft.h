@@ -106,6 +106,7 @@ struct raft_buffer
 #define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
 #define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
 #define RAFT_SPARE 2   /* Does not replicate log, or participate in quorum. */
+#define RAFT_DYING 3   /* Do nothing, just wait to be removed. */
 
 /**
  * Hold information about a single server in the cluster configuration.
@@ -848,7 +849,7 @@ typedef void (*raft_state_change_cb)(struct raft *raft, int state);
  * role change callback.
  * notify the user the role has changed
  */
-typedef void (*raft_role_change_cb)(struct raft *raft, struct raft_server *server);
+typedef void (*raft_role_change_cb)(struct raft *raft, const struct raft_server *server);
 
 struct raft_change;   /* Forward declaration */
 struct raft_transfer; /* Forward declaration */

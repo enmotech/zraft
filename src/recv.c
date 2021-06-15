@@ -232,7 +232,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 			r->io, message->copy_chunks_result.cklist,
 			message->copy_chunks_result.status);
 		/* Try to apply some log entries. */
-		replicationApply(r, NULL);
+		replicationApply(r);
 		break;
 	};
 

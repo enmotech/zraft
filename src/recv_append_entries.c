@@ -40,11 +40,14 @@ int recvAppendEntries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: replicating[%d] permit[%d]",
-		   rkey(r), r->state, args->pkt, __func__, args->pi.replicating, args->pi.permit);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: replicating[%d] permit[%d] "
+		   "args->term[%lld] prev_log_index[%lld] entries[%d]",
+		   rkey(r), r->state, args->pkt, __func__, args->pi.replicating,
+		   args->pi.permit, args->term, args->prev_log_index, args->n_entries);
 
     result.rejected = args->prev_log_index;
     result.last_log_index = logLastIndex(&r->log);
+
 
     rv = recvEnsureMatchingTerms(r, args->term, &match);
     if (rv != 0) {
@@ -52,9 +55,6 @@ int recvAppendEntries(struct raft *r,
 				rkey(r), r->state);
         return rv;
     }
-
-	if (args->term > r->current_term)
-		r->last_append_time = 0;
 
     /* From Figure 3.1:
      *

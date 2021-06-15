@@ -1037,6 +1037,7 @@ struct raft
 
 	/* To save pgrep info. */
 	int64_t last_append_time;
+	raft_term last_append_term;
 };
 
 RAFT_API int raft_init(struct raft *r,

@@ -782,7 +782,7 @@ int logAcquireSection(
         return 0;
 	}
 
-	realn = min(realn, 50);
+	realn = min(realn, 16);
 
     /* Get the array index of the first entry to acquire. */
     i = locateEntry(l, index);

@@ -844,6 +844,11 @@ typedef void (*raft_close_cb)(struct raft *raft);
  * notify the user the state has changed
  */
 typedef void (*raft_state_change_cb)(struct raft *raft, int state);
+/**
+ * role change callback.
+ * notify the user the role has changed
+ */
+typedef void (*raft_role_change_cb)(struct raft *raft, struct raft_server *server);
 
 struct raft_change;   /* Forward declaration */
 struct raft_transfer; /* Forward declaration */
@@ -1018,6 +1023,10 @@ struct raft
 	 */
 	raft_state_change_cb state_change_cb;
 	/*
+	 * Callback to invoke once the role has changed.
+	 */
+	raft_role_change_cb role_change_cb;
+	/*
      * Human-readable message providing diagnostic information about the last
      * error occurred.
      */
@@ -1069,6 +1078,8 @@ RAFT_API int raft_configuration_get(const struct raft *r, struct raft_configurat
  * @param cb
  */
 void raft_set_state_change_cb(struct raft *r, raft_state_change_cb cb);
+
+void raft_set_role_change_cb(struct raft *r, raft_role_change_cb cb);
 
 /**
  * Force a new configuration in order to recover from a loss of quorum where the

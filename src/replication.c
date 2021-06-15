@@ -421,6 +421,9 @@ static void assignRoleCb(struct raft_change *req, int status)
 	server->pre_role = RAFT_UNKNOW;
 	raft_free(_result);
 	raft_free(req);
+
+	if (r->role_change_cb)
+		r->role_change_cb(r, server);
 }
 
 static void assignRole(struct raft *r, struct raft_server *server, int role)

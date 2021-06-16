@@ -146,7 +146,7 @@ int configurationAdd(struct raft_configuration *c,
 	    do {
 		    server = &servers[i - 1];
 		    if (server->id > id)
-			    server[i--] = *server;
+			    servers[i--] = *server;
 		    else
 			    break;
 	    } while (i > 0);

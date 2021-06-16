@@ -2332,7 +2332,7 @@ static bool shouldTakeSnapshot(struct raft *r)
 
 	/* pgrep: Can not delete log entries after prev_applied_index  */
 	unsigned inx = configurationIndexOf(&r->configuration, r->pgrep_id);
-	if (r->pgrep_id != RAFT_INVALID_ID &&
+	if (r->pgrep_id != RAFT_INVALID_ID && inx != r->configuration.n &&
 		r->leader_state.progress[inx].prev_applied_index -
 		r->log.snapshot.last_index < r->snapshot.threshold) {
 		return false;

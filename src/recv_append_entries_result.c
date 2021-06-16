@@ -35,9 +35,9 @@ int recvAppendEntriesResult(struct raft *r,
 
 	(void)(address);
 	
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: peer[%d] replicating[%u] "
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: peer[%lld] replicating[%u] "
 		   "permit[%d] pi.time[%ld] rejected[%lld] last_log_index[%lld]",
-		   rkey(r), r->state, result->pkt, __func__, i, result->pi.replicating,
+		   rkey(r), r->state, result->pkt, __func__, id, result->pi.replicating,
 		   result->pi.permit, result->pi.time, result->rejected, result->last_log_index);
 
     if (r->state != RAFT_LEADER) {
@@ -106,7 +106,7 @@ __pgrep_proc:
 			r->io->pgrep_cancel(r->io);
 
 		} else {
-			if (i != r->pgrep_id) {
+			if (id != r->pgrep_id) {
 				/* i is't the pgrep destination. */
 				unpermit = true;
 
@@ -139,7 +139,8 @@ __pgrep_proc:
                             r->last_applied == r->last_applying) {
                             replicationApplyPi(r, pi);
                         } else {
-                            replicationProgressPi(r, r->pgrep_id, pi);
+							unsigned inx = configurationIndexOf(&r->configuration, r->pgrep_id);
+                            replicationProgressPi(r, inx, pi);
                         }
 					}
 				} else {

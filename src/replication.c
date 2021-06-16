@@ -483,10 +483,12 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	ZSINFO(gzlog, "[raft][%d][%d][%s]: server i[%d] permit[%d].",
 		   rkey(r), r->state, __func__, i, pi.permit);
 
+	unsigned inx = configurationIndexOf(&r->configuration, r->pgrep_id);
+
 	if (server->role != RAFT_STANDBY ||
 		server->pre_role == RAFT_STANDBY ||
-		i != r->pgrep_id) {
-		ZSINFO(gzlog, "[raft][%d][%d][%s]: role[%d] pre_role[%d] pgrep_id[%d] goto heatbeat.",
+		i != inx) {
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: role[%d] pre_role[%d] pgrep_id[%lld] goto heatbeat.",
 			   rkey(r), r->state, __func__, server->role,  server->pre_role, r->pgrep_id);
 		goto __heart_beat;
 	}
@@ -516,7 +518,7 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	case PGREP_TICK_DLT:
 		progressSetPgreplicating(r, i, false);
 		progressUpdateAppliedIndex(r, i, 0);
-		ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep over status[%d] pgrep_id[%d] replicating[%d].",
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep over status[%d] pgrep_id[%lld] replicating[%d].",
 			   rkey(r), r->state, __func__, status, r->pgrep_id, p->replicating);
 		if (status == PGREP_TICK_FIN) {
 			if (pi.permit) {
@@ -624,7 +626,7 @@ static bool enterPgrepicating(struct raft *r, unsigned i, struct pgrep_permit_in
 		(server->role == RAFT_STANDBY || server->pre_role == RAFT_STANDBY)) {
 		if (server->role == RAFT_STANDBY && server->pre_role != RAFT_STANDBY)
 			progressSetPgreplicating(r, i, true);
-		ZSINFO(gzlog, "[raft][%d][%d][%s]: i[%d] pgrep_id[%d].",
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: i[%d] pgrep_id[%lld].",
 			   rkey(r), r->state, __func__, i, r->pgrep_id);
 		return true;
 	}
@@ -2051,8 +2053,10 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 	 * If there are a gap between prev_applied_index and last_applied, to starting a relicatingProgress.
 	 */
 
-	if (r->state != RAFT_LEADER || r->pgrep_id == (unsigned)-1 ||
-		progressGetAppliedIndex(r, r->pgrep_id) == r->last_applied) {
+	unsigned inx = configurationIndexOf(&r->configuration, r->pgrep_id);
+
+	if (r->state != RAFT_LEADER || r->pgrep_id == (raft_id)-1 ||
+		progressGetAppliedIndex(r, inx) == r->last_applied) {
 
 		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
 		pi.permit = false;
@@ -2061,10 +2065,10 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 		return;
 	}
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s]: start a replicationProgress pgrep_id[%d] permit[%d].",
+	ZSINFO(gzlog, "[raft][%d][%d][%s]: start a replicationProgress pgrep_id[%lld] permit[%d].",
 		   rkey(r), r->state, __func__, r->pgrep_id, pi.permit);
 
-	replicationProgressPi(r, r->pgrep_id, pi);
+	replicationProgressPi(r, inx, pi);
 }
 
 void replicationApplyFollowerCb(
@@ -2311,8 +2315,9 @@ static bool shouldTakeSnapshot(struct raft *r)
 	}
 
 	/* pgrep: Can not delete log entries after prev_applied_index  */
-	if (r->pgrep_id != (unsigned)-1 &&
-		r->leader_state.progress[r->pgrep_id].prev_applied_index -
+	unsigned inx = configurationIndexOf(&r->configuration, r->pgrep_id);
+	if (r->pgrep_id != RAFT_INVALID_ID &&
+		r->leader_state.progress[inx].prev_applied_index -
 		r->log.snapshot.last_index < r->snapshot.threshold) {
 		return false;
 	}
@@ -2447,7 +2452,7 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 
 	/* When pgreping, apply smaller batch of entries. */
 	raft_index to_commit_index = min(r->commit_index, r->last_applying + 8);
-	if (r->pgrep_id == (unsigned)-1)
+	if (r->pgrep_id == RAFT_INVALID_ID)
 		to_commit_index = r->commit_index;
 
 	ab->expect_num = (int)(to_commit_index - r->last_applying);

@@ -50,6 +50,8 @@
 /* Id of a raft group. */
 #define rkey(r) ((r)->io->raft_key((r)->io))
 
+#define RAFT_INVALID_ID ((raft_id)-1)
+
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
@@ -866,7 +868,7 @@ struct raft
 	raft_id id;                 /* Server ID of this raft instance. */
 	char *address;              /* Server address of this raft instance. */
 
-	volatile unsigned pgrep_id;			/* The server ID that is relicating to. */
+	volatile raft_id pgrep_id;			/* The server ID that is relicating to. */
 
 	/*
      * Cache of the server's persistent state, updated on stable storage before

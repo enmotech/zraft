@@ -28,7 +28,7 @@ int membershipCanChangeConfiguration(struct raft *r)
         goto err;
     }
 
-    if (r->pgrep_id != (uint32_t)-1) {
+    if (r->pgrep_id != RAFT_INVALID_ID) {
         rv = RAFT_CANTCHANGE;
         goto err;
     }

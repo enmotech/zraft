@@ -307,21 +307,23 @@ bool progressPgreplicating(struct raft *r, unsigned i)
 
 int progressSetPgreplicating(struct raft *r, unsigned i, bool value)
 {
-	struct raft_progress *p = &r->leader_state.progress[i];
-	int res = 0;
+    struct raft_progress *p = &r->leader_state.progress[i];
+    int res = 0;
 
-	if (value) {
-		res = __sync_bool_compare_and_swap(&r->pgrep_id, (unsigned)-1, i);
-	} else {
-		res = __sync_bool_compare_and_swap(&r->pgrep_id, i, (unsigned)-1);
-	}
+    if (value) {
+        res = __sync_bool_compare_and_swap(
+            &r->pgrep_id, RAFT_INVALID_ID, r->configuration.servers[i].id);
+    } else {
+        res = __sync_bool_compare_and_swap(
+            &r->pgrep_id, r->configuration.servers[i].id, RAFT_INVALID_ID);
+    }
 
-	if (res != 0) {
-		p->replicating = value;
-		return 0;
-	}
+    if (res != 0) {
+        p->replicating = value;
+        return 0;
+    }
 
-	return -1;
+    return -1;
 }
 
 #undef tracef

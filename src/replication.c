@@ -1200,6 +1200,14 @@ void sendAppendEntriesResult(
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s] permit[%d] time[%ld].",
 		   rkey(r), r->state, args->pkt, __func__, result->pi.permit, result->pi.time);
 
+	const struct raft_server *me = configurationGet(&r->configuration, r->id);
+	int role = -1;
+	int pre_role = -1;
+	if (me) {
+		role = me->role;
+		pre_role = me->pre_role;
+	}
+
 	ZSINFO(gzlog,
 		   "dumpstatus:###"
 		   "{ \"time\":%ld, "
@@ -1220,8 +1228,8 @@ void sendAppendEntriesResult(
 		   rkey(r),
 		   r->id,
 		   r->state,
-		   configurationGet(&r->configuration, r->id)->role,
-		   configurationGet(&r->configuration, r->id)->pre_role,
+		   role,
+		   pre_role,
 		   logLastIndex(&r->log),
 		   r->last_applying,
 		   r->last_applied,

@@ -141,9 +141,18 @@ int configurationAdd(struct raft_configuration *c,
         return RAFT_NOMEM;
     }
     c->servers = servers;
-
+    i = c->n;
+    if (i > 0) {/* make sure the array is sorted */
+	    do {
+		    server = &servers[i - 1];
+		    if (server->id > id)
+			    server[i--] = *server;
+		    else
+			    break;
+	    } while (i > 0);
+    }
     /* Fill the newly allocated slot (the last one) with the given details. */
-    server = &servers[c->n];
+    server = &servers[i];
     server->id = id;
     server->address = raft_malloc(strlen(address) + 1);
     if (server->address == NULL) {

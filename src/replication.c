@@ -186,6 +186,14 @@ static int sendAppendEntries(struct raft *r,
 		   args->n_entries, args->prev_log_index,
 		   server->id, logLastIndex(&r->log), r->last_applied);
 
+	const struct raft_server *me = configurationGet(&r->configuration, r->id);
+	int role = -1;
+	int pre_role = -1;
+	if (me) {
+		role = me->role;
+		pre_role = me->pre_role;
+	}
+
 	ZSINFO(gzlog,
 		   "dumpstatus:###"
 		   "{ \"time\":%ld, "
@@ -206,8 +214,8 @@ static int sendAppendEntries(struct raft *r,
 		   rkey(r),
 		   r->id,
 		   r->state,
-		   configurationGet(&r->configuration, r->id)->role,
-		   configurationGet(&r->configuration, r->id)->pre_role,
+		   role,
+		   pre_role,
 		   logLastIndex(&r->log),
 		   r->last_applying,
 		   r->last_applied,

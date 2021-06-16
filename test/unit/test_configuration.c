@@ -541,8 +541,8 @@ TEST(configurationDecode, two_servers, setUp, tearDown, 0, NULL)
     buf.len = sizeof bytes;
     DECODE(&buf);
     ASSERT_N(2);
-    ASSERT_SERVER(0, 5, "x.y", RAFT_VOTER);
-    ASSERT_SERVER(1, 3, "192.2", RAFT_STANDBY);
+    ASSERT_SERVER(1, 5, "x.y", RAFT_VOTER);
+    ASSERT_SERVER(2, 3, "192.2", RAFT_STANDBY);
     return MUNIT_OK;
 }
 

@@ -501,14 +501,14 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 		goto __heart_beat;
 	}
 
-	/* Send tick message, and handle all status. */
-	status = r->io->pgrep_tick(r->io, r->id, server->id, r->current_term, &pi);
-
 	if (r->configuration_uncommitted_index) {
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: cui[%lld] goto heatbeat.",
 			   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
 		goto __heart_beat;
 	}
+
+	/* Send tick message, and handle all status. */
+	status = r->io->pgrep_tick(r->io, r->id, server->id, r->current_term, &pi);
 
 	switch (status) {
 	case PGREP_TICK_SUC:
@@ -2332,7 +2332,8 @@ static bool shouldTakeSnapshot(struct raft *r)
 
 	/* pgrep: Can not delete log entries after prev_applied_index  */
 	unsigned inx = configurationIndexOf(&r->configuration, r->pgrep_id);
-	if (r->pgrep_id != RAFT_INVALID_ID && inx != r->configuration.n &&
+	if (r->state == RAFT_LEADER &&
+		r->pgrep_id != RAFT_INVALID_ID && inx != r->configuration.n &&
 		r->leader_state.progress[inx].prev_applied_index -
 		r->log.snapshot.last_index < r->snapshot.threshold) {
 		return false;

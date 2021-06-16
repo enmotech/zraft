@@ -58,6 +58,14 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
      * the fsm. */
     raft_free(snapshot->bufs);
 
+    ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump]", rkey(r), r->state, __func__);
+    for (unsigned int i = 0; i < r->configuration.n; i++) {
+        const struct raft_server *server = &r->configuration.servers[i];
+        ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+               rkey(r), r->state, __func__, i,
+               server->id, server->role, server->pre_role);
+    }
+
     return 0;
 }
 

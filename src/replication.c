@@ -1516,8 +1516,14 @@ static int pgrep_take_snapshot(struct raft *r)
 	snapshot->index = r->log.snapshot.last_index;
 	snapshot->term = r->log.snapshot.last_term;
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s] at %lld %lld.",
+	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] at %lld %lld.",
 		   rkey(r), r->state, __func__, snapshot->term, snapshot->index);
+	for (i = 0; i < r->configuration.n; i++) {
+		const struct raft_server *servert = &r->configuration.servers[i];
+		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+			   rkey(r), r->state, __func__, i,
+			   servert->id, servert->role, servert->pre_role);
+	}
 
 	rv = configurationCopy(&r->configuration, &snapshot->configuration);
 	if (rv != 0) {
@@ -2320,7 +2326,15 @@ static int takeSnapshot(struct raft *r)
 	unsigned i;
 	int rv;
 
-	ZSINFO(gzlog, "take snapshot at %lld", r->last_applied);
+
+	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] take snapshot at %lld.",
+		   rkey(r), r->state, __func__, r->last_applied);
+	for (i = 0; i < r->configuration.n; i++) {
+		const struct raft_server *servert = &r->configuration.servers[i];
+		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+			   rkey(r), r->state, __func__, i,
+			   servert->id, servert->role, servert->pre_role);
+	}
 
 	snapshot = &r->snapshot.pending;
 	snapshot->index = r->last_applied;

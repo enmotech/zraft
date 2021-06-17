@@ -745,12 +745,10 @@ struct raft_io
 
 	void (*pgrep_raft_permit)(
 		struct raft_io *io,
-		uint16_t _type,
 		struct pgrep_permit_info *pi);
 
 	void (*pgrep_raft_unpermit)(
 		struct raft_io *io,
-		uint16_t _type,
 		const struct pgrep_permit_info *pi);
 
 	void (*pgrep_recv_copy_chunks)(

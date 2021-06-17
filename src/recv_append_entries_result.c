@@ -126,7 +126,7 @@ __pgrep_proc:
 
 				if (r->last_applied > prev_applied_index) {
 
-					r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
+					r->io->pgrep_raft_permit(r->io, &pi);
 					/* Can't get the permit with the old granted permit,
 					   because permit timeout changed. */
 					if (!pi.permit)
@@ -150,7 +150,7 @@ __pgrep_proc:
 		}
 
 		if (unpermit) {
-			r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &result->pi);
+			r->io->pgrep_raft_unpermit(r->io, &result->pi);
 			ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep permit released.",
 				   rkey(r), r->state, __func__);
 		}

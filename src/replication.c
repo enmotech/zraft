@@ -153,7 +153,7 @@ static int sendAppendEntries(struct raft *r,
 			goto err;
 		}
 		/* To updating the permit. */
-		r->io->pgrep_raft_permit(r->io, RAFT_APD, &args->pi);
+		r->io->pgrep_raft_permit(r->io, &args->pi);
 		if (!pi.permit) {
 			rv = -1;
 			goto err_after_entries_acquired;
@@ -530,7 +530,7 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 			   rkey(r), r->state, __func__, status, r->pgrep_id, p->replicating);
 		if (status == PGREP_TICK_FIN) {
 			if (pi.permit) {
-				r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+				r->io->pgrep_raft_unpermit(r->io, &pi);
 				pi.permit = false;
 			}
 			r->leader_state.promotee_id = 0;
@@ -549,7 +549,7 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 
 	if (!pi.permit) {
 		/* To ask pgerp permission. */
-		r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
+		r->io->pgrep_raft_permit(r->io, &pi);
 		if (!pi.permit) {
 			ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep permit not granted.",
 				   rkey(r), r->state, __func__);
@@ -584,7 +584,7 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 __heart_beat:
 	if (pi.permit) {
 		/* If permit granted, and there has no log entries, release the permit. */
-		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+		r->io->pgrep_raft_unpermit(r->io, &pi);
 		pi.permit = false;
 
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep permit released because just heart beat.",
@@ -1487,6 +1487,13 @@ static int deleteConflictingEntries(struct raft *r,
 
 static int try_truncate(struct raft *r, raft_index index)
 {
+	int rv;
+	if (r->configuration_uncommitted_index >= index) {
+		rv = membershipRollback(r);
+		if (rv)
+			return rv;
+	}
+
 	if (index > logLastIndex(&r->log))
 		return 0;
 
@@ -1494,7 +1501,7 @@ static int try_truncate(struct raft *r, raft_index index)
 		return RAFT_LOG_BUSY;
 	}
 
-	int rv = r->io->truncate(r->io, index);
+	r->io->truncate(r->io, index);
 	if (rv)
 		return rv;
 
@@ -2074,7 +2081,7 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 	if (r->state != RAFT_LEADER || r->pgrep_id == (raft_id)-1 ||
 		progressGetAppliedIndex(r, inx) == r->last_applied) {
 
-		r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+		r->io->pgrep_raft_unpermit(r->io, &pi);
 		pi.permit = false;
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: release pgrep permit.", rkey(r), r->state, __func__);
 		replicationApply(r);
@@ -2437,7 +2444,7 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 	 * Start a replicationProgress.
 	 */
 	if (r->state == RAFT_LEADER && !pi.permit) {
-		r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
+		r->io->pgrep_raft_permit(r->io, &pi);
 		if (!pi.permit) {
 			ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep permit not granted r->commit_index[%lld].",
 				   rkey(r), r->state, __func__, r->commit_index);
@@ -2451,7 +2458,7 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 	if (r->last_applying == r->commit_index ||
 		r->last_applied == r->commit_index) {
 		if (pi.permit) {
-			r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &pi);
+			r->io->pgrep_raft_unpermit(r->io, &pi);
 			ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep permit released because no logs need apply.",
 				   rkey(r), r->state, __func__);
 		}

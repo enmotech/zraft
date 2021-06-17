@@ -212,6 +212,17 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
 
+	/* To rest the pgrep destination. */
+	unsigned i = configurationIndexOf(&r->configuration, r->pgrep_id);
+	r->pgrep_id = RAFT_INVALID_ID;
+	if (i != r->configuration.n) {
+		struct raft_progress *p = &r->leader_state.progress[i];
+		if (p->replicating) {
+			r->io->pgrep_cancel(r->io);
+			p->replicating = false;
+		}
+	}
+
     /* notify the user */
     if(r->state_change_cb != NULL)
 	    r->state_change_cb(r, RAFT_LEADER);

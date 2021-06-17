@@ -212,7 +212,7 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
 
-	/* To rest the pgrep destination. */
+	/* To reset the pgrep destination. */
 	unsigned i = configurationIndexOf(&r->configuration, r->pgrep_id);
 	r->pgrep_id = RAFT_INVALID_ID;
 	if (i != r->configuration.n) {

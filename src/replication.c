@@ -1666,6 +1666,13 @@ static int checkPgreplicating(
 			r->last_stored = trunc_index - 1;
 			r->commit_index = trunc_index - 1;
 
+			const struct raft_server *server = configurationGet(&r->configuration, r->id);
+			if (server && r->role_change_cb) {
+				struct raft_server server_cp = *server;
+				server_cp.pre_role = RAFT_STANDBY;
+				r->role_change_cb(r, &server_cp);
+			}
+
 			rv = 0;
 			goto async_false;
 		}

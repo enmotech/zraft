@@ -32,39 +32,39 @@
 #endif
 
 
-#include<unistd.h>
-#include <fcntl.h>
-static void exception_exit_test(struct raft *r, uint32_t pgkey)
-{
-	if (pgkey != rkey(r))
-		return;
-
-	char *flag_file = "exception_exit_test";
-	
-	if (access(flag_file, F_OK) == 0) {
-		return;
-	}
-
-	ZSWARNING(gzlog, "[raft][%d][%d][%s].", rkey(r), r->state, __func__);
-	creat(flag_file, S_IFREG);
-	exit(0);
-}
-
-static void exception_exit_test2(struct raft *r, uint32_t pgkey)
-{
-	if (pgkey != rkey(r))
-		return;
-
-	char *flag_file = "exception_exit_test2";
-	
-	if (access(flag_file, F_OK) == 0) {
-		return;
-	}
-
-	ZSWARNING(gzlog, "[raft][%d][%d][%s].", rkey(r), r->state, __func__);
-	creat(flag_file, S_IFREG);
-	exit(0);
-}
+//#include<unistd.h>
+//#include <fcntl.h>
+//static void exception_exit_test(struct raft *r, uint32_t pgkey)
+//{
+//	if (pgkey != rkey(r))
+//		return;
+//
+//	char *flag_file = "exception_exit_test";
+//
+//	if (access(flag_file, F_OK) == 0) {
+//		return;
+//	}
+//
+//	ZSWARNING(gzlog, "[raft][%d][%d][%s].", rkey(r), r->state, __func__);
+//	creat(flag_file, S_IFREG);
+//	exit(0);
+//}
+//
+//static void exception_exit_test2(struct raft *r, uint32_t pgkey)
+//{
+//	if (pgkey != rkey(r))
+//		return;
+//
+//	char *flag_file = "exception_exit_test2";
+//
+//	if (access(flag_file, F_OK) == 0) {
+//		return;
+//	}
+//
+//	ZSWARNING(gzlog, "[raft][%d][%d][%s].", rkey(r), r->state, __func__);
+//	creat(flag_file, S_IFREG);
+//	exit(0);
+//}
 
 int64_t raft_tick_count_ns(void)
 {

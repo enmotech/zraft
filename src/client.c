@@ -55,14 +55,10 @@ int raft_apply(struct raft *r,
         goto err_after_log_append;
     }
 
-
 	ZSINFO(gzlog, "[raft][%d][%d] %u |usr-req-key-1|%d-%lld|.",
 		   rkey(r), r->state, n, rkey(r), index);
 
 	return 0;
-
-	ZSINFO(gzlog, "[raft][%d][%d] %u |usr-req-key-1|%d-%lld| failed[%d].",
-		   rkey(r), r->state, n, rkey(r), index, rv);
 
 err_after_log_append:
     logDiscard(&r->log, index);

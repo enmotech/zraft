@@ -84,7 +84,7 @@ int membershipUncommittedChange(struct raft *r,
 
 	/* Notify the upper module the role changed. */
 	server = configurationGet(&r->configuration, r->id);
-	if (server && server->role == RAFT_DYING && r->role_change_cb)
+	if (server && r->role_change_cb)
 		r->role_change_cb(r, server);
 
 	for (unsigned int i = 0; i < r->configuration.n; i++) {

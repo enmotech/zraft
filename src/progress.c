@@ -232,6 +232,9 @@ bool progressMaybeDecrement(struct raft *r,
     p->next_index = min(rejected, last_index + 1);
     p->next_index = max(p->next_index, 1);
 
+	ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+		   rkey(r), r->state, __func__, p->next_index);
+
     return true;
 }
 
@@ -241,6 +244,8 @@ void progressOptimisticNextIndex(struct raft *r,
 {
     struct raft_progress *p = &r->leader_state.progress[i];
     p->next_index = next_index;
+	ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+		   rkey(r), r->state, __func__, p->next_index);
 }
 
 bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
@@ -253,6 +258,8 @@ bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
     }
     if (p->next_index < last_index + 1) {
         p->next_index = last_index + 1;
+		ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+			   rkey(r), r->state, __func__, p->next_index);
     }
     return updated;
 }
@@ -272,6 +279,9 @@ void progressToProbe(struct raft *r, const unsigned i)
         p->next_index = p->match_index + 1;
     }
     p->state = PROGRESS__PROBE;
+
+	ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+		   rkey(r), r->state, __func__, p->next_index);
 }
 
 void progressToPipeline(struct raft *r, const unsigned i)

@@ -525,6 +525,7 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	case PGREP_TICK_FIN:
 	case PGREP_TICK_ABD:
 	case PGREP_TICK_DLT:
+		progressOptimisticNextIndex(r, i, progressGetAppliedIndex(r, i) + 1);
 		progressSetPgreplicating(r, i, false);
 		progressUpdateAppliedIndex(r, i, 0);
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep over status[%d] pgrep_id[%lld] replicating[%d].",

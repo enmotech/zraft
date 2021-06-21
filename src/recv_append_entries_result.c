@@ -124,7 +124,8 @@ __pgrep_proc:
 				   to start a new relication. */
 				progressUpdateAppliedIndex(r, i, prev_applied_index);
 
-				if (r->last_applied > prev_applied_index) {
+				if (r->last_applied > prev_applied_index ||
+					result->pi.replicating == PGREP_RND_BGN) {
 
 					r->io->pgrep_raft_permit(r->io, &pi);
 					/* Can't get the permit with the old granted permit,

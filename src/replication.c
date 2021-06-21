@@ -519,7 +519,8 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 		break;
 	case PGREP_TICK_RUN:
 		/* There are some entries need to sending. */
-		sendSectionLogs = r->last_applied > progressGetAppliedIndex(r, i);
+		//sendSectionLogs = r->last_applied > progressGetAppliedIndex(r, i);
+		sendSectionLogs = true;
 		break;
 	case PGREP_TICK_FIN:
 	case PGREP_TICK_ABD:
@@ -535,6 +536,8 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 			}
 			r->leader_state.promotee_id = 0;
 			assignRole(r, server, RAFT_VOTER);
+			/* Start a replication right now to preventing catch-up again. */
+			replicationProgress(r, i);
 			return 0;
 		}
 		goto __heart_beat;
@@ -1665,13 +1668,6 @@ static int checkPgreplicating(
 
 			r->last_stored = trunc_index - 1;
 			r->commit_index = trunc_index - 1;
-
-			const struct raft_server *server = configurationGet(&r->configuration, r->id);
-			if (server && r->role_change_cb) {
-				struct raft_server server_cp = *server;
-				server_cp.pre_role = RAFT_STANDBY;
-				r->role_change_cb(r, &server_cp);
-			}
 
 			rv = 0;
 			goto async_false;

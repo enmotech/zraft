@@ -7,6 +7,7 @@
 #include "log.h"
 #include "recv.h"
 #include "replication.h"
+#include "configuration.h"
 #include "tracing.h"
 
 /* Set to 1 to enable tracing. */
@@ -121,6 +122,17 @@ int recvAppendEntries(struct raft *r,
 
     /* Reset the election timer. */
     r->election_timer_start = r->io->time(r->io);
+
+	if (args->pi.replicating) {
+		const struct raft_server *server = configurationGet(&r->configuration, r->id);
+		if (!r->pgrep_reported && server && r->role_change_cb) {
+			struct raft_server server_cp = *server;
+			server_cp.pre_role = RAFT_STANDBY;
+			r->role_change_cb(r, &server_cp);
+			r->pgrep_reported = true;
+		}
+	} else
+		r->pgrep_reported = false;
 
 	if (args->pi.replicating == PGREP_RND_HRT) {
 		goto reply;

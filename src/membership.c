@@ -61,11 +61,15 @@ int membershipUncommittedChange(struct raft *r,
     struct raft_configuration configuration;
 	const struct raft_server *server;
     int rv;
+    int old_role;
 
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
     assert(entry != NULL);
     assert(entry->type == RAFT_CHANGE);
+
+    server = configurationGet(&r->configuration, r->id);
+    old_role = server ? server->role : RAFT_UNKNOW;
 
     raft_configuration_init(&configuration);
 
@@ -79,13 +83,14 @@ int membershipUncommittedChange(struct raft *r,
     r->configuration = configuration;
     r->configuration_uncommitted_index = index;
 
+    /* Notify the upper module the role changed. */
+    server = configurationGet(&r->configuration, r->id);
+    if (server && r->role_change_cb &&
+        (old_role != RAFT_UNKNOW && old_role != server->role))
+        r->role_change_cb(r, server);
+
 	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
 		   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
-
-	/* Notify the upper module the role changed. */
-	server = configurationGet(&r->configuration, r->id);
-	if (server && server->role == RAFT_DYING && r->role_change_cb)
-		r->role_change_cb(r, server);
 
 	for (unsigned int i = 0; i < r->configuration.n; i++) {
 		const struct raft_server *servert = &r->configuration.servers[i];
@@ -103,8 +108,10 @@ err:
 
 int membershipRollback(struct raft *r)
 {
+    const struct raft_server *server;
     const struct raft_entry *entry;
     int rv;
+    int old_role;
 
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
@@ -112,6 +119,9 @@ int membershipRollback(struct raft *r)
 
     /* Fetch the last committed configuration entry. */
     assert(r->configuration_index != 0);
+
+    server = configurationGet(&r->configuration, r->id);
+    old_role = server ? server->role : RAFT_UNKNOW;
 
     entry = logGet(&r->log, r->configuration_index);
 
@@ -127,6 +137,13 @@ int membershipRollback(struct raft *r)
     }
 
     r->configuration_uncommitted_index = 0;
+
+    /* Notify the upper module the role changed. */
+    server = configurationGet(&r->configuration, r->id);
+    if (server && r->role_change_cb &&
+        (old_role != RAFT_UNKNOW && old_role != server->role))
+        r->role_change_cb(r, server);
+
     ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
            rkey(r), r->state, __func__, r->configuration_uncommitted_index);
 

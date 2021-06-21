@@ -72,6 +72,7 @@ int raft_init(struct raft *r,
     r->max_catch_up_round_duration = DEFAULT_MAX_CATCH_UP_ROUND_DURATION;
 	r->last_append_time = 0;
 	r->last_append_term = 0;
+    r->pgrep_reported = false;
 	r->role_change_cb = NULL;
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {

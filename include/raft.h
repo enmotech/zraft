@@ -213,7 +213,6 @@ struct copy_chunk_posi {
 #define PGREP_RND_ING ((uint16_t)2) /* Pg relicating. */
 #define PGREP_RND_HRT ((uint16_t)4) /* Pg relicating heart beat. */
 #define PGREP_RND_ERR ((uint16_t)-1) /* Pg relicating meet some error. */
-#define PGREP_RND_BRK ((uint16_t)-3) /* Pg relicating break, to start new pgrep. */
 
 
 #define __init_permit_info(pi) \
@@ -1048,6 +1047,7 @@ struct raft
 	/* To save pgrep info. */
 	int64_t last_append_time;
 	raft_term last_append_term;
+	bool pgrep_reported;
 };
 
 RAFT_API int raft_init(struct raft *r,

@@ -130,6 +130,8 @@ int recvAppendEntries(struct raft *r,
 			server_cp.pre_role = RAFT_STANDBY;
 			r->role_change_cb(r, &server_cp);
 			r->pgrep_reported = true;
+			ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] pre_role[%d].",
+				   rkey(r), r->state, __func__, server_cp.pre_role);
 		}
 	} else
 		r->pgrep_reported = false;

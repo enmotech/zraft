@@ -81,8 +81,11 @@ int membershipUncommittedChange(struct raft *r,
 
     /* Notify the upper module the role changed. */
     server = configurationGet(&r->configuration, r->id);
-    if (server && r->role_change_cb)
+    if (server && r->role_change_cb) {
         r->role_change_cb(r, server);
+        ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+               rkey(r), r->state, __func__, server->role);
+    }
 
 	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
 		   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
@@ -131,8 +134,11 @@ int membershipRollback(struct raft *r)
 
     /* Notify the upper module the role changed. */
     server = configurationGet(&r->configuration, r->id);
-    if (server && r->role_change_cb)
+    if (server && r->role_change_cb) {
         r->role_change_cb(r, server);
+        ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+               rkey(r), r->state, __func__, server->role);
+    }
 
     ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
            rkey(r), r->state, __func__, r->configuration_uncommitted_index);

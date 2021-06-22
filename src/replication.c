@@ -431,8 +431,11 @@ static void assignRoleCb(struct raft_change *req, int status)
 	raft_free(req);
 
 	/* Notify the upper module the role changed. */
-	if (r->role_change_cb)
+	if (r->role_change_cb) {
 		r->role_change_cb(r, server);
+		ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+			   rkey(r), r->state, __func__, server->role);
+	}
 }
 
 static void assignRole(struct raft *r, struct raft_server *server, int role)

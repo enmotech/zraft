@@ -813,12 +813,16 @@ int logAcquireSection(
 
 	unsigned cnt = 0;
 	unsigned short type;
+	int left_bufsize = 0x700000; /* Buffer size limit of network io. */
 
     for (j = 0; j < *n; j++) {
         size_t k = (i + j) % l->size;
         struct raft_entry *entry = &(*entries)[j];
         *entry = l->entries[k];
 		if (j && entry->type != type)
+			break;
+		left_bufsize -= (int)(sizeof(struct raft_entry) + entry->buf.len);
+		if (left_bufsize < 0)
 			break;
 		type = entry->type;
 		refsIncr(l, entry->term, index + j);

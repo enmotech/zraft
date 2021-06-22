@@ -159,8 +159,7 @@ static int sendAppendEntries(struct raft *r,
 			goto err_after_entries_acquired;
 		}
 	} else {
-		/* TODO: implement a limit to the total size of the entries being sent */
-		rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries);
+		rv = logAcquireSection(&r->log, next_index, logLastIndex(&r->log), &args->entries, &args->n_entries);
 		if (rv != 0) {
 			goto err;
 		}

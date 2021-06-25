@@ -77,6 +77,15 @@ static void convertFailChange(struct raft_change *req)
 /* Clear leader state. */
 static void convertClearLeader(struct raft *r)
 {
+    /* Stop pgrep. */
+    if(r->pgrep_id != RAFT_INVALID_ID) {
+        r->io->pgrep_cancel(r->io);
+        struct pgrep_permit_info pi = {0}; 
+        int status = r->io->pgrep_tick(r->io, r->id, r->pgrep_id, r->current_term, &pi);
+        assert(status == PGREP_TICK_ABD);
+        r->pgrep_id = RAFT_INVALID_ID;
+    }
+
     if (r->leader_state.progress != NULL) {
         raft_free(r->leader_state.progress);
         r->leader_state.progress = NULL;
@@ -211,17 +220,6 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_number = 0;
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
-
-	/* To reset the pgrep destination. */
-	unsigned i = configurationIndexOf(&r->configuration, r->pgrep_id);
-	r->pgrep_id = RAFT_INVALID_ID;
-	if (i != r->configuration.n) {
-		struct raft_progress *p = &r->leader_state.progress[i];
-		if (p->replicating) {
-			r->io->pgrep_cancel(r->io);
-			p->replicating = false;
-		}
-	}
 
     /* notify the user */
     if(r->state_change_cb != NULL)

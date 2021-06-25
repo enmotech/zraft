@@ -447,7 +447,7 @@ static void assignRole(struct raft *r, struct raft_server *server, int role)
 		return;
 	}
 
-	_req = raft_malloc(sizeof(struct raft_change *));
+	_req = raft_malloc(sizeof(struct raft_change));
 	if (!_req)
 		return;
 

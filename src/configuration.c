@@ -120,7 +120,10 @@ int configurationAdd(struct raft_configuration *c,
     assert(c != NULL);
     assert(id != 0);
 
-    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
+    if (role != RAFT_STANDBY &&
+	role != RAFT_VOTER &&
+	role != RAFT_SPARE &&
+	role != RAFT_DYING) {
         return RAFT_BADROLE;
     }
 

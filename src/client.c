@@ -241,7 +241,10 @@ int raft_assign(struct raft *r,
     raft_index last_index;
     int rv;
 
-    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
+    if (role != RAFT_STANDBY &&
+	role != RAFT_VOTER &&
+	role != RAFT_SPARE &&
+	role != RAFT_DYING) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
         return rv;
@@ -273,6 +276,9 @@ int raft_assign(struct raft *r,
             case RAFT_SPARE:
                 name = "spare";
                 break;
+	    case RAFT_DYING:
+		name = "dying";
+		break;
             default:
                 name = NULL;
                 assert(0);

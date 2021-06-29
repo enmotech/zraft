@@ -2301,6 +2301,10 @@ static void applyChange(struct raft *r, const raft_index index)
 			ZSINFO(gzlog, "[raft][%d][%d][%s] change call backed.",
 				      rkey(r), r->state, __func__);
 			req->cb(req, 0);
+		} else {
+			ZSINFO(gzlog, "[raft][%d][%d][%s] change call backed in new Leader.",
+				      rkey(r), r->state, __func__);
+			r->role_change_cb(r, NULL);
 		}
 	} else {
 		/* if we are removed from the configuration,

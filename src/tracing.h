@@ -6,15 +6,16 @@
 #include "../include/raft.h"
 #include "../../../infrastructure/zlog/logger.h"
 
-
 #ifdef RAFT_TEST
 #undef ZSINFO
 #undef ZSERROR
 #undef ZSWARNING
-
+#undef ZSNOTICE
 #define ZSINFO(g, p, ...)
 #define ZSERROR(g, p, ...)
 #define ZSWARNING(g, p, ...)
+#define ZSINFO(g, p, ...)
+#define ZSNOTICE(g, p, ...)
 #else
 extern struct zlogger *gzlog;
 #endif

@@ -22,7 +22,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
 	struct fixture *f = munit_malloc(sizeof *f);
 	unsigned i;
-	SETUP_CLUSTER(2);
+	SETUP_CLUSTER(CLUSTER_N);
 	CLUSTER_BOOTSTRAP;
 	for (i = 0; i < CLUSTER_N; i++) {
 		struct raft *raft = CLUSTER_RAFT(i);
@@ -54,7 +54,7 @@ static void tearDown(void *data)
 #define ASSERT_LEADER(I) munit_assert_int(CLUSTER_STATE(I), ==, RAFT_LEADER)
 
 SUITE(paper_test)
-
+#include <unistd.h>
 /* follower update it's term when receive higher term AE. */
 TEST(paper_test, followerUpdateTermFromAE, setUp, tearDown, 0, NULL)
 {
@@ -72,20 +72,21 @@ TEST(paper_test, followerUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(k,i);
 
 	//let server j be new leader and add term
+	CLUSTER_DEPOSE;
 	CLUSTER_ELECT(j);
 	ASSERT_LEADER(j);
 	ASSERT_FOLLOWER(i);
 	raft_term t = CLUSTER_TERM(j);
-	CLUSTER_STEP_UNTIL_TERM_IS(j, t+1, 1000);
+	//CLUSTER_STEP_UNTIL_TERM_IS(j, t+1, 1000);
 	struct raft_entry entry1;
 	entry1.type = RAFT_COMMAND;
-	entry1.term = t+1;
+	entry1.term = t;
 	FsmEncodeSetX(123, &entry1.buf);
 	CLUSTER_ADD_ENTRY(j, &entry1);
 
 	CLUSTER_DESATURATE_BOTHWAYS(j,k);
 	CLUSTER_STEP_UNTIL_DELIVERED(j, k, 100);
-	ASSERT_TERM(k,t+1);
+	ASSERT_TERM(k,t);
 	ASSERT_FOLLOWER(k);
 
 	return MUNIT_OK;
@@ -93,30 +94,38 @@ TEST(paper_test, followerUpdateTermFromAE, setUp, tearDown, 0, NULL)
 
 TEST(paper_test, candidateUpdateTermFromAE, setUp, tearDown, 0, NULL)
 {
+	int flag=1;
+	while(flag)
+		sleep(2);
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
 	CLUSTER_START;
-	//let server k disconnect from cluster
+	//let server k isolate from cluster
 	CLUSTER_SATURATE_BOTHWAYS(k,j);
 	CLUSTER_SATURATE_BOTHWAYS(k,i);
+	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_CANDIDATE, 2000);
+//	unsigned m = CLUSTER_LEADER;
+//	raft_term t = CLUSTER_TERM(m);
+//
+//	f->cluster.leader_id=0;
+//	CLUSTER_ELECT(i);
+//	ASSERT_LEADER(i);
+//	ASSERT_FOLLOWER(j);
+//	ASSERT_CANDIDATE(k);
+//
+//	t = CLUSTER_TERM(i);
 
-	raft_fixture_step_until_state_is(&f->cluster, k, RAFT_CANDIDATE, 2000);
-	ASSERT_CANDIDATE(k);
-
-	CLUSTER_ELECT(i);
-	ASSERT_LEADER(i);
-	ASSERT_FOLLOWER(j);
-	ASSERT_CANDIDATE(k);
-
-	raft_term t = CLUSTER_TERM(i);
+	raft_term t = CLUSTER_TERM(j);
+	CLUSTER_STEP_UNTIL_TERM_IS(j, t+1, 2000);
+	unsigned m = CLUSTER_LEADER;
 	struct raft_entry entry1;
 	entry1.type = RAFT_COMMAND;
-	entry1.term = t;
+	entry1.term = t+1;
 	FsmEncodeSetX(123, &entry1.buf);
-	CLUSTER_ADD_ENTRY(i, &entry1);
-	CLUSTER_DESATURATE_BOTHWAYS(k,i);
-	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
-	ASSERT_TERM(k,t);
+	CLUSTER_ADD_ENTRY(m, &entry1);
+	CLUSTER_DESATURATE_BOTHWAYS(k,m);
+	CLUSTER_STEP_UNTIL_DELIVERED(m, k, 100);
+	ASSERT_TERM(k,t+1);
 	ASSERT_FOLLOWER(k);
 
 	return MUNIT_OK;
@@ -131,19 +140,21 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	CLUSTER_ELECT(i);
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
+	raft_term t = CLUSTER_TERM(i);
 
 	//let server i disconnect from cluster
 	CLUSTER_SATURATE_BOTHWAYS(i,j);
 	CLUSTER_SATURATE_BOTHWAYS(i,k);
 
 	//let server j be another leader
+	CLUSTER_DEPOSE;
 	CLUSTER_ELECT(j);
 	ASSERT_LEADER(j);
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(k);
 
 	//server add entry
-	raft_term t = CLUSTER_TERM(j);
+	t = CLUSTER_TERM(j);
 	struct raft_entry entry1;
 	entry1.type = RAFT_COMMAND;
 	entry1.term = t;

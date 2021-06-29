@@ -409,14 +409,14 @@ err:
 
 struct assign_result {
 	struct raft *r;
-	struct raft_server *server;
+	raft_id id;
 };
 
 static void assignRoleCb(struct raft_change *req, int status)
 {
 	(void)status;
 	struct assign_result *_result = req->data;
-	struct raft_server *server = _result->server;
+	struct raft_server *server = configurationGet(_result->id);
 	struct raft *r = _result->r;
 
 	ZSINFO(gzlog, "[raft][%d][%d][%s]: server[%lld] role:[%d] return.",
@@ -431,9 +431,9 @@ static void assignRoleCb(struct raft_change *req, int status)
 
 	/* Notify the upper module the role changed. */
 	if (r->role_change_cb) {
-		r->role_change_cb(r, server);
 		ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
 			   rkey(r), r->state, __func__, server->role);
+		r->role_change_cb(r, server);
 	}
 }
 
@@ -458,7 +458,7 @@ static void assignRole(struct raft *r, struct raft_server *server, int role)
 	}
 
 	server->pre_role = role;
-	_result->server = server;
+	_result->id = server->id;
 	_result->r = r;
 	_req->data = _result;
 	_req->cb = assignRoleCb;

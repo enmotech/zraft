@@ -2287,7 +2287,6 @@ static void applyChange(struct raft *r, const raft_index index)
 	if (r->state == RAFT_LEADER) {
 		req = r->leader_state.change;
 		r->leader_state.change = NULL;
-
 		/* If we are leader but not part of this new configuration, step
 		 * down.
 		 *
@@ -2298,10 +2297,9 @@ static void applyChange(struct raft *r, const raft_index index)
 		 */
 		server = configurationGet(&r->configuration, r->id);
 		if (server == NULL) {
-			convertToFollower(r);
+			//convertToFollower(r);
 			r->removed = true;
 		}
-
 		if (req != NULL && req->cb != NULL) {
 			ZSINFO(gzlog, "[raft][%d][%d][%s] change call backed.",
 				      rkey(r), r->state, __func__);

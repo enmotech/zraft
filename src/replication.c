@@ -92,6 +92,11 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 	struct raft *r = req->raft;
 	unsigned i = configurationIndexOf(&r->configuration, req->server_id);
 
+	if (r->state == RAFT_UNAVAILABLE) {
+		raft_free(req);
+		return;
+	}
+
 	if (r->state == RAFT_LEADER && i < r->configuration.n) {
 		if (status != 0) {
 			tracef("failed to send append entries to server %u: %s",

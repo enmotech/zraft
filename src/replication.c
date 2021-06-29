@@ -2313,6 +2313,8 @@ static void applyChange(struct raft *r, const raft_index index)
 		}
 
 		if (req != NULL && req->cb != NULL) {
+			ZSINFO(gzlog, "[raft][%d][%d][%s] change call backed.",
+				      rkey(r), r->state, __func__);
 			req->cb(req, 0);
 		}
 	} else {

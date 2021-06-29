@@ -52,7 +52,7 @@ int replicationProgressInner(struct raft *r, unsigned i, struct pgrep_permit_inf
  *
  * It must be called only by leaders. */
 int replicationUpdate(struct raft *r,
-                      const struct raft_server *server,
+                      const raft_id id,
                       const struct raft_append_entries_result *result);
 
 /* Append the log entries in the given request if the Log Matching Property is

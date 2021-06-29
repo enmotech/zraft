@@ -1047,7 +1047,7 @@ int replicationTrigger(struct raft *r, raft_index index)
 //}
 
 int replicationUpdate(struct raft *r,
-					  const struct raft_server *server,
+					  const raft_id id,
 					  const struct raft_append_entries_result *result)
 {
 //	bool is_being_promoted;
@@ -1055,7 +1055,7 @@ int replicationUpdate(struct raft *r,
 	unsigned i;
 	int rv;
 
-	i = configurationIndexOf(&r->configuration, server->id);
+	i = configurationIndexOf(&r->configuration, id);
 
 	assert(r->state == RAFT_LEADER);
 	assert(i < r->configuration.n);
@@ -1077,7 +1077,7 @@ int replicationUpdate(struct raft *r,
 									   result->last_log_index);
 		if (retry) {
 			/* Retry, ignoring errors. */
-			tracef("log mismatch -> send old entries to %u", server->id);
+			tracef("log mismatch -> send old entries to %u", id);
 			replicationProgress(r, i);
 		}
 		return 0;
@@ -1115,21 +1115,6 @@ int replicationUpdate(struct raft *r,
 		progressToPipeline(r, i);
 	}
 
-	/* If the server is currently being promoted and is catching with logs,
-	 * update the information about the current catch-up round, and possibly
-	 * proceed with the promotion. */
-//	is_being_promoted = r->leader_state.promotee_id != 0 &&
-//		r->leader_state.promotee_id == server->id;
-//	if (is_being_promoted) {
-//		bool is_up_to_date = membershipUpdateCatchUpRound(r);
-//		if (is_up_to_date) {
-//			rv = triggerActualPromotion(r);
-//			if (rv != 0) {
-//				return rv;
-//			}
-//		}
-//	}
-
 	/* Check if we can commit some new entries. */
 	replicationQuorum(r, r->last_stored);
 
@@ -1146,13 +1131,13 @@ int replicationUpdate(struct raft *r,
 
 	/* Get again the server index since it might have been removed from the
 	 * configuration. */
-	i = configurationIndexOf(&r->configuration, server->id);
+	i = configurationIndexOf(&r->configuration, id);
 
 	if (i < r->configuration.n) {
 		/* If we are transferring leadership to this follower, check if its log
 		 * is now up-to-date and, if so, send it a TimeoutNow RPC (unless we
 		 * already did). */
-		if (r->transfer != NULL && r->transfer->id == server->id) {
+		if (r->transfer != NULL && r->transfer->id == id) {
 			if (progressIsUpToDate(r, i) && r->transfer->send.data == NULL) {
 				rv = membershipLeadershipTransferStart(r);
 				if (rv != 0) {

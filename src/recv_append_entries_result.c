@@ -80,7 +80,7 @@ int recvAppendEntriesResult(struct raft *r,
 		goto __pgrep_proc;
 
     /* Update the progress of this server, possibly sending further entries. */
-    rv = replicationUpdate(r, server, result);
+    rv = replicationUpdate(r, server->id, result);
     if (rv != 0) {
         goto __pgrep_proc;
     }

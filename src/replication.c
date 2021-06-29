@@ -417,7 +417,7 @@ static void assignRoleCb(struct raft_change *req, int status)
 	(void)status;
 	struct assign_result *_result = req->data;
 	struct raft *r = _result->r;
-	struct raft_server *server = configurationGet(&r->configuration, _result->id);
+	struct raft_server *server = (struct raft_server *)configurationGet(&r->configuration, _result->id);
 
 	ZSINFO(gzlog, "[raft][%d][%d][%s]: server[%lld] role:[%d] return.",
 		   rkey(r), r->state, __func__, server->id, server->role);

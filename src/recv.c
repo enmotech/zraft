@@ -40,6 +40,8 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
 	struct raft *r = request->raft;
 	char *address = (char *)(request->message.server_address);
 
+	if (r->state == RAFT_UNAVAILABLE)
+		goto err;
 	r->io->state = RAFT_IO_AVAILABLE;
 	if(status != 0) {
 		convertToUnavailable(r);
@@ -244,8 +246,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 
 	/* If there's a leadership transfer in progress, check if it has
      * completed. */
-	if (r->io->state == RAFT_IO_AVAILABLE &&
-	    r->transfer != NULL) {
+	if (r->transfer != NULL) {
 		if (r->follower_state.current_leader.id == r->transfer->id) {
 			membershipLeadershipTransferClose(r);
 		}

@@ -120,8 +120,9 @@ void electionSetMetaCb(struct raft_io_set_meta *req, int status)
 	size_t i;
 	int rv;
 
+	if (r->state == RAFT_UNAVAILABLE)
+		goto err;
 	assert(r->state == RAFT_CANDIDATE);
-
 	r->io->state = RAFT_IO_AVAILABLE;
 	if(status != 0) {
 		convertToUnavailable(r);

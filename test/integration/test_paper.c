@@ -274,8 +274,6 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
     struct fixture *f = data;
 	unsigned i = 0, j = 1, k = 2;
 	CLUSTER_START;
-	CLUSTER_SATURATE_BOTHWAYS(i,j);
-	CLUSTER_SATURATE_BOTHWAYS(i,k);
 	ASSERT_FOLLOWER(i);
 	raft_term t = CLUSTER_TERM(i);
 	struct raft *r = CLUSTER_RAFT(i);

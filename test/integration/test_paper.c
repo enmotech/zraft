@@ -238,7 +238,7 @@ TEST(paper_test, followerStartElection, setUp, tearDown, 0, NULL) {
 	raft_fixture_set_election_timeout_min(&f->cluster, k);
 	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_CANDIDATE, 2000);
 	unsigned vote_for = CLUSTER_VOTED_FOR(k);
-	munit_assert_int32(vote_for--, ==, k);
+	munit_assert_int32(vote_for-1, ==, k);
 	ASSERT_CANDIDATE(k);
 	raft_term t1 = CLUSTER_TERM(k);
 	munit_assert_llong(t1, ==, t+1);
@@ -262,7 +262,7 @@ TEST(paper_test, candidateStartElection, setUp, tearDown, 0, NULL) {
 	electionStart(r);
 
 	unsigned vote_for = CLUSTER_VOTED_FOR(i);
-	munit_assert_int32(vote_for, ==, i);
+	munit_assert_int32(vote_for-1, ==, i);
 	ASSERT_CANDIDATE(i);
 	raft_term t1 = CLUSTER_TERM(i);
 	munit_assert_llong(t1, ==, t+1);

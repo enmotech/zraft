@@ -102,17 +102,18 @@ TEST(paper_test, candidateUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(k,i);
 	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_CANDIDATE, 2000);
 
+	j=CLUSTER_LEADER;
 	raft_term t = CLUSTER_TERM(j);
-	CLUSTER_STEP_UNTIL_TERM_IS(j, t+1, 2000);
-	unsigned m = CLUSTER_LEADER;
+//	CLUSTER_STEP_UNTIL_TERM_IS(j, t+1, 2000);
+//	unsigned m = CLUSTER_LEADER;
 	struct raft_entry entry1;
 	entry1.type = RAFT_COMMAND;
-	entry1.term = t+1;
+	entry1.term = t;
 	FsmEncodeSetX(123, &entry1.buf);
-	CLUSTER_ADD_ENTRY(m, &entry1);
-	CLUSTER_DESATURATE_BOTHWAYS(k,m);
-	CLUSTER_STEP_UNTIL_DELIVERED(m, k, 100);
-	ASSERT_TERM(k,t+1);
+	CLUSTER_ADD_ENTRY(j, &entry1);
+	CLUSTER_DESATURATE_BOTHWAYS(k,j);
+	CLUSTER_STEP_UNTIL_DELIVERED(j, k, 100);
+	ASSERT_TERM(k,t);
 	ASSERT_FOLLOWER(k);
 
 	return MUNIT_OK;

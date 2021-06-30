@@ -120,8 +120,9 @@ void electionSetMetaCb(struct raft_io_set_meta *req, int status)
 	size_t i;
 	int rv;
 
+	if (r->state == RAFT_UNAVAILABLE)
+		goto err;
 	assert(r->state == RAFT_CANDIDATE);
-
 	r->io->state = RAFT_IO_AVAILABLE;
 	if(status != 0) {
 		convertToUnavailable(r);
@@ -344,6 +345,7 @@ int electionVote(struct raft *r,
 		 bool *granted)
 {
 	const struct raft_server *local_server;
+	const struct raft_server *dest_server;
 	raft_index local_last_index;
 	raft_term local_last_term;
 	bool is_transferee; /* Requester is the target of a leadership transfer */
@@ -356,8 +358,14 @@ int electionVote(struct raft *r,
 	assert(granted != NULL);
 
 	local_server = configurationGet(&r->configuration, r->id);
+	dest_server = configurationGet(&r->configuration, args->candidate_id);
 
 	*granted = false;
+
+	if (dest_server == NULL || dest_server->role != RAFT_VOTER) {
+		tracef("dest server is not voter -> not granting vote");
+		return 0;
+	}
 
 	if (local_server == NULL || local_server->role != RAFT_VOTER) {
 		tracef("local server is not voting -> not granting vote");

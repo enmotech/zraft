@@ -782,7 +782,7 @@ int logAcquireSection(
         return 0;
 	}
 
-	realn = min(realn, 50);
+	realn = min(realn, 16);
 
     /* Get the array index of the first entry to acquire. */
     i = locateEntry(l, index);
@@ -813,12 +813,16 @@ int logAcquireSection(
 
 	unsigned cnt = 0;
 	unsigned short type;
+	int left_bufsize = 0x700000; /* Buffer size limit of network io. */
 
     for (j = 0; j < *n; j++) {
         size_t k = (i + j) % l->size;
         struct raft_entry *entry = &(*entries)[j];
         *entry = l->entries[k];
 		if (j && entry->type != type)
+			break;
+		left_bufsize -= (int)(sizeof(struct raft_entry) + entry->buf.len);
+		if (left_bufsize < 0)
 			break;
 		type = entry->type;
 		refsIncr(l, entry->term, index + j);
@@ -925,10 +929,9 @@ static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
 
 /* Core logic of @logTruncate and @logDiscard, removing all log entries from
  * @index onward. If @destroy is true, also destroy the removed entries. */
-static int removeSuffix(struct raft_log *l,
+static void removeSuffix(struct raft_log *l,
                          const raft_index index,
-                         bool destroy,
-						 bool decref)
+                         bool destroy)
 {
     size_t i;
     size_t n;
@@ -944,25 +947,15 @@ static int removeSuffix(struct raft_log *l,
     for (i = 0; i < n; i++) {
         struct raft_entry *entry;
         bool unref;
-		size_t back;
 
-		if (l->back == 0) {
-			back = l->size - 1;
-		} else {
-			back = l->back - 1;
-		}
+        if (l->back == 0) {
+            l->back = l->size - 1;
+        } else {
+            l->back--;
+        }
 
-		entry = &l->entries[back];
-		unref = refsIf(l, entry->term, start + n - i - 1);
-
-		if (!unref && !decref) {
-			ZSINFO(gzlog, "removeSuffix: failed index[%ld]", back);
-			return -1;
-		}
-
-		l->back = back;
-        
-		unref = refsDecr(l, entry->term, start + n - i - 1);
+        entry = &l->entries[l->back];
+        unref = refsDecr(l, entry->term, start + n - i - 1);
 
         if (unref && destroy) {
             destroyEntry(l, entry);
@@ -970,8 +963,6 @@ static int removeSuffix(struct raft_log *l,
     }
 
     clearIfEmpty(l);
-
-	return 0;
 }
 
 void logTruncate(struct raft_log *l, const raft_index index)
@@ -982,22 +973,54 @@ void logTruncate(struct raft_log *l, const raft_index index)
 
 	ZSINFO(gzlog, "logTruncate: index[%lld]", index);
 
-    removeSuffix(l, index, true, true);
+    removeSuffix(l, index, true);
 }
 
-int logTruncateIf(struct raft_log *l, const raft_index index)
+int isRefs(struct raft_log *l, const raft_index index)
 {
     if (logNumEntries(l) == 0) {
         return 0;
     }
 
-	ZSINFO(gzlog, "logTruncateIf: index[%lld]", index);
-    return removeSuffix(l, index, true, false);
+	ZSINFO(gzlog, "isRefs: index[%lld]", index);
+
+	size_t i;
+    size_t n;
+    raft_index start = index;
+
+    assert(l != NULL);
+    assert(index > l->offset);
+    assert(index <= logLastIndex(l));
+
+    n = (size_t)(logLastIndex(l) - start) + 1;
+
+	size_t back = l->back;
+
+    for (i = 0; i < n; i++) {
+        struct raft_entry *entry;
+        bool unref;
+
+        if (back == 0) {
+            back = l->size - 1;
+        } else {
+            back--;
+        }
+
+        entry = &l->entries[back];
+		unref = refsIf(l, entry->term, start + n - i - 1);
+
+		if (!unref) {
+			ZSINFO(gzlog, "isRefs: index[%lld] is referenced.", start + n - i - 1);
+			return RAFT_LOG_BUSY;
+		}
+    }
+
+	return 0;
 }
 
 void logDiscard(struct raft_log *l, const raft_index index)
 {
-    removeSuffix(l, index, false, true);
+    removeSuffix(l, index, false);
 }
 
 /* Delete all entries up to the given index (included). */

@@ -50,6 +50,8 @@
 /* Id of a raft group. */
 #define rkey(r) ((r)->io->raft_key((r)->io))
 
+#define RAFT_INVALID_ID ((raft_id)-1)
+
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
@@ -106,6 +108,7 @@ struct raft_buffer
 #define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
 #define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
 #define RAFT_SPARE 2   /* Does not replicate log, or participate in quorum. */
+#define RAFT_DYING 3   /* Do nothing, just wait to be removed. */
 
 /**
  * Hold information about a single server in the cluster configuration.
@@ -210,7 +213,6 @@ struct copy_chunk_posi {
 #define PGREP_RND_ING ((uint16_t)2) /* Pg relicating. */
 #define PGREP_RND_HRT ((uint16_t)4) /* Pg relicating heart beat. */
 #define PGREP_RND_ERR ((uint16_t)-1) /* Pg relicating meet some error. */
-#define PGREP_RND_BRK ((uint16_t)-3) /* Pg relicating break, to start new pgrep. */
 
 
 #define __init_permit_info(pi) \
@@ -742,12 +744,10 @@ struct raft_io
 
 	void (*pgrep_raft_permit)(
 		struct raft_io *io,
-		uint16_t _type,
 		struct pgrep_permit_info *pi);
 
 	void (*pgrep_raft_unpermit)(
 		struct raft_io *io,
-		uint16_t _type,
 		const struct pgrep_permit_info *pi);
 
 	void (*pgrep_recv_copy_chunks)(
@@ -844,6 +844,11 @@ typedef void (*raft_close_cb)(struct raft *raft);
  * notify the user the state has changed
  */
 typedef void (*raft_state_change_cb)(struct raft *raft, int state);
+/**
+ * role change callback.
+ * notify the user the role has changed
+ */
+typedef void (*raft_role_change_cb)(struct raft *raft, const struct raft_server *server);
 
 struct raft_change;   /* Forward declaration */
 struct raft_transfer; /* Forward declaration */
@@ -860,7 +865,7 @@ struct raft
 	raft_id id;                 /* Server ID of this raft instance. */
 	char *address;              /* Server address of this raft instance. */
 
-	volatile unsigned pgrep_id;			/* The server ID that is relicating to. */
+	volatile raft_id pgrep_id;			/* The server ID that is relicating to. */
 
 	/*
      * Cache of the server's persistent state, updated on stable storage before
@@ -1018,6 +1023,10 @@ struct raft
 	 */
 	raft_state_change_cb state_change_cb;
 	/*
+	 * Callback to invoke once the role has changed.
+	 */
+	raft_role_change_cb role_change_cb;
+	/*
      * Human-readable message providing diagnostic information about the last
      * error occurred.
      */
@@ -1037,6 +1046,8 @@ struct raft
 
 	/* To save pgrep info. */
 	int64_t last_append_time;
+	raft_term last_append_term;
+	bool pgrep_reported;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1068,6 +1079,8 @@ RAFT_API int raft_configuration_get(const struct raft *r, struct raft_configurat
  * @param cb
  */
 void raft_set_state_change_cb(struct raft *r, raft_state_change_cb cb);
+
+void raft_set_role_change_cb(struct raft *r, raft_role_change_cb cb);
 
 /**
  * Force a new configuration in order to recover from a loss of quorum where the

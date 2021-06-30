@@ -28,7 +28,7 @@ int membershipCanChangeConfiguration(struct raft *r)
         goto err;
     }
 
-    if (r->pgrep_id != (uint32_t)-1) {
+    if (r->pgrep_id != RAFT_INVALID_ID) {
         rv = RAFT_CANTCHANGE;
         goto err;
     }
@@ -54,62 +54,12 @@ err:
     return rv;
 }
 
-//bool membershipUpdateCatchUpRound(struct raft *r)
-//{
-//    unsigned server_index;
-//    raft_index match_index;
-//    raft_index last_index;
-//    raft_time now = r->io->time(r->io);
-//    raft_time round_duration;
-//    bool is_up_to_date;
-//    bool is_fast_enough;
-//
-//    assert(r->state == RAFT_LEADER);
-//    assert(r->leader_state.promotee_id != 0);
-//
-//    server_index =
-//        configurationIndexOf(&r->configuration, r->leader_state.promotee_id);
-//    assert(server_index < r->configuration.n);
-//
-//    match_index = progressMatchIndex(r, server_index);
-//
-//    /* If the server did not reach the target index for this round, it did not
-//     * catch up. */
-//    if (match_index < r->leader_state.round_index) {
-//        return false;
-//    }
-//
-//    last_index = logLastIndex(&r->log);
-//    round_duration = now - r->leader_state.round_start;
-//
-//    is_up_to_date = match_index == last_index;
-//    is_fast_enough = round_duration < r->election_timeout;
-//
-//    /* If the server's log is fully up-to-date or the round that just terminated
-//     * was fast enough, then the server as caught up. */
-//    if (is_up_to_date || is_fast_enough) {
-//        r->leader_state.round_number = 0;
-//        r->leader_state.round_index = 0;
-//        r->leader_state.round_start = 0;
-//
-//        return true;
-//    }
-//
-//    /* If we get here it means that this catch-up round is complete, but there
-//     * are more entries to replicate, or it was not fast enough. Let's start a
-//     * new round. */
-//    r->leader_state.round_number++;
-//    r->leader_state.round_index = last_index;
-//    r->leader_state.round_start = now;
-//
-//    return false;
-//}
-
 int membershipUncommittedChange(struct raft *r,
                                 const raft_index index,
                                 const struct raft_entry *entry)
 {
     struct raft_configuration configuration;
+	const struct raft_server *server;
     int rv;
 
     assert(r != NULL);
@@ -129,8 +79,24 @@ int membershipUncommittedChange(struct raft *r,
     r->configuration = configuration;
     r->configuration_uncommitted_index = index;
 
-    ZSINFO(gzlog, "[raft][%d][%d]membershipUncommittedChange set configuration_uncommitted_index = [%lld].",
-           rkey(r), r->state, r->configuration_uncommitted_index);
+    /* Notify the upper module the role changed. */
+    server = configurationGet(&r->configuration, r->id);
+    if (server && r->role_change_cb) {
+        ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+               rkey(r), r->state, __func__, server->role);
+		r->role_change_cb(r, server);
+		server = configurationGet(&r->configuration, r->id);
+    }
+
+	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
+		   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
+
+	for (unsigned int i = 0; i < r->configuration.n; i++) {
+		const struct raft_server *servert = &r->configuration.servers[i];
+		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+			   rkey(r), r->state, __func__, i,
+			   servert->id, servert->role, servert->pre_role);
+	}
 
     return 0;
 
@@ -141,6 +107,7 @@ err:
 
 int membershipRollback(struct raft *r)
 {
+    const struct raft_server *server;
     const struct raft_entry *entry;
     int rv;
 
@@ -165,8 +132,25 @@ int membershipRollback(struct raft *r)
     }
 
     r->configuration_uncommitted_index = 0;
-    ZSINFO(gzlog, "[raft][%d][%d]membershipRollback set configuration_uncommitted_index = [%lld].",
-           rkey(r), r->state, r->configuration_uncommitted_index);
+
+    /* Notify the upper module the role changed. */
+    server = configurationGet(&r->configuration, r->id);
+    if (server && r->role_change_cb) {
+        ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+               rkey(r), r->state, __func__, server->role);
+		r->role_change_cb(r, server);
+		server = configurationGet(&r->configuration, r->id);
+    }
+
+    ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
+           rkey(r), r->state, __func__, r->configuration_uncommitted_index);
+
+	for (unsigned int i = 0; i < r->configuration.n; i++) {
+		const struct raft_server *servert = &r->configuration.servers[i];
+		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+			   rkey(r), r->state, __func__, i,
+			   servert->id, servert->role, servert->pre_role);
+	}
 
     return 0;
 }

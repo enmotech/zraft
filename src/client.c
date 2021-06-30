@@ -55,14 +55,10 @@ int raft_apply(struct raft *r,
         goto err_after_log_append;
     }
 
-
 	ZSINFO(gzlog, "[raft][%d][%d] %u |usr-req-key-1|%d-%lld|.",
 		   rkey(r), r->state, n, rkey(r), index);
 
 	return 0;
-
-	ZSINFO(gzlog, "[raft][%d][%d] %u |usr-req-key-1|%d-%lld| failed[%d].",
-		   rkey(r), r->state, n, rkey(r), index, rv);
 
 err_after_log_append:
     logDiscard(&r->log, index);
@@ -168,8 +164,14 @@ static int clientChangeConfiguration(
     }
 
     r->configuration_uncommitted_index = index;
-	ZSINFO(gzlog, "[raft][%d][%d]clientChangeConfiguration set configuration_uncommitted_index = [%lld].",
-		   rkey(r), r->state, r->configuration_uncommitted_index);
+	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
+		   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
+	for (unsigned int i = 0; i < r->configuration.n; i++) {
+		const struct raft_server *servert = &r->configuration.servers[i];
+		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+			   rkey(r), r->state, __func__, i,
+			   servert->id, servert->role, servert->pre_role);
+	}
 
     return 0;
 
@@ -239,7 +241,10 @@ int raft_assign(struct raft *r,
     raft_index last_index;
     int rv;
 
-    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
+    if (role != RAFT_STANDBY &&
+	role != RAFT_VOTER &&
+	role != RAFT_SPARE &&
+	role != RAFT_DYING) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
         return rv;
@@ -271,6 +276,9 @@ int raft_assign(struct raft *r,
             case RAFT_SPARE:
                 name = "spare";
                 break;
+	    case RAFT_DYING:
+		name = "dying";
+		break;
             default:
                 name = NULL;
                 assert(0);
@@ -290,23 +298,6 @@ int raft_assign(struct raft *r,
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;
 
-    /* If we are not promoting to the voter role or if the log of this server is
-     * already up-to-date, we can submit the configuration change
-     * immediately. */
-//    if (role != RAFT_VOTER ||
-//        progressMatchIndex(r, server_index) == last_index) {
-//        int old_role = r->configuration.servers[server_index].role;
-//        r->configuration.servers[server_index].role = role;
-//
-//        rv = clientChangeConfiguration(r, req, &r->configuration);
-//        if (rv != 0) {
-//            r->configuration.servers[server_index].role = old_role;
-//            return rv;
-//        }
-//
-//        return 0;
-//    }
-
 	(void)last_index;
 
 	if (role == RAFT_VOTER)
@@ -322,24 +313,6 @@ int raft_assign(struct raft *r,
 	}
 
 	return 0;
-
-    /* Initialize the first catch-up round. */
-//    r->leader_state.round_number = 1;
-//    r->leader_state.round_index = last_index;
-//    r->leader_state.round_start = r->io->time(r->io);
-
-    /* Immediately initiate an AppendEntries request. */
-//    struct pgrep_permit_info pi;
-//	pi.permit = false;
-//    pi.replicating = PGREP_RND_NML;
-//    rv = replicationProgress(r, server_index, pi);
-//    if (rv != 0 && rv != RAFT_NOCONNECTION) {
-//        /* This error is not fatal. */
-//        tracef("failed to send append entries to server %u: %s (%d)",
-//               server->id, raft_strerror(rv), rv);
-//    }
-
-    return 0;
 
 err:
     assert(rv != 0);

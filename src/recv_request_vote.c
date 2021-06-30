@@ -38,6 +38,8 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 	struct raft_io_send *reqs;
 	int rv = 0;
 
+	if (r->state == RAFT_UNAVAILABLE)
+		goto err;
 	r->io->state = RAFT_IO_AVAILABLE;
 	if(status != 0) {
 		convertToUnavailable(r);

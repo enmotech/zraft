@@ -853,6 +853,23 @@ void ioDrop(struct io *io, int type, bool flag)
     io->drop[type - 1] = flag;
 }
 
+static void ioMethodRaftUnpermit(
+	struct raft_io *io,
+	const struct pgrep_permit_info *pi)
+{
+	assert(pi);
+	assert(io);
+}
+
+static void ioMethodRaftPermit(
+	struct raft_io *io,
+	struct pgrep_permit_info *pi)
+{
+	assert(pi);
+	assert(io);
+	pi->permit = true;
+}
+
 static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 {
     struct io *io;
@@ -895,7 +912,8 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->time = ioMethodTime;
     raft_io->random = ioMethodRandom;
     raft_io->set_meta = ioMethodSetTermVote;
-
+	raft_io->pgrep_raft_permit = ioMethodRaftPermit;
+	raft_io->pgrep_raft_unpermit = ioMethodRaftUnpermit;
     return 0;
 }
 

@@ -24,6 +24,7 @@ int recvAppendEntriesResult(struct raft *r,
     int rv = 0;
 
 	bool pgrep_proc = false;
+	struct pgrep_permit_info pi = result->pi;
 
     assert(r != NULL);
     assert(id > 0);
@@ -34,10 +35,10 @@ int recvAppendEntriesResult(struct raft *r,
 
 	(void)(address);
 	
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntriesResult: peer[%d], \
-		   replicating[%u] permit[%d] rejected[%lld] last_log_index[%lld]",
-		   rkey(r), r->state, result->pkt, i, result->pi.replicating,
-		   result->pi.permit, result->rejected, result->last_log_index);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: peer[%lld] replicating[%u] "
+		   "permit[%d] pi.time[%ld] rejected[%lld] last_log_index[%lld]",
+		   rkey(r), r->state, result->pkt, __func__, id, result->pi.replicating,
+		   result->pi.permit, result->pi.time, result->rejected, result->last_log_index);
 
     if (r->state != RAFT_LEADER) {
         tracef("local server is not leader -> ignore");
@@ -79,7 +80,7 @@ int recvAppendEntriesResult(struct raft *r,
 		goto __pgrep_proc;
 
     /* Update the progress of this server, possibly sending further entries. */
-    rv = replicationUpdate(r, server, result);
+    rv = replicationUpdate(r, server->id, result);
     if (rv != 0) {
         goto __pgrep_proc;
     }
@@ -95,33 +96,54 @@ __pgrep_proc:
 	if (result->pi.permit) {
 
 		raft_index prev_applied_index = min(
-			max(result->last_log_index, r->log.offset), r->last_applied);
+			max(result->last_log_index, r->log.snapshot.last_index), r->last_applied);
 		bool unpermit = false;
 
 		if (!pgrep_proc) {
-			ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult meet some error pgrep_cancel.",
-				   rkey(r), r->state);
+			ZSINFO(gzlog, "[raft][%d][%d][%s] meet some error pgrep_cancel.",
+				   rkey(r), r->state, __func__);
 			unpermit = true;
 			r->io->pgrep_cancel(r->io);
+
 		} else {
-			if (i != r->pgrep_id) {
+			if (id != r->pgrep_id) {
 				/* i is't the pgrep destination. */
 				unpermit = true;
+
 			} else if (result->pi.replicating == PGREP_RND_ERR) {
 				/* Catch-up meet some error. */
-				ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult catch-up meet some error pgrep_cancel.",
-				   rkey(r), r->state);
+				ZSINFO(gzlog, "[raft][%d][%d][%s] catch-up meet some error pgrep_cancel.",
+					   rkey(r), r->state, __func__);
 				unpermit = true;
 				r->io->pgrep_cancel(r->io);
+
 			} else  if (result->pi.replicating == PGREP_RND_BGN ||
 						result->pi.replicating == PGREP_RND_ING) {
-				/* Update the prev_applied_index and check to start a new relication. */
+
+				/* Update the prev_applied_index and check
+				   to start a new relication. */
 				progressUpdateAppliedIndex(r, i, prev_applied_index);
-				if (r->last_applied > prev_applied_index) {
-					struct pgrep_permit_info pi;
-					pi.permit = true;
-					r->io->pgrep_raft_permit(r->io, RAFT_APD, &pi);
-					replicationProgress(r, r->pgrep_id, pi);
+
+				if (r->last_applied > prev_applied_index ||
+					result->pi.replicating == PGREP_RND_BGN) {
+
+					r->io->pgrep_raft_permit(r->io, &pi);
+					/* Can't get the permit with the old granted permit,
+					   because permit timeout changed. */
+					if (!pi.permit)
+						r->io->pgrep_cancel(r->io);
+
+					else {
+						/* Still some entries need applying to destination,
+						   before copy chunks.*/
+                        if (r->commit_index > r->last_applying &&
+                            r->last_applied == r->last_applying) {
+                            replicationApplyPi(r, pi);
+                        } else {
+							unsigned inx = configurationIndexOf(&r->configuration, r->pgrep_id);
+                            replicationProgressPi(r, inx, pi);
+                        }
+					}
 				} else {
 					unpermit = true;
 				}
@@ -129,15 +151,15 @@ __pgrep_proc:
 		}
 
 		if (unpermit) {
-			r->io->pgrep_raft_unpermit(r->io, RAFT_APD, &result->pi);
-			ZSINFO(gzlog, "[raft][%d][%d]recvAppendEntriesResult: pgrep permit released.",
-				   rkey(r), r->state);
+			r->io->pgrep_raft_unpermit(r->io, &result->pi);
+			ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep permit released.",
+				   rkey(r), r->state, __func__);
 		}
 	}
 
 	if (r->commit_index > r->last_applying &&
 		r->last_applied == r->last_applying)
-		replicationApply(r, NULL);
+		replicationApply(r);
 
     return rv;
 }

@@ -33,6 +33,15 @@ static int restoreMostRecentConfiguration(struct raft *r,
 	raft_configuration_close(&r->configuration);
 	r->configuration = configuration;
 	r->configuration_index = index;
+
+	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump]", rkey(r), r->state, __func__);
+	for (unsigned int i = 0; i < r->configuration.n; i++) {
+		const struct raft_server *server = &r->configuration.servers[i];
+		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+			   rkey(r), r->state, __func__, i,
+			   server->id, server->role, server->pre_role);
+	}
+
 	return 0;
 }
 
@@ -94,8 +103,8 @@ static int restoreEntries(struct raft *r,
 		}
 	}
 
-	ZSINFO(gzlog, "[raft][%d][%d]restoreEntries, last_stored[%lld]",
-		   rkey(r), r->state, r->last_stored);
+	ZSINFO(gzlog, "[raft][%d][%d][%s], last_stored[%lld]",
+		   rkey(r), r->state, __func__, r->last_stored);
 
 	raft_free(entries);
 	return 0;
@@ -151,6 +160,9 @@ static void raftLoadCb(struct raft_io_load *req,
 	int rv = status;
 	struct raft_start *start = request->start;
 
+
+	ZSINFO(gzlog, "[raft][%d][%d][%s] status[%d] load[%p]", rkey(r), r->state, __func__, status, (void*)load);
+
 	if(status == 0) {
 		if(load) {
 			r->current_term = load->term;
@@ -162,10 +174,13 @@ static void raftLoadCb(struct raft_io_load *req,
 
 			assert(start_index >= 1);
 
+			ZSINFO(gzlog, "[raft][%d][%d][%s] n_entries[%ld] snapshot[%p]",
+				   rkey(r), r->state, __func__, n_entries, (void*)snapshot);
+
 			/* If we have a snapshot, let's restore it. */
 			if (snapshot != NULL) {
-				tracef("restore snapshot with last index %llu and last term %llu",
-				       snapshot->index, snapshot->term);
+				ZSINFO(gzlog, "[raft][%d][%d][%s] restore snapshot with last index %llu and last term %llu",
+					   rkey(r), r->state, __func__, snapshot->index, snapshot->term);
 				rv = snapshotRestore(r, snapshot);
 				if (rv != 0) {
 					snapshotDestroy(snapshot);
@@ -190,7 +205,8 @@ static void raftLoadCb(struct raft_io_load *req,
 
 			/* Append the entries to the log, possibly restoring the last
 	     * configuration. */
-			tracef("restore %lu entries starting at %llu", n_entries, start_index);
+			ZSINFO(gzlog, "[raft][%d][%d][%s] restore %lu entries starting at %llu",
+				   rkey(r), r->state, __func__, n_entries, start_index);
 			rv = restoreEntries(r, snapshot_index, snapshot_term, start_index, entries,
 					    n_entries);
 			if (rv != 0) {

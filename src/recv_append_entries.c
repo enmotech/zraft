@@ -7,6 +7,7 @@
 #include "log.h"
 #include "recv.h"
 #include "replication.h"
+#include "configuration.h"
 #include "tracing.h"
 
 /* Set to 1 to enable tracing. */
@@ -40,11 +41,14 @@ int recvAppendEntries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d]recvAppendEntries: replicating[%d] permit[%d]",
-		   rkey(r), r->state, args->pkt, args->pi.replicating, args->pi.permit);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: replicating[%d] permit[%d] "
+		   "args->term[%lld] prev_log_index[%lld] entries[%d]",
+		   rkey(r), r->state, args->pkt, __func__, args->pi.replicating,
+		   args->pi.permit, args->term, args->prev_log_index, args->n_entries);
 
     result.rejected = args->prev_log_index;
     result.last_log_index = logLastIndex(&r->log);
+
 
     rv = recvEnsureMatchingTerms(r, args->term, &match);
     if (rv != 0) {
@@ -52,9 +56,6 @@ int recvAppendEntries(struct raft *r,
 				rkey(r), r->state);
         return rv;
     }
-
-	if (args->term > r->current_term)
-		r->last_append_time = 0;
 
     /* From Figure 3.1:
      *
@@ -121,6 +122,19 @@ int recvAppendEntries(struct raft *r,
 
     /* Reset the election timer. */
     r->election_timer_start = r->io->time(r->io);
+
+	if (args->pi.replicating) {
+		const struct raft_server *server = configurationGet(&r->configuration, r->id);
+		if (!r->pgrep_reported && server && r->role_change_cb) {
+			struct raft_server server_cp = *server;
+			server_cp.pre_role = RAFT_STANDBY;
+			r->role_change_cb(r, &server_cp);
+			r->pgrep_reported = true;
+			ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] pre_role[%d].",
+				   rkey(r), r->state, __func__, server_cp.pre_role);
+		}
+	} else
+		r->pgrep_reported = false;
 
 	if (args->pi.replicating == PGREP_RND_HRT) {
 		goto reply;

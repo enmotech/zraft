@@ -120,7 +120,10 @@ int configurationAdd(struct raft_configuration *c,
     assert(c != NULL);
     assert(id != 0);
 
-    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
+    if (role != RAFT_STANDBY &&
+	role != RAFT_VOTER &&
+	role != RAFT_SPARE &&
+	role != RAFT_DYING) {
         return RAFT_BADROLE;
     }
 
@@ -142,14 +145,13 @@ int configurationAdd(struct raft_configuration *c,
     }
     c->servers = servers;
     i = c->n;
-    if (i > 0) {/* make sure the array is sorted */
-	    do {
-		    server = &servers[i - 1];
-		    if (server->id > id)
-			    servers[i--] = *server;
-		    else
-			    break;
-	    } while (i > 0);
+    /* make sure the array is sorted */
+    while (i > 0) {
+	    server = &servers[i - 1];
+	    if (server->id > id)
+		    servers[i--] = *server;
+	    else
+		    break;
     }
     /* Fill the newly allocated slot (the last one) with the given details. */
     server = &servers[i];

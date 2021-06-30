@@ -37,7 +37,7 @@ int raft_init(struct raft *r,
     r->fsm = fsm;
     r->tracer = &NoopTracer;
     r->id = id;
-	r->pgrep_id = (unsigned)-1;
+	r->pgrep_id = RAFT_INVALID_ID;
     /* Make a copy of the address */
     r->address = HeapMalloc(strlen(address) + 1);
     if (r->address == NULL) {
@@ -71,6 +71,9 @@ int raft_init(struct raft *r,
     r->max_catch_up_rounds = DEFAULT_MAX_CATCH_UP_ROUNDS;
     r->max_catch_up_round_duration = DEFAULT_MAX_CATCH_UP_ROUND_DURATION;
 	r->last_append_time = 0;
+	r->last_append_term = 0;
+    r->pgrep_reported = false;
+	r->role_change_cb = NULL;
     rv = r->io->init(r->io, r->id, r->address);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
@@ -88,6 +91,11 @@ err:
 void raft_set_state_change_cb(struct raft *r, raft_state_change_cb cb)
 {
 	r->state_change_cb = cb;
+}
+
+void raft_set_role_change_cb(struct raft *r, raft_role_change_cb cb)
+{
+	r->role_change_cb = cb;
 }
 
 int raft_io_state(struct raft_io *io)

@@ -235,12 +235,12 @@ TEST(paper_test, followerStartElection, setUp, tearDown, 0, NULL) {
 	ASSERT_FOLLOWER(k);
 	raft_term t = CLUSTER_TERM(i);
 
-	raft_fixture_set_election_timeout_min(&f->cluster, i);
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 2000);
-	unsigned vote_for = CLUSTER_VOTED_FOR(i);
-	munit_assert_int32(vote_for, ==, i);
-	ASSERT_CANDIDATE(i);
-	raft_term t1 = CLUSTER_TERM(i);
+	raft_fixture_set_election_timeout_min(&f->cluster, k);
+	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_CANDIDATE, 2000);
+	unsigned vote_for = CLUSTER_VOTED_FOR(k);
+	munit_assert_int32(vote_for, ==, k);
+	ASSERT_CANDIDATE(k);
+	raft_term t1 = CLUSTER_TERM(k);
 	munit_assert_llong(t1, ==, t+1);
 	return MUNIT_OK;
 }

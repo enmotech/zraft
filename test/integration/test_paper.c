@@ -235,9 +235,8 @@ TEST(paper_test, followerStartElection, setUp, tearDown, 0, NULL) {
 	ASSERT_FOLLOWER(k);
 	raft_term t = CLUSTER_TERM(i);
 
-	struct raft *r = CLUSTER_RAFT(i);
-	electionStart(r);
-
+	raft_fixture_set_election_timeout_min(f, i);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 2000);
 	unsigned vote_for = CLUSTER_VOTED_FOR(i);
 	munit_assert_int32(vote_for, ==, i);
 	ASSERT_CANDIDATE(i);

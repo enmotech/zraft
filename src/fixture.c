@@ -1564,6 +1564,11 @@ static void maximizeAllRandomizedElectionTimeoutsExcept(struct raft_fixture *f,
         raft->follower_state.randomized_election_timeout = timeout;
     }
 }
+void raft_fixture_set_election_timeout_min(struct raft_fixture *f,
+										   unsigned i)
+{
+	maximizeAllRandomizedElectionTimeoutsExcept(f, i);
+}
 
 void raft_fixture_hook(struct raft_fixture *f, raft_fixture_event_cb hook)
 {

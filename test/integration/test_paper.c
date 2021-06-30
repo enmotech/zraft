@@ -94,9 +94,6 @@ TEST(paper_test, followerUpdateTermFromAE, setUp, tearDown, 0, NULL)
 
 TEST(paper_test, candidateUpdateTermFromAE, setUp, tearDown, 0, NULL)
 {
-	int flag=1;
-	while(flag)
-		sleep(2);
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
 	CLUSTER_START;
@@ -104,16 +101,6 @@ TEST(paper_test, candidateUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(k,j);
 	CLUSTER_SATURATE_BOTHWAYS(k,i);
 	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_CANDIDATE, 2000);
-//	unsigned m = CLUSTER_LEADER;
-//	raft_term t = CLUSTER_TERM(m);
-//
-//	f->cluster.leader_id=0;
-//	CLUSTER_ELECT(i);
-//	ASSERT_LEADER(i);
-//	ASSERT_FOLLOWER(j);
-//	ASSERT_CANDIDATE(k);
-//
-//	t = CLUSTER_TERM(i);
 
 	raft_term t = CLUSTER_TERM(j);
 	CLUSTER_STEP_UNTIL_TERM_IS(j, t+1, 2000);

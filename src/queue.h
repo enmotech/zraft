@@ -25,10 +25,10 @@ typedef void *queue[2];
 /* Insert an element at the back of a queue. */
 #define QUEUE_PUSH(q, e)               \
     {                                  \
-        QUEUE_NEXT(e) = (q);           \
+	QUEUE_NEXT(e) = (q);           \
         QUEUE_PREV(e) = QUEUE_PREV(q); \
+	QUEUE_PREV(q) = (e);           \
         QUEUE_PREV_NEXT(e) = (e);      \
-        QUEUE_PREV(q) = (e);           \
     }
 
 /* Remove the given element from the queue. Any element can be removed at any *

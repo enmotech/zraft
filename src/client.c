@@ -130,7 +130,8 @@ int raft_optbarrier(struct raft *r,
 	raft_index index;
 	int rv;
 
-	if (r->state != RAFT_LEADER || r->transfer != NULL) {
+	if (r->state != RAFT_LEADER ||
+	    r->transfer != NULL) {
 		rv = RAFT_NOTLEADER;
 		goto err;
 	}
@@ -139,8 +140,11 @@ int raft_optbarrier(struct raft *r,
 	req->type = RAFT_BARRIER;
 	req->index = index;
 	req->cb = cb;
-	QUEUE_PUSH(&r->leader_state.optbarriers,
-		   &req->queue);
+	if (r->last_applying == index)
+		cb(req, 0);
+	else
+		QUEUE_PUSH(&r->leader_state.optbarriers,
+			   &req->queue);
 
 	return 0;
 err:

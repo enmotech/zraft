@@ -431,4 +431,7 @@ RAFT_API unsigned raft_fixture_n_recv(struct raft_fixture *f,
                                       unsigned i,
                                       int type);
 
+
+RAFT_API void raft_fixture_set_election_timeout_min(struct raft_fixture *f,
+													unsigned i);
 #endif /* RAFT_FIXTURE_H */

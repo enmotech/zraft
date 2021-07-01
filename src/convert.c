@@ -109,6 +109,19 @@ static void convertClearLeader(struct raft *r)
         };
     }
 
+    while (!QUEUE_IS_EMPTY(&r->leader_state.optbarriers)) {
+	struct request *req;
+	queue *head;
+	head = QUEUE_HEAD(&r->leader_state.optbarriers);
+	QUEUE_REMOVE(head);
+	req = QUEUE_DATA(head, struct request, queue);
+	assert(req->type == RAFT_BARRIER);
+	switch (req->type) {
+	    case RAFT_BARRIER:
+		convertFailBarrier((struct raft_barrier *)req);
+		break;
+	};
+    }
     /* Fail any promote request that is still outstanding because the server is
      * still catching up and no entry was submitted. */
     if (r->leader_state.change != NULL) {
@@ -206,6 +219,7 @@ int convertToLeader(struct raft *r)
 
     /* Reset apply requests queue */
     QUEUE_INIT(&r->leader_state.requests);
+    QUEUE_INIT(&r->leader_state.optbarriers);
 
     /* Allocate and initialize the progress array. */
     rv = progressBuildArray(r);

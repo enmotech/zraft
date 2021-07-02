@@ -114,7 +114,7 @@ int recvAppendEntries(struct raft *r,
     /* Update current leader because the term in this AppendEntries RPC is up to
      * date. */
     rv = recvUpdateLeader(r, id, address);
-    if (rv != 0) {
+    if (rv == RAFT_NOMEM) {
 		ZSERROR(gzlog, "[raft][%d][%d]recvUpdateLeader failed!",
 				rkey(r), r->state);
         return rv;
@@ -133,8 +133,13 @@ int recvAppendEntries(struct raft *r,
 			ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] pre_role[%d].",
 				   rkey(r), r->state, __func__, server_cp.pre_role);
 		}
-	} else
+	} else {
+		if (rv == 0)
+			r->state_change_cb(r, RAFT_FOLLOWER);
+		else
+			rv = 0;
 		r->pgrep_reported = false;
+	}
 
 	if (args->pi.replicating == PGREP_RND_HRT) {
 		goto reply;

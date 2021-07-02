@@ -97,23 +97,26 @@ TEST(paper_test, candidateUpdateTermFromAE, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
 	CLUSTER_START;
+	CLUSTER_ELECT(k);
+
 	//let server k isolate from cluster
 	CLUSTER_SATURATE_BOTHWAYS(k,j);
 	CLUSTER_SATURATE_BOTHWAYS(k,i);
 	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_CANDIDATE, 2000);
+	raft_term t1 = CLUSTER_TER(k);
 
 	j=CLUSTER_LEADER;
-	raft_term t = CLUSTER_TERM(j);
-//	CLUSTER_STEP_UNTIL_TERM_IS(j, t+1, 2000);
-//	unsigned m = CLUSTER_LEADER;
+	raft_term t2 = CLUSTER_TERM(j);
+	munit_assert_llong(t1, <, t2);
+
 	struct raft_entry entry1;
 	entry1.type = RAFT_COMMAND;
-	entry1.term = t;
+	entry1.term = t2;
 	FsmEncodeSetX(123, &entry1.buf);
 	CLUSTER_ADD_ENTRY(j, &entry1);
 	CLUSTER_DESATURATE_BOTHWAYS(k,j);
 	CLUSTER_STEP_UNTIL_DELIVERED(j, k, 100);
-	ASSERT_TERM(k,t);
+	ASSERT_TERM(k,t2);
 	ASSERT_FOLLOWER(k);
 
 	return MUNIT_OK;
@@ -279,8 +282,9 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
 	struct raft *r = CLUSTER_RAFT(i);
 	struct raft_request_vote req = {
 		.candidate_id = j,
-		.last_log_term = 0,
-		.term = t+1
+		.last_log_term = t,
+		.term = t+1,
+		.last_log_index = UINT64_MAX
 	};
 
 	bool grant = false;

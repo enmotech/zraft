@@ -134,18 +134,13 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
-
+	raft_set_election_timeout(CLUSTER_RAFT(i), 100000);
 	//let server i disconnect from cluster
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
-	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
-	raft_set_election_timeout(CLUSTER_RAFT(1), 1000);
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 20000);
 	ASSERT_FOLLOWER(k);
-
-	//set server num as 1, let the isolate server i be leader
-	f->cluster.n = 1;
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_LEADER, 20000);
+	ASSERT_LEADER(i)
 
 	raft_term t1 = CLUSTER_TERM(i);
 	raft_term t2 = CLUSTER_TERM(j);

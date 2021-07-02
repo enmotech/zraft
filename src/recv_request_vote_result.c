@@ -35,6 +35,8 @@ static void recvVoteResultBumpTermIOCb(struct raft_io_set_meta *req, int status)
 	struct setMetar *request = req->data;
 	struct raft *r = request->raft;
 
+	if (r->state == RAFT_UNAVAILABLE)
+		goto err;
 	r->io->state = RAFT_IO_AVAILABLE;
 	if(status != 0) {
 		convertToUnavailable(r);

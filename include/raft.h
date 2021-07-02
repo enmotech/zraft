@@ -986,6 +986,7 @@ struct raft
 			raft_index round_index;         /* Target of the current round. */
 			raft_time round_start;          /* Start of current round. */
 			void *requests[2];              /* Outstanding client requests. */
+                        void *optbarriers[2];
 		} leader_state;
 	};
 
@@ -1266,6 +1267,11 @@ struct raft_barrier
  * This can be used to ensure that there are no unapplied commands.
  */
 RAFT_API int raft_barrier(struct raft *r,
+			  struct raft_barrier *req,
+			  raft_barrier_cb cb);
+
+
+RAFT_API int raft_optbarrier(struct raft *r,
 			  struct raft_barrier *req,
 			  raft_barrier_cb cb);
 

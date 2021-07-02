@@ -123,6 +123,35 @@ err:
     return rv;
 }
 
+int raft_optbarrier(struct raft *r,
+		  struct raft_barrier *req,
+		  raft_barrier_cb cb)
+{
+	raft_index index;
+	int rv;
+
+	if (r->state != RAFT_LEADER ||
+	    r->transfer != NULL) {
+		rv = RAFT_NOTLEADER;
+		goto err;
+	}
+	/* Index of the barrier entry being appended. */
+	index = logLastIndex(&r->log);
+	req->type = RAFT_BARRIER;
+	req->index = index;
+	req->cb = cb;
+	if (r->last_applying == index)
+		cb(req, 0);
+	else
+		QUEUE_PUSH(&r->leader_state.optbarriers,
+			   &req->queue);
+
+	return 0;
+err:
+	assert(rv != 0);
+	return rv;
+}
+
 static int clientChangeConfiguration(
     struct raft *r,
     struct raft_change *req,

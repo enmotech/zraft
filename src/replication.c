@@ -855,6 +855,20 @@ static struct request* getRequest(struct raft *r,
 	return NULL;
 }
 
+static struct raft_barrier *getFirstOptBarrier(struct raft *r)
+{
+	queue *head;
+	struct raft_barrier *req = NULL;
+
+	if (r->state == RAFT_LEADER &&
+	    !QUEUE_IS_EMPTY(&r->leader_state.optbarriers)) {
+		head = QUEUE_HEAD(&r->leader_state.optbarriers);
+		req = QUEUE_DATA(head, struct raft_barrier, queue);
+	}
+
+	return req;
+}
+
 /* Invoked once a disk write request for new entries has been completed. */
 static void appendLeaderCb(struct raft_io_append *req, int status)
 {
@@ -2482,6 +2496,8 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 	ab->expect_num = (int)(to_commit_index - r->last_applying);
 	ab->applied_num = 0;
 
+	struct raft_barrier *barrier = getFirstOptBarrier(r);
+
 	for (index = r->last_applying + 1; index <= to_commit_index; index++) {
 		const struct raft_entry *entry = logGet(&r->log, index);
 
@@ -2524,6 +2540,11 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 		}
 
 		r->last_applying = index;
+		if (barrier != NULL &&
+		    barrier->index == r->last_applying) {
+			QUEUE_REMOVE(&(barrier->queue));
+			barrier->cb(barrier, 0);
+		}
 		ZSINFO(gzlog, "[raft][%d][%d][%s] update last_applying[%lld].",
 			   rkey(r), r->state, __func__, r->last_applying);
 	}

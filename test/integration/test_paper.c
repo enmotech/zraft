@@ -228,9 +228,15 @@ TEST(paper_test, leaderBcastBeat, setUp, tearDown, 0, NULL) {
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
+	raft_term t = CLUSTER_TERM(i);
 
-	//todo
-
+	//without any AE, after a max election_timeout, test the cluster still
+	//the same leader and the same term
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+	munit_assert_llong(t, =, CLUSTER_TERM(i));
 	return MUNIT_OK;
 }
 

@@ -103,7 +103,7 @@ TEST(paper_test, candidateUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(k,j);
 	CLUSTER_SATURATE_BOTHWAYS(k,i);
 	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_CANDIDATE, 2000);
-	raft_term t1 = CLUSTER_TER(k);
+	raft_term t1 = CLUSTER_TERM(k);
 
 	j=CLUSTER_LEADER;
 	raft_term t2 = CLUSTER_TERM(j);

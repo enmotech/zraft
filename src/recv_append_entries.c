@@ -134,7 +134,7 @@ int recvAppendEntries(struct raft *r,
 				   rkey(r), r->state, __func__, server_cp.pre_role);
 		}
 	} else {
-		if (rv == 0)
+		if (rv == 0 && r->state_change_cb)
 			r->state_change_cb(r, RAFT_FOLLOWER);
 		else
 			rv = 0;

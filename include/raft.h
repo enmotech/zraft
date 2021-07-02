@@ -108,7 +108,7 @@ struct raft_buffer
 #define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
 #define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
 #define RAFT_SPARE 2   /* Does not replicate log, or participate in quorum. */
-#define RAFT_DYING 3   /* Do nothing, just wait to be removed. */
+//#define RAFT_DYING 3   /* Do nothing, just wait to be removed. */
 
 /**
  * Hold information about a single server in the cluster configuration.

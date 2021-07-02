@@ -98,15 +98,19 @@ TEST(paper_test, candidateUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	unsigned i=0,j=1,k=2;
 	CLUSTER_START;
 	CLUSTER_ELECT(k);
+	ASSERT_LEADER(k);
+	ASSERT_FOLLOWER(i);
+	ASSERT_FOLLOWER(j);
 
 	//let server k isolate from cluster
 	CLUSTER_SATURATE_BOTHWAYS(k,j);
 	CLUSTER_SATURATE_BOTHWAYS(k,i);
+	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_FOLLOWER, 2000);
 	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_CANDIDATE, 2000);
 	raft_term t1 = CLUSTER_TERM(k);
 
-	j=CLUSTER_LEADER;
-	raft_term t2 = CLUSTER_TERM(j);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_LEADER, 2000);
+	raft_term t2 = CLUSTER_TERM(i);
 	munit_assert_llong(t1, <, t2);
 
 	struct raft_entry entry1;
@@ -114,8 +118,8 @@ TEST(paper_test, candidateUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	entry1.term = t2;
 	FsmEncodeSetX(123, &entry1.buf);
 	CLUSTER_ADD_ENTRY(j, &entry1);
-	CLUSTER_DESATURATE_BOTHWAYS(k,j);
-	CLUSTER_STEP_UNTIL_DELIVERED(j, k, 100);
+	CLUSTER_DESATURATE_BOTHWAYS(k,i);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
 	ASSERT_TERM(k,t2);
 	ASSERT_FOLLOWER(k);
 

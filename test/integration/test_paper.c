@@ -132,20 +132,23 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
 	CLUSTER_START;
-	CLUSTER_ELECT(k);
-	ASSERT_LEADER(k);
-	ASSERT_FOLLOWER(i);
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
 
 	//let server i disconnect from cluster
-	CLUSTER_SATURATE_BOTHWAYS(k,i);
-	CLUSTER_SATURATE_BOTHWAYS(k,j);
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_LEADER, 2000);
-	ASSERT_LEADER(k);
-	ASSERT_FOLLOWER(j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 20000);
+	ASSERT_FOLLOWER(k);
 
-	raft_term t1 = CLUSTER_TERM(k);
-	raft_term t2 = CLUSTER_TERM(i);
+	//set server num as 1, let the isolate server i be leader
+	f->cluster.n = 1;
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_LEADER, 20000);
+
+	raft_term t1 = CLUSTER_TERM(i);
+	raft_term t2 = CLUSTER_TERM(j);
 	munit_assert_llong(t1, <, t2);
 
 	//server add entry
@@ -153,13 +156,13 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	entry1.type = RAFT_COMMAND;
 	entry1.term = t2;
 	FsmEncodeSetX(123, &entry1.buf);
-	CLUSTER_ADD_ENTRY(i, &entry1);
+	CLUSTER_ADD_ENTRY(j, &entry1);
 
 	//restore network of server i and deliver entry to i
-	CLUSTER_DESATURATE_BOTHWAYS(i,k);
-	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
-	ASSERT_TERM(k,t2);
-	ASSERT_FOLLOWER(k);
+	CLUSTER_DESATURATE_BOTHWAYS(i,j);
+	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
+	ASSERT_TERM(i,t2);
+	ASSERT_FOLLOWER(i);
 
 	return MUNIT_OK;
 }

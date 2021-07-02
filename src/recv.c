@@ -380,6 +380,7 @@ int recvUpdateLeader(struct raft *r, const raft_id id, const char *address)
 		return RAFT_NOMEM;
 	}
 	strcpy(r->follower_state.current_leader.address, address);
+	r->state_change_cb(r, RAFT_FOLLOWER);
 
 	return 0;
 }

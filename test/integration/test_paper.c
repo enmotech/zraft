@@ -140,7 +140,7 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 20000);
 	ASSERT_FOLLOWER(k);
-	ASSERT_LEADER(i)
+	ASSERT_LEADER(i);
 
 	raft_term t1 = CLUSTER_TERM(i);
 	raft_term t2 = CLUSTER_TERM(j);

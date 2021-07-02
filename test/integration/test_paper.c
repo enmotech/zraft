@@ -87,7 +87,6 @@ TEST(paper_test, followerUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(j,k);
 	CLUSTER_STEP_UNTIL_DELIVERED(j, k, 100);
 	ASSERT_TERM(k,t);
-	ASSERT_FOLLOWER(k);
 
 	return MUNIT_OK;
 }
@@ -121,7 +120,6 @@ TEST(paper_test, candidateUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(k,i);
 	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
 	ASSERT_TERM(k,t2);
-	ASSERT_FOLLOWER(k);
 
 	return MUNIT_OK;
 }
@@ -140,6 +138,8 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	//let server i disconnect from cluster
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
+	raft_set_election_timeout(CLUSTER_RAFT(1), 1000);
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 20000);
 	ASSERT_FOLLOWER(k);
 
@@ -162,7 +162,6 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(i,j);
 	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
 	ASSERT_TERM(i,t2);
-	ASSERT_FOLLOWER(i);
 
 	return MUNIT_OK;
 }
@@ -317,31 +316,33 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
 //test candidate recv a AE which term bigger than itself,
 //then it change state to follower and update it's term
 TEST(paper_test, candidateFallBack, setUp, tearDown, 0, NULL) {
-    struct fixture *f = data;
+	struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
 	CLUSTER_START;
-	//let server k disconnect from cluster
+	CLUSTER_ELECT(k);
+	ASSERT_LEADER(k);
+	ASSERT_FOLLOWER(i);
+	ASSERT_FOLLOWER(j);
+
+	//let server k isolate from cluster
 	CLUSTER_SATURATE_BOTHWAYS(k,j);
 	CLUSTER_SATURATE_BOTHWAYS(k,i);
+	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_FOLLOWER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(k, RAFT_CANDIDATE, 2000);
+	raft_term t1 = CLUSTER_TERM(k);
 
-	struct raft *r = CLUSTER_RAFT(k);
-	electionStart(r);
-	ASSERT_CANDIDATE(k);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_LEADER, 2000);
+	raft_term t2 = CLUSTER_TERM(i);
+	munit_assert_llong(t1, <, t2);
 
-	CLUSTER_ELECT(i);
-	ASSERT_LEADER(i);
-	ASSERT_FOLLOWER(j);
-	ASSERT_CANDIDATE(k);
-
-	raft_term t = CLUSTER_TERM(i);
 	struct raft_entry entry1;
 	entry1.type = RAFT_COMMAND;
-	entry1.term = t;
+	entry1.term = t2;
 	FsmEncodeSetX(123, &entry1.buf);
 	CLUSTER_ADD_ENTRY(i, &entry1);
 	CLUSTER_DESATURATE_BOTHWAYS(k,i);
 	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
-	ASSERT_TERM(k,t);
+	ASSERT_TERM(k,t2);
 	ASSERT_FOLLOWER(k);
 
 	return MUNIT_OK;

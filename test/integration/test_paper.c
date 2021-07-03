@@ -467,7 +467,7 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	CLUSTER_ELECT(j);
 	ASSERT_FOLLOWER(i);
 	int et2 = CLUSTER_RAFT(i)->election_timeout;
-	munit_assert_int(t1, != ,t2);
+	munit_assert_int(et1, != ,et2);
 	return MUNIT_OK;
 }
 

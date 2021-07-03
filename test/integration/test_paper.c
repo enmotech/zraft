@@ -164,39 +164,40 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
 TEST(paper_test, rejectStaleTermAE, setUp, tearDown, 0, NULL)
 {
 	//elect server i as leader
-    struct fixture *f = data;
+	struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
-
-	//let server i disconnect from cluster
-	CLUSTER_SATURATE_BOTHWAYS(i,j);
-	CLUSTER_SATURATE_BOTHWAYS(i,k);
-
-	//let server j be another leader
-	CLUSTER_ELECT(j);
-	ASSERT_LEADER(j);
-	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(k);
-	raft_term t = CLUSTER_TERM(i);
-	raft_term t1 = CLUSTER_TERM(j);
-	munit_assert_llong(t1, >, t);
+	raft_set_election_timeout(CLUSTER_RAFT(i), 100000);
+	//let server i disconnect from cluster
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 20000);
+	ASSERT_FOLLOWER(k);
+	ASSERT_LEADER(i);
+
+	raft_term t1 = CLUSTER_TERM(i);
+	raft_term t2 = CLUSTER_TERM(j);
+	munit_assert_llong(t1, <, t2);
 
 	//server add entry
 	struct raft_entry entry1;
 	entry1.type = RAFT_COMMAND;
-	entry1.term = t;
+	entry1.term = t1;
 	FsmEncodeSetX(123, &entry1.buf);
 	CLUSTER_ADD_ENTRY(i, &entry1);
 
 	//restore network of server i and deliver entry to i
 	CLUSTER_DESATURATE_BOTHWAYS(i,j);
 	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
-	ASSERT_TERM(j,t1);
-	ASSERT_LEADER(j);
 
+	//make sure server j still be the leader, indicate it reject the
+	//lower term AE from server i
+	ASSERT_TERM(j,t2);
+	ASSERT_LEADER(j);
 	return MUNIT_OK;
 }
 

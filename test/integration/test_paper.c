@@ -472,16 +472,27 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	ASSERT_CANDIDATE(i);
 	ASSERT_CANDIDATE(j);
 	ASSERT_CANDIDATE(k);
-
+	CLUSTER_DESATURATE_BOTHWAYS(j,k);
 	CLUSTER_DESATURATE_BOTHWAYS(i,j);
 	CLUSTER_DESATURATE_BOTHWAYS(i,k);
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_LEADER, 2000);
-	CLUSTER_DESATURATE_BOTHWAYS(j,k);
-	CLUSTER_STEP_UNTIL_ELAPSED(200);
-	ASSERT_FOLLOWER(j);
-	ASSERT_FOLLOWER(k);
-	int t1 = CLUSTER_RAFT(i)->follower_state.randomized_election_timeout;
-	int t2 = CLUSTER_RAFT(j)->follower_state.randomized_election_timeout;
+
+	CLUSTER_STEP_UNTIL_HAS_LEADER(3000);
+	unsigned  l = CLUSTER_LEADER, m, n;
+	switch(l) {
+		case i:
+			m,n=j,k;
+			break;
+		case j:
+			m,n=i,k;
+			break;
+		case k:
+			m,n=i,j;
+			break;
+	}
+	ASSERT_FOLLOWER(m);
+	ASSERT_FOLLOWER(n);
+	int t1 = CLUSTER_RAFT(m)->follower_state.randomized_election_timeout;
+	int t2 = CLUSTER_RAFT(n)->follower_state.randomized_election_timeout;
 	munit_assert_int(t1, != ,t2);
 	return MUNIT_OK;
 }

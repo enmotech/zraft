@@ -480,8 +480,8 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	CLUSTER_STEP_UNTIL_ELAPSED(200);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
-	t1 = CLUSTER_RAFT(i)->follower_state.randomized_election_timeout;
-	t2 = CLUSTER_RAFT(j)->follower_state.randomized_election_timeout;
+	int t1 = CLUSTER_RAFT(i)->follower_state.randomized_election_timeout;
+	int t2 = CLUSTER_RAFT(j)->follower_state.randomized_election_timeout;
 	munit_assert_int(t1, != ,t2);
 	return MUNIT_OK;
 }

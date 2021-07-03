@@ -462,11 +462,18 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	struct fixture *f = data;
 	unsigned i=0, j=1, k=2;
 	CLUSTER_RAFT(i)->io->random = test_random;
+	CLUSTER_RAFT(j)->io->random = test_random;
+	CLUSTER_RAFT(k)->io->random = test_random;
 	CLUSTER_START;
-	int et1 = CLUSTER_RAFT(i)->election_timeout;
-	CLUSTER_ELECT(j);
-	ASSERT_FOLLOWER(i);
-	int et2 = CLUSTER_RAFT(i)->election_timeout;
+	CLUSTER_SATURATE_BOTHWAYS(i,j);
+	CLUSTER_SATURATE_BOTHWAYS(i,k);
+	CLUSTER_SATURATE_BOTHWAYS(j,k);
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+	int et1 = CLUSTER_RAFT(j)->election_timeout;
+	int et2 = CLUSTER_RAFT(k)->election_timeout;
 	munit_assert_int(et1, != ,et2);
 	return MUNIT_OK;
 }

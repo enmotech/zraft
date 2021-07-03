@@ -472,6 +472,12 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	ASSERT_CANDIDATE(j);
 	ASSERT_CANDIDATE(j);
 	ASSERT_CANDIDATE(k);
+	CLUSTER_DESATURATE_BOTHWAYS(i,j);
+	CLUSTER_DESATURATE_BOTHWAYS(i,k);
+	CLUSTER_DESATURATE_BOTHWAYS(j,k);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_LEADER, 2000);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
 	int et1 = CLUSTER_RAFT(j)->election_timeout;
 	int et2 = CLUSTER_RAFT(k)->election_timeout;
 	munit_assert_int(et1, != ,et2);

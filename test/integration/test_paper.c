@@ -291,16 +291,18 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
 	unsigned i = 0, j = 1, k = 2;
 
 	/* drop all the msg between i and j */
+	CLUSTER_START;
 	CLUSTER_SET_NETWORK_LATENCY(i,200);
 	CLUSTER_SET_NETWORK_LATENCY(i,200);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 400);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, j, 500);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, k, 2000);
 	raft_set_election_timeout(CLUSTER_RAFT(i), 400);
 	raft_set_election_timeout(CLUSTER_RAFT(j), 500);
 	raft_set_election_timeout(CLUSTER_RAFT(k), 2000);
 
-	CLUSTER_START;
-	CLUSTER_STEP_UNTIL_ELAPSED(400);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE,2000);
 	//server 0 election timeout, then be the first candidate
-	ASSERT_CANDIDATE(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
 	ASSERT_TIME(400);

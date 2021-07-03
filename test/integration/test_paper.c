@@ -325,7 +325,7 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
 	//isolate server i
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
-	CLUSTER_STEP_UNTIL_ELAPSED(400);
+	CLUSTER_STEP_UNTIL_ELAPSED(300);
 	//server j already receive the RV_RESULT from k, but is not granted,
 	//so server j still be the candidate
 	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE_RESULT), == ,1);
@@ -369,8 +369,83 @@ TEST(paper_test, candidateFallBack, setUp, tearDown, 0, NULL) {
 	return MUNIT_OK;
 }
 
+// leaderElectionInOneRoundRPC tests all cases that may happen in
+// leader election during one round of RequestVote RPC:
+//expect A. it wins the election
+//expect B. it loses the election
+//expect C. it is unclear about the result
 TEST(paper_test, leaderElectionInOneRoundRPC, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+
+	//define election_timeout for control the election
+	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 400);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, j, 500);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, k, 2000);
+	raft_set_election_timeout(CLUSTER_RAFT(i), 400);
+	raft_set_election_timeout(CLUSTER_RAFT(j), 500);
+	raft_set_election_timeout(CLUSTER_RAFT(k), 2000);
+	CLUSTER_SET_NETWORK_LATENCY(i,200);
+	CLUSTER_SET_NETWORK_LATENCY(j,200);
+
+	CLUSTER_START;
+
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE,2000);
+	//I election timeout, then be the first candidate
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+	ASSERT_TIME(400);
+
+	//when time goes to 500ms, J election_timeout and be another candidate,
+	//and it still not receive the RV from I cause I hold a 200ms network_latency
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE,2000);
+	munit_assert_int(CLUSTER_N_SEND(i, RAFT_IO_REQUEST_VOTE), == ,2);
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE), == ,0);
+	ASSERT_CANDIDATE(i);
+	ASSERT_FOLLOWER(k);
+	ASSERT_TIME(500);
+
+	/* K granted I's RV */
+	CLUSTER_STEP_UNTIL_VOTED_FOR(k, i, 2000);
+
+	//make sure K only receive RV from I, cause the J's RV still
+	//propagating through the network
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_REQUEST_VOTE), == ,1);
+
+	//make sure J already send RV out
+	munit_assert_int(CLUSTER_N_SEND(j, RAFT_IO_REQUEST_VOTE), == ,2);
+	ASSERT_TIME(600);
+
+	//isolate I from the network for avoid win the election
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_STEP_UNTIL_ELAPSED(300);
+	//J already receive the RV_RESULT from K, but is not granted, cause K already grant for I just now.
+	//so J remains candidate state
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE_RESULT), == ,1);
+	//after One Round RV, neither candidate I nor candidate J achieve a majority,
+	// so both of them remain candidate state (expect C)
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(i);
+	ASSERT_TIME(900);
+
+	raft_term t1 = CLUSTER_TERM(i);
+	raft_term t2 = CLUSTER_TERM(i);
+	//first one round RV of candidate I already timeout,
+	// it must add term and start a new term election
+	munit_assert_llong(t1, ==, t2+1);
+	CLUSTER_STEP_UNTIL_ELAPSED(300);
+
+	//recover the msg communication of I and set a lower network latency
+	//for guarantee I's RV will be received firstly
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+	CLUSTER_SET_NETWORK_LATENCY(i,15);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(100);
+	ASSERT_LEADER(i);	//expect A
+	ASSERT_FOLLOWER(j); //expect B
 	return MUNIT_OK;
 }
 

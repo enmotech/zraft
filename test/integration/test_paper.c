@@ -53,6 +53,8 @@ static void tearDown(void *data)
 /* Assert that the I'th server is in leader state. */
 #define ASSERT_LEADER(I) munit_assert_int(CLUSTER_STATE(I), ==, RAFT_LEADER)
 
+/* Assert that the fixture time matches the given value */
+#define ASSERT_TIME(TIME) munit_assert_int(CLUSTER_TIME, ==, TIME)
 SUITE(paper_test)
 #include <unistd.h>
 /* follower update it's term when receive higher term AE. */
@@ -134,6 +136,8 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
+
+	//set a big election_timeout to avoid leader i step down
 	raft_set_election_timeout(CLUSTER_RAFT(i), 100000);
 	//let server i disconnect from cluster
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
@@ -285,29 +289,52 @@ TEST(paper_test, candidateStartElection, setUp, tearDown, 0, NULL) {
 TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
     struct fixture *f = data;
 	unsigned i = 0, j = 1, k = 2;
+
+	/* drop all the msg between i and j */
+	CLUSTER_SET_NETWORK_LATENCY(i,200);
+	CLUSTER_SET_NETWORK_LATENCY(i,200);
+	raft_set_election_timeout(CLUSTER_RAFT(i), 400);
+	raft_set_election_timeout(CLUSTER_RAFT(j), 500);
+	raft_set_election_timeout(CLUSTER_RAFT(k), 2000);
+
 	CLUSTER_START;
-	ASSERT_FOLLOWER(i);
-	raft_term t = CLUSTER_TERM(i);
-	struct raft *r = CLUSTER_RAFT(i);
-	struct raft_request_vote req = {
-		.candidate_id = j,
-		.last_log_term = t,
-		.term = t+1,
-		.last_log_index = UINT64_MAX
-	};
+	CLUSTER_STEP_UNTIL_ELAPSED(400);
+	//server 0 election timeout, then be the first candidate
+	ASSERT_CANDIDATE(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+	ASSERT_TIME(400);
+	CLUSTER_STEP_UNTIL_ELAPSED(100);
+	//all the RV send by i, still in the network
+	munit_assert_int(CLUSTER_N_SEND(i, RAFT_IO_REQUEST_VOTE), == ,2);
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE), == ,0);
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_REQUEST_VOTE), == ,0);
+	ASSERT_TIME(400);
+	ASSERT_CANDIDATE(j);
+	/* Server 0 tick send RV */
+	CLUSTER_STEP;
+	CLUSTER_STEP_UNTIL_VOTED_FOR(k, i, 2000);
 
-	bool grant = false;
-	electionVote(r, &req, &grant);
-	munit_assert(grant == true);
 
-	//vote for the same candidate again
-	electionVote(r, &req, &grant);
-	munit_assert(grant == true);
+	//after server k grant server i‘s RV, then isolate server i.
+	//server j still not receive RV, and it already election_timeout when
+	//cluster time equal 500ms, and be the candidate and send RV out
+	CLUSTER_SATURATE_BOTHWAYS(i,k);
+	CLUSTER_SATURATE_BOTHWAYS(i,j);
+	ASSERT_TIME(600);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(i);
 
-	//reject this rv, cause already vote for server k
-	req.candidate_id = k;
-	electionVote(r, &req, &grant);
-	munit_assert(grant == false);
+	/* Server 1 tick send RV */
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE), == ,0);
+	munit_assert_int(CLUSTER_N_SEND(j, RAFT_IO_REQUEST_VOTE), == ,2);
+
+
+	//wait for server j election_timeout and be another candidate
+
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
 	return MUNIT_OK;
 }
 

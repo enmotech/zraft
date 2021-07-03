@@ -307,37 +307,27 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
 	ASSERT_TIME(400);
-	CLUSTER_STEP_UNTIL_ELAPSED(100);
-	//all the RV send by i, still in the network
+
+	//when time is 500ms, the server j election_timeout and be another candidate,
+	//and it still not receive the RV from i
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE,2000);
 	munit_assert_int(CLUSTER_N_SEND(i, RAFT_IO_REQUEST_VOTE), == ,2);
 	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE), == ,0);
-	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_REQUEST_VOTE), == ,0);
-	ASSERT_TIME(400);
-	ASSERT_CANDIDATE(j);
-	/* Server 0 tick send RV */
-	CLUSTER_STEP;
-	CLUSTER_STEP_UNTIL_VOTED_FOR(k, i, 2000);
-
-
-	//after server k grant server i‘s RV, then isolate server i.
-	//server j still not receive RV, and it already election_timeout when
-	//cluster time equal 500ms, and be the candidate and send RV out
-	CLUSTER_SATURATE_BOTHWAYS(i,k);
-	CLUSTER_SATURATE_BOTHWAYS(i,j);
-	ASSERT_TIME(600);
-	ASSERT_CANDIDATE(j);
 	ASSERT_CANDIDATE(i);
-
-	/* Server 1 tick send RV */
-	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE), == ,0);
-	munit_assert_int(CLUSTER_N_SEND(j, RAFT_IO_REQUEST_VOTE), == ,2);
-
-
-	//wait for server j election_timeout and be another candidate
-
-	ASSERT_LEADER(i);
-	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
+	ASSERT_TIME(500);
+
+	/* Server k grant i's RV and server j's RV still in network */
+	CLUSTER_STEP_UNTIL_VOTED_FOR(k, i, 2000);
+	munit_assert_int(CLUSTER_N_SEND(j, RAFT_IO_REQUEST_VOTE), == ,2);
+	ASSERT_TIME(600);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(400);
+	//server j already receive the RV_RESULT from k, but is not granted,
+	//so server j still be the candidate
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE_RESULT), == ,1);
+	ASSERT_CANDIDATE(j);
+
 	return MUNIT_OK;
 }
 

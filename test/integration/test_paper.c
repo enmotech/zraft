@@ -531,10 +531,66 @@ TEST(paper_test, candidateElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-//2 servers, both start as followers, when I election_timeout, then convert to candidate,
-//then assert another server J is still follower state
 TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_RAFT(i)->io->random = test_random;
+	CLUSTER_RAFT(j)->io->random = test_random;
+	CLUSTER_RAFT(k)->io->random = test_random;
+	CLUSTER_SATURATE_BOTHWAYS(i,j);
+	CLUSTER_SATURATE_BOTHWAYS(i,k);
+	CLUSTER_SATURATE_BOTHWAYS(j,k);
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	ASSERT_CANDIDATE(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+
+	//recover network for produce a leader
+	CLUSTER_DESATURATE_BOTHWAYS(i,j);
+	CLUSTER_DESATURATE_BOTHWAYS(i,k);
+	CLUSTER_DESATURATE_BOTHWAYS(j,k);
+	CLUSTER_STEP_UNTIL_HAS_LEADER(3000);
+
+	//find out the leader and followers
+	unsigned  l = CLUSTER_LEADER;
+	unsigned  m, n;
+	switch(l) {
+		case 0:
+			m = 1;
+			n = 2;
+			break;
+		case 1:
+			m = 0;
+			n = 2;
+			break;
+		case 2:
+			m = 0;
+			n = 1;
+			break;
+	}
+	ASSERT_FOLLOWER(m);
+	ASSERT_FOLLOWER(n);
+
+	//saturate again the leader
+	CLUSTER_SATURATE_BOTHWAYS(l, m);
+	CLUSTER_SATURATE_BOTHWAYS(l, n);
+
+	//find out the minimal election_timeout server
+	int min_idx = m;
+	int another = n;
+	int min_et = CLUSTER_RAFT(m)->follower_state.randomized_election_timeout;
+	if (min_et > CLUSTER_RAFT(n)->candidate_state.randomized_election_timeout) {
+		min_idx = n;
+		another = m;
+	}
+
+	//when the minimal election_timeout happen
+	//at the same time, another server most possibly
+	// still be follower cause the randomized election_timeout which avoid split votes
+	CLUSTER_STEP_UNTIL_STATE_IS(min_idx, RAFT_CANDIDATE, 2000);
+	ASSERT_FOLLOWER(another);
 	return MUNIT_OK;
 }
 
@@ -562,6 +618,8 @@ TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 	et[i] = CLUSTER_RAFT(i)->candidate_state.randomized_election_timeout;
 	et[j] = CLUSTER_RAFT(j)->candidate_state.randomized_election_timeout;
 	et[k] = CLUSTER_RAFT(k)->candidate_state.randomized_election_timeout;
+
+	//select the minimal election_timeout server
 	int min_et = et[i],
 		min_idx = i;
 	for (int idx = 1; idx < 3; idx++) {
@@ -571,10 +629,12 @@ TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 		}
 	}
 
+	//wait for it's new term, indicate it start a new round request vote
+	CLUSTER_STEP_UNTIL_TERM_IS(min_idx, t1+1, 2000);
+
 	//randomized election_timeout to ensure that,
 	//at the same time, only one server will election_timeout and
 	//start request_vote_rpc for avoid split votes
-	CLUSTER_STEP_UNTIL_TERM_IS(min_idx, t1+1, 2000);
 	switch (min_idx) {
 		case 0:
 			ASSERT_TERM(1,t1);

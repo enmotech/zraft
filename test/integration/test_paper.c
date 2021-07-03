@@ -477,7 +477,8 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(i,k);
 
 	CLUSTER_STEP_UNTIL_HAS_LEADER(3000);
-	unsigned  l = CLUSTER_LEADER, m, n;
+	unsigned  l = CLUSTER_LEADER;
+	unsigned  m, n;
 	switch(l) {
 		case 0:
 			m, n = 1, 2;

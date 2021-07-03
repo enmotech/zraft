@@ -468,29 +468,47 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(i,k);
 	CLUSTER_SATURATE_BOTHWAYS(j,k);
 	CLUSTER_START;
-	ASSERT_FOLLOWER(i);
-	ASSERT_FOLLOWER(j);
-	ASSERT_FOLLOWER(k);
 	CLUSTER_STEP_UNTIL_ELAPSED(2000);
 	ASSERT_CANDIDATE(i);
 	ASSERT_CANDIDATE(j);
 	ASSERT_CANDIDATE(k);
+
 	CLUSTER_DESATURATE_BOTHWAYS(i,j);
 	CLUSTER_DESATURATE_BOTHWAYS(i,k);
-	int x = CLUSTER_RAFT(j)->election_timeout;
 	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_LEADER, 2000);
 	CLUSTER_DESATURATE_BOTHWAYS(j,k);
 	CLUSTER_STEP_UNTIL_ELAPSED(200);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
-	int et1 = CLUSTER_RAFT(j)->election_timeout;
-	int et2 = CLUSTER_RAFT(k)->election_timeout;
-	munit_assert_int(et1, != ,et2);
+	t1 = CLUSTER_RAFT(i)->follower_state.randomized_election_timeout;
+	t2 = CLUSTER_RAFT(j)->follower_state.randomized_election_timeout;
+	munit_assert_int(t1, != ,t2);
 	return MUNIT_OK;
 }
 
 TEST(paper_test, candidateElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_RAFT(i)->io->random = test_random;
+	CLUSTER_RAFT(j)->io->random = test_random;
+	CLUSTER_RAFT(k)->io->random = test_random;
+	CLUSTER_SATURATE_BOTHWAYS(i,j);
+	CLUSTER_SATURATE_BOTHWAYS(i,k);
+	CLUSTER_SATURATE_BOTHWAYS(j,k);
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	ASSERT_CANDIDATE(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+
+	int t1 = CLUSTER_RAFT(i)->candidate_state.randomized_election_timeout;
+	int t2 = CLUSTER_RAFT(j)->candidate_state.randomized_election_timeout;
+	int t3 = CLUSTER_RAFT(k)->candidate_state.randomized_election_timeout;
+
+	munit_assert_int(t1, !=, t2);
+	munit_assert_int(t1, !=, t3);
+	munit_assert_int(t2, !=, t3);
 	return MUNIT_OK;
 }
 

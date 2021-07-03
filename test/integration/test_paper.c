@@ -577,7 +577,7 @@ TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(l, m);
 	CLUSTER_SATURATE_BOTHWAYS(l, n);
 
-	//find out the minimal election_timeout server
+	//find out the server with the minimal election_timeout
 	int min_idx = m;
 	int another = n;
 	int min_et = CLUSTER_RAFT(m)->follower_state.randomized_election_timeout;
@@ -586,9 +586,8 @@ TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 		another = m;
 	}
 
-	//when the minimal election_timeout happen
-	//at the same time, another server most possibly
-	// still be follower cause the randomized election_timeout which avoid split votes
+	//when the minimal election_timeout happen, another server most possibly
+	//still be follower cause the randomized election_timeout which avoid split votes
 	CLUSTER_STEP_UNTIL_STATE_IS(min_idx, RAFT_CANDIDATE, 2000);
 	ASSERT_FOLLOWER(another);
 	return MUNIT_OK;

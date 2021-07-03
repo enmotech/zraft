@@ -155,6 +155,7 @@ TEST(paper_test, leaderUpdateTermFromAE, setUp, tearDown, 0, NULL)
 
 	//restore network of server i and deliver entry to i
 	CLUSTER_DESATURATE_BOTHWAYS(i,j);
+	raft_set_election_timeout(CLUSTER_RAFT(i), 1000);
 	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
 	ASSERT_TERM(i,t2);
 
@@ -192,6 +193,7 @@ TEST(paper_test, rejectStaleTermAE, setUp, tearDown, 0, NULL)
 
 	//restore network of server i and deliver entry to i
 	CLUSTER_DESATURATE_BOTHWAYS(i,j);
+	raft_set_election_timeout(CLUSTER_RAFT(i), 1000);
 	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
 
 	//make sure server j still be the leader, indicate it reject the

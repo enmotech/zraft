@@ -479,7 +479,7 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	CLUSTER_STEP_UNTIL_HAS_LEADER(3000);
 	unsigned  l = CLUSTER_LEADER;
 	unsigned  m, n;
-	switch(x) {
+	switch(l) {
 		case 0:
 			m = 1;
 			n = 2;

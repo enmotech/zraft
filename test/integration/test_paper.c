@@ -368,3 +368,83 @@ TEST(paper_test, candidateFallBack, setUp, tearDown, 0, NULL) {
 
 	return MUNIT_OK;
 }
+
+TEST(paper_test, leaderElectionInOneRoundRPC, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, candidateElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, leaderCommitEntry, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, leaderAcknownledgeCommit, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, followerAppendEntry, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, leaderSyncFollowerLog, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, voteRequest, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, voter, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, leaderOnlyCommitLogFromCurrentTerm, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}

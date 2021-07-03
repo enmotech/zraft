@@ -290,7 +290,7 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
     struct fixture *f = data;
 	unsigned i = 0, j = 1, k = 2;
 
-	/* drop all the msg between i and j */
+	//define election_timeout
 	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 400);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, j, 500);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, k, 2000);
@@ -298,7 +298,7 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
 	raft_set_election_timeout(CLUSTER_RAFT(j), 500);
 	raft_set_election_timeout(CLUSTER_RAFT(k), 2000);
 	CLUSTER_SET_NETWORK_LATENCY(i,200);
-	CLUSTER_SET_NETWORK_LATENCY(i,200);
+	CLUSTER_SET_NETWORK_LATENCY(j,200);
 
 	CLUSTER_START;
 
@@ -322,6 +322,9 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
 	munit_assert_int(CLUSTER_N_SEND(j, RAFT_IO_REQUEST_VOTE), == ,2);
 	ASSERT_TIME(600);
 
+	//isolate server i
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
 	CLUSTER_STEP_UNTIL_ELAPSED(400);
 	//server j already receive the RV_RESULT from k, but is not granted,
 	//so server j still be the candidate

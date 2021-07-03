@@ -581,7 +581,7 @@ TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 	int min_idx = m;
 	int another = n;
 	int min_et = CLUSTER_RAFT(m)->follower_state.randomized_election_timeout;
-	if (min_et > CLUSTER_RAFT(n)->candidate_state.randomized_election_timeout) {
+	if (min_et > (int)CLUSTER_RAFT(n)->candidate_state.randomized_election_timeout) {
 		min_idx = n;
 		another = m;
 	}

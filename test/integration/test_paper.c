@@ -431,7 +431,7 @@ TEST(paper_test, leaderElectionInOneRoundRPC, setUp, tearDown, 0, NULL)
 	ASSERT_TIME(900);
 
 	raft_term t1 = CLUSTER_TERM(i);
-	raft_term t2 = CLUSTER_TERM(i);
+	raft_term t2 = CLUSTER_TERM(j);
 	//first one round RV of candidate I already timeout,
 	// it must add term and start a new term election
 	munit_assert_llong(t1, ==, t2+1);
@@ -446,11 +446,28 @@ TEST(paper_test, leaderElectionInOneRoundRPC, setUp, tearDown, 0, NULL)
 	CLUSTER_STEP_UNTIL_ELAPSED(100);
 	ASSERT_LEADER(i);	//expect A
 	ASSERT_FOLLOWER(j); //expect B
+	ASSERT_TERM(i, 4);
 	return MUNIT_OK;
+}
+
+/* Implementation of raft_io->random. */
+static int test_random(struct raft_io *io, int min, int max)
+{
+	(void)io;
+	return min + (abs(rand()) % (max - min));
 }
 
 TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_RAFT(i)->io->random = test_random;
+	CLUSTER_START;
+	int et1 = CLUSTER_RAFT(i)->election_timeout;
+	CLUSTER_ELECT(j);
+	ASSERT_FOLLOWER(i);
+	int et2 = CLUSTER_RAFT(i)->election_timeout;
+	munit_assert_int(t1, != ,t2);
 	return MUNIT_OK;
 }
 

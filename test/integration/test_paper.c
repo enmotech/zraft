@@ -457,6 +457,8 @@ static int test_random(struct raft_io *io, int min, int max)
 	return min + (abs(rand()) % (max - min));
 }
 
+//test when state change to follower,
+//different server's election_timeout will be randomized to a different number
 TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
@@ -501,6 +503,8 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+//test when state change to candidate,
+//different server's election_timeout will be randomized to a different number
 TEST(paper_test, candidateElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
@@ -527,6 +531,8 @@ TEST(paper_test, candidateElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+//2 servers, both start as followers, when I election_timeout, then convert to candidate,
+//then assert another server J is still follower state
 TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 {
 	return MUNIT_OK;
@@ -534,6 +540,56 @@ TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 
 TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_RAFT(i)->io->random = test_random;
+	CLUSTER_RAFT(j)->io->random = test_random;
+	CLUSTER_RAFT(k)->io->random = test_random;
+	CLUSTER_SATURATE_BOTHWAYS(i,j);
+	CLUSTER_SATURATE_BOTHWAYS(i,k);
+	CLUSTER_SATURATE_BOTHWAYS(j,k);
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	ASSERT_CANDIDATE(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+	raft_term t1 = CLUSTER_TERM(i);
+	raft_term t2 = CLUSTER_TERM(i);
+	raft_term t3 = CLUSTER_TERM(i);
+	munit_assert_llong(t1, ==, t2);
+	munit_assert_llong(t1, ==, t3);
+	int et[3] = {0};
+	et[i] = CLUSTER_RAFT(i)->candidate_state.randomized_election_timeout;
+	et[j] = CLUSTER_RAFT(j)->candidate_state.randomized_election_timeout;
+	et[k] = CLUSTER_RAFT(k)->candidate_state.randomized_election_timeout;
+	int min_et = et[i],
+		min_idx = i;
+	for (int idx = 1; idx < 3; idx++) {
+		if (et[idx] < min_et) {
+			min_et = et[idx];
+			min_idx = idx;
+		}
+	}
+
+	//randomized election_timeout to ensure that,
+	//at the same time, only one server will election_timeout and
+	//start request_vote_rpc for avoid split votes
+	CLUSTER_STEP_UNTIL_TERM_IS(min_idx, t1+1, 2000);
+	switch (min_idx) {
+		case 0:
+			ASSERT_TERM(1,t1);
+			ASSERT_TERM(2,t1);
+			break;
+		case 1:
+			ASSERT_TERM(0,t1);
+			ASSERT_TERM(2,t1);
+			break;
+		case 2:
+			ASSERT_TERM(0,t1);
+			ASSERT_TERM(1,t1);
+			break;
+	}
+
 	return MUNIT_OK;
 }
 

@@ -729,14 +729,15 @@ TEST(paper_test, leaderCommitEntry, setUp, tearDown, 0, NULL)
 }
 
 struct send_ae_cnt {
-	struct raft_fixture *f;
 	unsigned i;
 	unsigned n;
 };
 
-static bool server_send_n_append_entry(struct send_ae_cnt *arg)
+static bool server_send_n_append_entry(
+	struct raft_fixture *f,
+	struct send_ae_cnt *arg)
 {
-	unsigned n =raft_fixture_n_send(arg->f, arg->i, RAFT_IO_APPEND_ENTRIES);
+	unsigned n = raft_fixture_n_send(f, arg->i, RAFT_IO_APPEND_ENTRIES);
 	return arg->n == n;
 }
 
@@ -776,9 +777,10 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 
 	//step until I send a heartbeat
 	unsigned msg_cnt = CLUSTER_N_SEND(i, RAFT_IO_APPEND_ENTRIES);
-	struct send_ae_cnt arg = {&f->cluster, i, msg_cnt+1};
+	struct send_ae_cnt arg = {i, msg_cnt+1};
 	CLUSTER_STEP_UNTIL(server_send_n_append_entry, &arg,200);
 	raft_time t = CLUSTER_TIME;
+	(void)t;
 
 	/* J receives a new heartbeat. */
 	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);

@@ -660,7 +660,7 @@ TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 // the new entries.
 // Also, it writes the new entry into stable storage.
 // Reference: section 5.3
-static test_free_req(struct raft_apply *req, int status, void *result)
+static void test_free_req(struct raft_apply *req, int status, void *result)
 {
 	free(req);
 }

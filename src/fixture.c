@@ -875,6 +875,12 @@ static void ioResetCkposi(struct raft_io *io)
 	//mock
 }
 
+struct copy_chunk_posi  ioRepBoundary(struct raft_io *io)
+{
+	struct pgrep_context *prp_ctx = (struct pgrep_context *)io->prp_ctx;
+	return prp_ctx->ck_posi_dst;
+}
+
 static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 {
     struct io *io;
@@ -920,6 +926,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 	raft_io->pgrep_raft_permit = ioMethodRaftPermit;
 	raft_io->pgrep_raft_unpermit = ioMethodRaftUnpermit;
 	raft_io->pgrep_reset_ckposi = ioResetCkposi;
+	raft_io->pgrep_boundary = ioRepBoundary;
     return 0;
 }
 

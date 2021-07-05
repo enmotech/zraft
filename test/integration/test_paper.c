@@ -663,7 +663,7 @@ TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 static void test_free_req(struct raft_apply *req, int status, void *result)
 {
 	(void)status;
-	(int*)result;
+	free(result);
 	free(req);
 }
 
@@ -716,7 +716,14 @@ TEST(paper_test, leaderCommitEntry, setUp, tearDown, 0, NULL)
 	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
 	CLUSTER_STEP_UNTIL_DELIVERED(k, i, 100);
 
+	//make sure the leader recv two AR_RESULT
 	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
+
+	//step leader apply the entry and update the commit index
+	CLUSTER_STEP_UNTIL_APPLIED(i, 1, 2000);
+
+	//make sure the entry set a commit state
+	munit_assert_int(f->cluster.commit_index, ==, 1);
 
 	return MUNIT_OK;
 }

@@ -673,9 +673,8 @@ TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
 	//the leader append an entry, and replicate to all the followers
 	struct raft_apply *req = munit_malloc(sizeof *req);
 	CLUSTER_APPLY_ADD_X(i, req, 1, NULL);
-
-	//step until the entry has been applied and replication to followers
-	CLUSTER_STEP_UNTIL_APPLIED(i, 1, 2000);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
 
 	//make sure the follower recv the append entry
 	munit_assert_int(CLUSTER_N_SEND(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);

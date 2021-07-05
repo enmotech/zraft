@@ -677,7 +677,6 @@ TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
 	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
 
 	//make sure the follower recv the append entry
-	munit_assert_int(CLUSTER_N_SEND(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
 	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
 	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
 

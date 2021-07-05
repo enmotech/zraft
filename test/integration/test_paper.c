@@ -728,7 +728,7 @@ TEST(paper_test, leaderCommitEntry, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-struct send_ae_cnt {
+struct ae_cnt {
 	unsigned i;
 	unsigned n;
 };
@@ -737,8 +737,17 @@ static bool server_send_n_append_entry(
 	struct raft_fixture *f,
 	void *arg)
 {
-	struct send_ae_cnt *a = arg;
+	struct ae_cnt *a = arg;
 	unsigned n = raft_fixture_n_send(f, a->i, RAFT_IO_APPEND_ENTRIES);
+	return a->n == n;
+}
+
+static bool server_recv_n_append_entry(
+	struct raft_fixture *f,
+	void *arg)
+{
+	struct ae_cnt *a = arg;
+	unsigned n = raft_fixture_n_recv(f, a->i, RAFT_IO_APPEND_ENTRIES);
 	return a->n == n;
 }
 
@@ -777,10 +786,13 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 1);
 
 	//step until I send a heartbeat
-	unsigned msg_cnt = CLUSTER_N_SEND(i, RAFT_IO_APPEND_ENTRIES);
-	struct send_ae_cnt arg = {i, msg_cnt+1};
+	unsigned send_cnt = CLUSTER_N_SEND(i, RAFT_IO_APPEND_ENTRIES);
+	unsigned recv_cnt = CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES);
+	struct ae_cnt arg = {i, send_cnt+1};
 	CLUSTER_STEP_UNTIL(server_send_n_append_entry, &arg,200);
-	(void)t;
+	arg.i = j;
+	arg.n = recv_cnt+1;
+	CLUSTER_STEP_UNTIL(server_recv_n_append_entry, &arg,200);
 
 	//make sure the entry set a commit state
 	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 2);

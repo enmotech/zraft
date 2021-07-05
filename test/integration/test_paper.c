@@ -872,9 +872,10 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(k);
 
 	//add entry
+	raft_term t1 = CLUSTER_TERM(i),
 	struct raft_entry e = {
 		.type = RAFT_COMMAND,
-		.term = CLUSTER_TERM(i),
+		.term = t1,
 	};
 	FsmEncodeSetX(123, &e.buf);
 	CLUSTER_ADD_ENTRY(i, &e);
@@ -883,10 +884,9 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 200);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 3000);
 	raft_fixture_step_until_rv_for_send(&f->cluster,
-									 i, j, CLUSTER_TERM(i),
-									 CLUSTER_TERM(i)-1, 1, 200);
+									 i, j, CLUSTER_TERM(i), t1, 1, 200);
 	return MUNIT_OK;
 }
 

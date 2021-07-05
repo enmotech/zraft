@@ -872,7 +872,7 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(k);
 
 	//add entry
-	raft_term t1 = CLUSTER_TERM(i),
+	raft_term t1 = CLUSTER_TERM(i);
 	struct raft_entry e = {
 		.type = RAFT_COMMAND,
 		.term = t1,

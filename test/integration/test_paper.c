@@ -751,6 +751,7 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 
 	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
 	CLUSTER_STEP_UNTIL_DELIVERED(k, i, 100);
+	raft_time t = CLUSTER_TIME;
 
 	//make sure the leader recv two AR_RESULT
 	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
@@ -763,6 +764,7 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 1);
 
 	unsigned msg_cnt = CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES);
+	ASSERT_TIME(t);
 	/* J receives a new heartbeat. */
 	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
 	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,msg_cnt+1);

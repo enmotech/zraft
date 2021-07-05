@@ -877,6 +877,7 @@ static void ioResetCkposi(struct raft_io *io)
 
 struct copy_chunk_posi  ioRepBoundary(struct raft_io *io)
 {
+	(void)io;
 	struct copy_chunk_posi ccp = {UINT64_MAX, UINT32_MAX};
 	return ccp;
 }

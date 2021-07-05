@@ -660,6 +660,11 @@ TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 // the new entries.
 // Also, it writes the new entry into stable storage.
 // Reference: section 5.3
+static test_free_req(struct raft_apply *req, int status, void *result)
+{
+	free(req);
+}
+
 TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
@@ -672,7 +677,7 @@ TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
 
 	//the leader append an entry, and replicate to all the followers
 	struct raft_apply *req = munit_malloc(sizeof *req);
-	CLUSTER_APPLY_ADD_X(i, req, 1, NULL);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
 	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
 	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
 
@@ -680,7 +685,6 @@ TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
 	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
 	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
 
-	free(req);
 	return MUNIT_OK;
 }
 

@@ -652,8 +652,37 @@ TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+// tests that when receiving client proposals,
+// the leader appends the proposal to its log as a new entry, then issues
+// AppendEntries RPCs in parallel to each of the other servers to replicate
+// the entry. Also, when sending an AppendEntries RPC, the leader includes
+// the index and term of the entry in its log that immediately precedes
+// the new entries.
+// Also, it writes the new entry into stable storage.
+// Reference: section 5.3
 TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i)
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//the leader append an entry, and replicate to all the followers
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, NULL);
+
+	//step until the entry has been applied and replication to followers
+	CLUSTER_STEP_UNTIL_APPLIED(i, 1, 2000);
+
+	//make sure the follower recv the append entry
+	munit_assert_int(CLUSTER_N_SEND(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
+
+	free(req);
 	return MUNIT_OK;
 }
 

@@ -300,6 +300,17 @@ RAFT_API bool raft_fixture_step_until_delivered(struct raft_fixture *f,
                                                 unsigned max_msecs);
 
 /**
+ * Step the cluster until the server i have a request_vote for send to j
+ */
+RAFT_API bool raft_fixture_step_until_rv_for_send(struct raft_fixture *f,
+												 unsigned i,
+												 unsigned j,
+												 raft_term candidate_term,
+												 raft_term last_log_term,
+												 raft_index last_log_index,
+												 unsigned max_msecs);
+
+/**
  * Set a function to be called after every time a fixture event occurs as
  * consequence of a step.
  */

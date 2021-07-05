@@ -1788,6 +1788,62 @@ bool raft_fixture_step_until_delivered(struct raft_fixture *f,
     return raft_fixture_step_until(f, hasDelivered, &target, max_msecs);
 }
 
+struct step_send_rv {
+	unsigned src;
+	unsigned dst;
+	raft_term candidate_term;
+	raft_term last_log_term;
+	raft_index last_log_index;
+};
+
+static bool hasRVForSend(struct raft_fixture *f,
+	void *arg)
+{
+	struct step_send_rv *expect = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, expect->src);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_REQUEST_VOTE)
+				continue;
+			if (message->server_id != expect->dst+1)
+				continue;
+
+			struct raft_request_vote *rv = message->request_vote;
+			assert(rv->term == expect->candidate_term);
+			assert(rv->last_log_index == expect->last_log_index);
+			assert(rv->last_log_term == expect->last_log_term);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool raft_fixture_step_until_rv_for_send(struct raft_fixture *f,
+									   unsigned i,
+									   unsigned j,
+									   raft_term candidate_term,
+									   raft_term last_log_term,
+									   raft_index last_log_index,
+									   unsigned max_msecs)
+{
+	struct step_send_rv target = {i, j, candidate_term, last_log_term, last_log_index};
+	return raft_fixture_step_until(f, hasRVForSend, &target, max_msecs);
+}
+
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
 {
     struct raft_io *io1 = &f->servers[i].io;

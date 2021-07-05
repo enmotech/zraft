@@ -794,7 +794,8 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 	arg.n = recv_cnt+1;
 	CLUSTER_STEP_UNTIL(server_recv_n_append_entry, &arg,200);
 
-	//make sure the entry set a commit state
+	//once the follower recv the heartbeat with new commit index,
+	//then it immediately commit the same commit_index log
 	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 2);
 	return MUNIT_OK;
 }
@@ -835,6 +836,7 @@ TEST(paper_test, leaderAcknownledgeCommit, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+
 TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 {
 	return MUNIT_OK;
@@ -855,8 +857,47 @@ TEST(paper_test, leaderSyncFollowerLog, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(paper_test, voteRequest, setUp, tearDown, 0, NULL)
+
+
+static bool send_rv(struct raft_fixture *f,
+	void *arg)
 {
+	struct test_rv *expect = arg;
+
+	return true;
+
+}
+
+//test the vote_request include the candidate's log and are sent to all of the other nodes
+TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+
+	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 200);
+	raft_set_election_timeout(CLUSTER_RAFT(i), 200);
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//add entry
+	raft_entry e = {
+		.type = RAFT_COMMAND,
+		.term = CLUSTER_TERM(i),
+	};
+	FsmEncodeSetX(123, &e.buf);
+	CLUSTER_ADD_ENTRY(i, &e);
+
+	//saturate for let I start a new election
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 200);
+	raft_fixture_step_until_rv_for_send(&f->cluster, i, j, CLUSTER_TERM(i),
+										CLUSTER_TERM(i)-1, 1);
 	return MUNIT_OK;
 }
 

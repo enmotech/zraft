@@ -877,7 +877,8 @@ static void ioResetCkposi(struct raft_io *io)
 
 struct copy_chunk_posi  ioRepBoundary(struct raft_io *io)
 {
-	return {-1,-1};
+	struct copy_chunk_posi ccp = {-1,-1};
+	return ccp;
 }
 
 static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)

@@ -857,23 +857,11 @@ TEST(paper_test, leaderSyncFollowerLog, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-
-
-static bool send_rv(struct raft_fixture *f,
-	void *arg)
-{
-	struct test_rv *expect = arg;
-
-	return true;
-
-}
-
 //test the vote_request include the candidate's log and are sent to all of the other nodes
 TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
 	unsigned i=0, j=1, k=2;
-
 	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 200);
 	raft_set_election_timeout(CLUSTER_RAFT(i), 200);
 
@@ -884,7 +872,7 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(k);
 
 	//add entry
-	raft_entry e = {
+	struct raft_entry e = {
 		.type = RAFT_COMMAND,
 		.term = CLUSTER_TERM(i),
 	};

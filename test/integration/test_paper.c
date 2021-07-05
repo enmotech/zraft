@@ -780,12 +780,7 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 	unsigned msg_cnt = CLUSTER_N_SEND(i, RAFT_IO_APPEND_ENTRIES);
 	struct send_ae_cnt arg = {i, msg_cnt+1};
 	CLUSTER_STEP_UNTIL(server_send_n_append_entry, &arg,200);
-	raft_time t = CLUSTER_TIME;
 	(void)t;
-
-	/* J receives a new heartbeat. */
-	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
-	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,msg_cnt+1);
 
 	//make sure the entry set a commit state
 	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 2);

@@ -756,17 +756,17 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
 
 	//step leader apply the entry and update the commit index
-	CLUSTER_STEP_UNTIL_APPLIED(i, 1, 2000);
+	CLUSTER_STEP_UNTIL_APPLIED(i, 2, 2000);
 
 	//make sure the entry set a commit state
-	munit_assert_int(f->cluster.commit_index, ==, 1);
-	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 0);
+	munit_assert_int(f->cluster.servers[i].raft.commit_index, ==, 2);
+	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 1);
 
 	/* J receives a heartbeat. */
 	CLUSTER_STEP_N(2);
 
 	//make sure the entry set a commit state
-	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 1);
+	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 2);
 	return MUNIT_OK;
 }
 

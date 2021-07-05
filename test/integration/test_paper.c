@@ -666,7 +666,7 @@ TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
 	unsigned i=0, j=1, k=2;
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
-	ASSERT_LEADER(i)
+	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
 

@@ -663,7 +663,7 @@ TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 static void test_free_req(struct raft_apply *req, int status, void *result)
 {
 	(void)status;
-	(void*)result;
+	(int*)result;
 	free(req);
 }
 
@@ -703,7 +703,7 @@ TEST(paper_test, leaderCommitEntry, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
 
-	/the leader append an entry, and replicate to all the followers
+	//the leader append an entry, and replicate to all the followers
 	struct raft_apply *req = munit_malloc(sizeof *req);
 	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
 	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);

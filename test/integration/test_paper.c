@@ -662,6 +662,8 @@ TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 // Reference: section 5.3
 static void test_free_req(struct raft_apply *req, int status, void *result)
 {
+	(void)status;
+	(void*)result;
 	free(req);
 }
 
@@ -688,8 +690,34 @@ TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+
+//when leader recv AE_RESULT from majority servers, then it apply the entry
+//and reply a commit to the client
 TEST(paper_test, leaderCommitEntry, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	/the leader append an entry, and replicate to all the followers
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
+
+	//make sure the follower recv the append entry
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
+
+	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(k, i, 100);
+
+	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
+
 	return MUNIT_OK;
 }
 

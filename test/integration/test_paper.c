@@ -728,8 +728,44 @@ TEST(paper_test, leaderCommitEntry, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+//after leader committed, the next heartbeat will notify follower to commit
 TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//the leader append an entry, and replicate to all the followers
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
+
+	//make sure the follower recv the append entry
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
+
+	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(k, i, 100);
+
+	//make sure the leader recv two AR_RESULT
+	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
+
+	//step leader apply the entry and update the commit index
+	CLUSTER_STEP_UNTIL_APPLIED(i, 1, 2000);
+
+	//make sure the entry set a commit state
+	munit_assert_int(f->cluster.commit_index, ==, 1);
+
+	/* J receives a heartbeat. */
+	CLUSTER_STEP_N(2);
+
+	//make sure the entry set a commit state
+	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 1);
 	return MUNIT_OK;
 }
 

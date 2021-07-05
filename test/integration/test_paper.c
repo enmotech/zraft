@@ -728,6 +728,16 @@ TEST(paper_test, leaderCommitEntry, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+struct send_ae_cnt {
+	unsigned i;
+	unsigned n;
+};
+
+static bool server_send_n_append_entry(struct send_ae_cnt *arg)
+{
+	return arg->n == CLUSTER_N_SEND(arg->i, RAFT_IO_APPEND_ENTRIES);
+}
+
 //after leader committed, the next heartbeat will notify follower to commit
 TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 {
@@ -751,7 +761,6 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 
 	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
 	CLUSTER_STEP_UNTIL_DELIVERED(k, i, 100);
-	raft_time t = CLUSTER_TIME;
 
 	//make sure the leader recv two AR_RESULT
 	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
@@ -763,8 +772,12 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 	munit_assert_int(f->cluster.servers[i].raft.commit_index, ==, 2);
 	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 1);
 
-	unsigned msg_cnt = CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES);
-	ASSERT_TIME(t);
+	//step until I send a heartbeat
+	unsigned msg_cnt = CLUSTER_N_SEND(i, RAFT_IO_APPEND_ENTRIES);
+	struct send_ae_cnt arg = {i, msg_cnt+1};
+	CLUSTER_STEP_UNTIL(server_send_n_append_entry, &arg,200);
+	raft_time t = CLUSTER_TIME;
+
 	/* J receives a new heartbeat. */
 	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
 	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,msg_cnt+1);

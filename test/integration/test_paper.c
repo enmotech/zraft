@@ -884,8 +884,9 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 
 	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 200);
-	raft_fixture_step_until_rv_for_send(&f->cluster, i, j, CLUSTER_TERM(i),
-										CLUSTER_TERM(i)-1, 1);
+	raft_fixture_step_until_rv_for_send(&f->cluster,
+									 i, j, CLUSTER_TERM(i),
+									 CLUSTER_TERM(i)-1, 1, 200);
 	return MUNIT_OK;
 }
 

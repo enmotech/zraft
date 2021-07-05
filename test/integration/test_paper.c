@@ -735,7 +735,8 @@ struct send_ae_cnt {
 
 static bool server_send_n_append_entry(struct send_ae_cnt *arg)
 {
-	return arg->n == CLUSTER_N_SEND(arg->i, RAFT_IO_APPEND_ENTRIES);
+	unsigned n = CLUSTER_N_SEND(arg->i, RAFT_IO_APPEND_ENTRIES);
+	return arg->n == n;
 }
 
 //after leader committed, the next heartbeat will notify follower to commit

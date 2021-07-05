@@ -862,9 +862,6 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
 	unsigned i=0, j=1, k=2;
-	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 200);
-	raft_set_election_timeout(CLUSTER_RAFT(i), 200);
-
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
 	ASSERT_LEADER(i);

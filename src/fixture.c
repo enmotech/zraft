@@ -1820,10 +1820,10 @@ static bool hasRVForSend(struct raft_fixture *f,
 			if (message->server_id != expect->dst+1)
 				continue;
 
-			struct raft_request_vote *rv = message->request_vote;
-			assert(rv->term == expect->candidate_term);
-			assert(rv->last_log_index == expect->last_log_index);
-			assert(rv->last_log_term == expect->last_log_term);
+			struct raft_request_vote rv = message->request_vote;
+			assert(rv.term == expect->candidate_term);
+			assert(rv.last_log_index == expect->last_log_index);
+			assert(rv.last_log_term == expect->last_log_term);
 
 			return true;
 		}

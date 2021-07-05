@@ -763,7 +763,7 @@ TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
 	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 1);
 
 	/* J receives a heartbeat. */
-	CLUSTER_STEP_N(2);
+	CLUSTER_STEP_N(7);
 
 	//make sure the entry set a commit state
 	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 2);

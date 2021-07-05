@@ -872,7 +872,6 @@ static void ioMethodRaftPermit(
 
 static void ioResetCkposi(struct raft_io *io)
 {
-	(void*)io;
 	//mock
 }
 

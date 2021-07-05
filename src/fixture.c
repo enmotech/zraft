@@ -870,6 +870,12 @@ static void ioMethodRaftPermit(
 	pi->permit = true;
 }
 
+static void ioResetCkposi(struct raft_io *io)
+{
+	(void*)io;
+	//mock
+}
+
 static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 {
     struct io *io;
@@ -914,6 +920,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->set_meta = ioMethodSetTermVote;
 	raft_io->pgrep_raft_permit = ioMethodRaftPermit;
 	raft_io->pgrep_raft_unpermit = ioMethodRaftUnpermit;
+	raft_io->pgrep_reset_ckposi = ioResetCkposi;
     return 0;
 }
 

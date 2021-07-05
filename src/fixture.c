@@ -875,6 +875,29 @@ static void ioResetCkposi(struct raft_io *io)
 	//mock
 }
 
+struct pgrep_rf_permit {
+	uint16_t ref_cnt;
+	int64_t io_tick;
+	int64_t time;
+};
+
+struct pgrep_context {
+	uint16_t ref_cnt;
+	struct pgrep_rf_permit rf_perm;
+	int64_t active_time;
+	int64_t next_retry_time;
+	int16_t status;
+	struct copy_chunk_posi ck_posi;
+	raft_id dest_server_id;
+	raft_id src_server_id;
+	raft_term term;
+	uint64_t copy_cnt;
+	int64_t last_send_time;
+	/* Fileds in catch-up. */
+	struct copy_chunk_posi ck_posi_dst;
+	int64_t last_copy_time;
+};
+
 struct copy_chunk_posi  ioRepBoundary(struct raft_io *io)
 {
 	struct pgrep_context *prp_ctx = (struct pgrep_context *)io->prp_ctx;

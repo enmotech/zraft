@@ -735,10 +735,11 @@ struct send_ae_cnt {
 
 static bool server_send_n_append_entry(
 	struct raft_fixture *f,
-	struct send_ae_cnt *arg)
+	void *arg)
 {
-	unsigned n = raft_fixture_n_send(f, arg->i, RAFT_IO_APPEND_ENTRIES);
-	return arg->n == n;
+	struct send_ae_cnt *a = arg;
+	unsigned n = raft_fixture_n_send(f, a->i, RAFT_IO_APPEND_ENTRIES);
+	return a->n == n;
 }
 
 //after leader committed, the next heartbeat will notify follower to commit

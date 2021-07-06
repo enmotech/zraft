@@ -936,16 +936,6 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 
 	struct ae_result_cnt arg = {i, 4};
 	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
-	raft_term t1 = logLastTerm(&f->cluster.servers[i].raft.log);
-	raft_term t2 = logLastTerm(&f->cluster.servers[j].raft.log);
-	raft_term t3 = logLastTerm(&f->cluster.servers[k].raft.log);
-	raft_index i1 = logLastIndex(&f->cluster.servers[i].raft.log);
-	raft_index i2 = logLastIndex(&f->cluster.servers[j].raft.log);
-	raft_index i3 = logLastIndex(&f->cluster.servers[k].raft.log);
-	munit_assert_llong(t1, ==, t2);
-	munit_assert_llong(t1, ==, t3);
-	munit_assert_llong(i1, ==, i2);
-	munit_assert_llong(i1, ==, i3);
 
 	//saturate for let J become candidate firstly
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
@@ -963,18 +953,18 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME;
 	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME;
 	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
-	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
+	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 3000;
 	CLUSTER_RAFT(i)->election_timeout = 1000;
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1000);
 	ASSERT_FOLLOWER(k);
 	CLUSTER_DESATURATE_BOTHWAYS(i, j);
 	CLUSTER_DESATURATE_BOTHWAYS(i, k);
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
 	//check candidate's RV detail
-	//raft_fixture_step_until_rv_for_send(
-	//	&f->cluster, j, i, CLUSTER_TERM(j), t2, i2, 200);
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster, j, i, CLUSTER_TERM(j), t2, i2, 200);
 
 	//mock RV's last_log_term - 1, so the voter will reject
 	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, CLUSTER_TERM(j), t1-1, i2);

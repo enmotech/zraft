@@ -921,6 +921,12 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	unsigned i=0, j=1, k=2;
 	struct raft_apply *req1;
 	struct raft_apply *req2;
+
+	//set server J and K max randomized election_timeout
+	raft_fixture_set_randomized_election_timeout(&f->cluster, j, 2000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, k, 2000);
+	raft_set_election_timeout(CLUSTER_RAFT(j), 2000);
+	raft_set_election_timeout(CLUSTER_RAFT(k), 2000);
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
 	ASSERT_LEADER(i);
@@ -953,6 +959,7 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	raft_fixture_step_rv_mock(&f->cluster, i, j, CLUSTER_TERM(i), t2-1, 3);
 
 	raft_fixture_step_until_rv_response(&f->cluster, j, i, t2, false, 200);
+	raft_fixture_step_until_rv_response(&f->cluster, k, i, t2, true, 200);
 	return MUNIT_OK;
 }
 

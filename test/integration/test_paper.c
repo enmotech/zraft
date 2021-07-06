@@ -961,7 +961,7 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 
 	//check candidate's RV detail
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, j, i, CLUSTER_TERM(j), t2, i2, 200);
+		&f->cluster, j, i, 3, 2, 3, 200);
 
 	//mock RV's last_log_term - 1, so the voter will reject
 	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, 3, 1, 3);

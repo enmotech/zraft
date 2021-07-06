@@ -951,7 +951,7 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 	CLUSTER_SATURATE_BOTHWAYS(j, k);
-	raft_fixture_set_election_timeout_min(&f->cluster, j);
+	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
 	ASSERT_FOLLOWER(i);
 	ASSERT_FOLLOWER(k);

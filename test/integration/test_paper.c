@@ -923,12 +923,9 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	struct raft_apply *req2;
 
 	//set server J and K max randomized election_timeout
-	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 200);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, j, 2000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, k, 2000);
-	raft_set_election_timeout(CLUSTER_RAFT(i), 200);
-	raft_set_election_timeout(CLUSTER_RAFT(j), 2000);
-	raft_set_election_timeout(CLUSTER_RAFT(k), 2000);
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
 	ASSERT_LEADER(i);

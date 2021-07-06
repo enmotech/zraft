@@ -944,6 +944,9 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	raft_term t1 = logLastTerm(&f->cluster.servers[i].raft.log);
 	raft_term t2 = logLastTerm(&f->cluster.servers[j].raft.log);
 	raft_term t3 = logLastTerm(&f->cluster.servers[k].raft.log);
+	raft_index i1 = logLastIndex(&f->cluster.servers[i].raft.log);
+	raft_index i2 = logLastIndex(&f->cluster.servers[j].raft.log);
+	raft_index i3 = logLastIndex(&f->cluster.servers[k].raft.log);
 	munit_assert_llong(t1, ==, t2);
 	munit_assert_llong(t1, ==, t3);
 	//saturate for let I start a new election
@@ -956,10 +959,10 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 
 	//check candidate's RV detail
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, i, j, CLUSTER_TERM(i), t1, 3, 200);
+		&f->cluster, i, j, CLUSTER_TERM(i), t1, i1, 200);
 
 	//set rv last_log_term - 1, so the voter will reject
-	raft_fixture_step_rv_mock(&f->cluster, i, j, CLUSTER_TERM(i), t2-1, 3);
+	raft_fixture_step_rv_mock(&f->cluster, i, j, CLUSTER_TERM(i), t2-1, i1);
 	ASSERT_FOLLOWER(j);
 	raft_fixture_step_until_rv_response(&f->cluster, j, i, t2, false, 200);
 	ASSERT_FOLLOWER(k);

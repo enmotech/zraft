@@ -2,6 +2,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
 #include "../../src/election.h"
+#include "../../src/log.h"
 
 /******************************************************************************
  *
@@ -325,7 +326,7 @@ TEST(paper_test, followerVote, setUp, tearDown, 0, NULL) {
 	//isolate server i
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
-	CLUSTER_STEP_UNTIL_ELAPSED(400);
+	CLUSTER_STEP_UNTIL_ELAPSED(300);
 	//server j already receive the RV_RESULT from k, but is not granted,
 	//so server j still be the candidate
 	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE_RESULT), == ,1);
@@ -366,5 +367,615 @@ TEST(paper_test, candidateFallBack, setUp, tearDown, 0, NULL) {
 	ASSERT_TERM(k,t2);
 	ASSERT_FOLLOWER(k);
 
+	return MUNIT_OK;
+}
+
+// leaderElectionInOneRoundRPC tests all cases that may happen in
+// leader election during one round of RequestVote RPC:
+//expect A. it wins the election
+//expect B. it loses the election
+//expect C. it is unclear about the result
+TEST(paper_test, leaderElectionInOneRoundRPC, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+
+	//define election_timeout for control the election
+	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 400);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, j, 500);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, k, 2000);
+	raft_set_election_timeout(CLUSTER_RAFT(i), 400);
+	raft_set_election_timeout(CLUSTER_RAFT(j), 500);
+	raft_set_election_timeout(CLUSTER_RAFT(k), 2000);
+	CLUSTER_SET_NETWORK_LATENCY(i,200);
+	CLUSTER_SET_NETWORK_LATENCY(j,200);
+
+	CLUSTER_START;
+
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE,2000);
+	//I election timeout, then be the first candidate
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+	ASSERT_TIME(400);
+
+	//when time goes to 500ms, J election_timeout and be another candidate,
+	//and it still not receive the RV from I cause I hold a 200ms network_latency
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE,2000);
+	munit_assert_int(CLUSTER_N_SEND(i, RAFT_IO_REQUEST_VOTE), == ,2);
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE), == ,0);
+	ASSERT_CANDIDATE(i);
+	ASSERT_FOLLOWER(k);
+	ASSERT_TIME(500);
+
+	/* K granted I's RV */
+	CLUSTER_STEP_UNTIL_VOTED_FOR(k, i, 2000);
+
+	//make sure K only receive RV from I, cause the J's RV still
+	//propagating through the network
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_REQUEST_VOTE), == ,1);
+
+	//make sure J already send RV out
+	munit_assert_int(CLUSTER_N_SEND(j, RAFT_IO_REQUEST_VOTE), == ,2);
+	ASSERT_TIME(600);
+
+	//isolate I from the network for avoid win the election
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_STEP_UNTIL_ELAPSED(300);
+	//J already receive the RV_RESULT from K, but is not granted, cause K already grant for I just now.
+	//so J remains candidate state
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_REQUEST_VOTE_RESULT), == ,1);
+	//after One Round RV, neither candidate I nor candidate J achieve a majority,
+	// so both of them remain candidate state (expect C)
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(i);
+	ASSERT_TIME(900);
+
+	raft_term t1 = CLUSTER_TERM(i);
+	raft_term t2 = CLUSTER_TERM(j);
+	//first one round RV of candidate I already timeout,
+	// it must add term and start a new term election
+	munit_assert_llong(t1, ==, t2+1);
+	CLUSTER_STEP_UNTIL_ELAPSED(300);
+
+	//recover the msg communication of I and set a lower network latency
+	//for guarantee I's RV will be received firstly
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+	CLUSTER_SET_NETWORK_LATENCY(i,15);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(100);
+	ASSERT_LEADER(i);	//expect A
+	ASSERT_FOLLOWER(j); //expect B
+	ASSERT_TERM(i, 4);
+	return MUNIT_OK;
+}
+
+/* Implementation of raft_io->random. */
+static int test_random(struct raft_io *io, int min, int max)
+{
+	(void)io;
+	return min + (abs(rand()) % (max - min));
+}
+
+//test when state change to follower,
+//different server's election_timeout will be randomized to a different number
+TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_RAFT(i)->io->random = test_random;
+	CLUSTER_RAFT(j)->io->random = test_random;
+	CLUSTER_RAFT(k)->io->random = test_random;
+	CLUSTER_SATURATE_BOTHWAYS(i,j);
+	CLUSTER_SATURATE_BOTHWAYS(i,k);
+	CLUSTER_SATURATE_BOTHWAYS(j,k);
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	ASSERT_CANDIDATE(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+	CLUSTER_DESATURATE_BOTHWAYS(j,k);
+	CLUSTER_DESATURATE_BOTHWAYS(i,j);
+	CLUSTER_DESATURATE_BOTHWAYS(i,k);
+
+	CLUSTER_STEP_UNTIL_HAS_LEADER(3000);
+	unsigned  l = CLUSTER_LEADER;
+	unsigned  m, n;
+	switch(l) {
+		case 0:
+			m = 1;
+			n = 2;
+			break;
+		case 1:
+			m = 0;
+			n = 2;
+			break;
+		case 2:
+			m = 0;
+			n = 1;
+			break;
+	}
+	ASSERT_FOLLOWER(m);
+	ASSERT_FOLLOWER(n);
+	int t1 = CLUSTER_RAFT(m)->follower_state.randomized_election_timeout;
+	int t2 = CLUSTER_RAFT(n)->follower_state.randomized_election_timeout;
+	munit_assert_int(t1, != ,t2);
+	return MUNIT_OK;
+}
+
+//test when state change to candidate,
+//different server's election_timeout will be randomized to a different number
+TEST(paper_test, candidateElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_RAFT(i)->io->random = test_random;
+	CLUSTER_RAFT(j)->io->random = test_random;
+	CLUSTER_RAFT(k)->io->random = test_random;
+	CLUSTER_SATURATE_BOTHWAYS(i,j);
+	CLUSTER_SATURATE_BOTHWAYS(i,k);
+	CLUSTER_SATURATE_BOTHWAYS(j,k);
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	ASSERT_CANDIDATE(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+
+	int t1 = CLUSTER_RAFT(i)->candidate_state.randomized_election_timeout;
+	int t2 = CLUSTER_RAFT(j)->candidate_state.randomized_election_timeout;
+	int t3 = CLUSTER_RAFT(k)->candidate_state.randomized_election_timeout;
+
+	munit_assert_int(t1, !=, t2);
+	munit_assert_int(t1, !=, t3);
+	munit_assert_int(t2, !=, t3);
+	return MUNIT_OK;
+}
+
+TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_RAFT(i)->io->random = test_random;
+	CLUSTER_RAFT(j)->io->random = test_random;
+	CLUSTER_RAFT(k)->io->random = test_random;
+	CLUSTER_SATURATE_BOTHWAYS(i,j);
+	CLUSTER_SATURATE_BOTHWAYS(i,k);
+	CLUSTER_SATURATE_BOTHWAYS(j,k);
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	ASSERT_CANDIDATE(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+
+	//recover network for produce a leader
+	CLUSTER_DESATURATE_BOTHWAYS(i,j);
+	CLUSTER_DESATURATE_BOTHWAYS(i,k);
+	CLUSTER_DESATURATE_BOTHWAYS(j,k);
+	CLUSTER_STEP_UNTIL_HAS_LEADER(3000);
+
+	//find out the leader and followers
+	unsigned  l = CLUSTER_LEADER;
+	unsigned  m, n;
+	switch(l) {
+		case 0:
+			m = 1;
+			n = 2;
+			break;
+		case 1:
+			m = 0;
+			n = 2;
+			break;
+		case 2:
+			m = 0;
+			n = 1;
+			break;
+	}
+	ASSERT_FOLLOWER(m);
+	ASSERT_FOLLOWER(n);
+
+	//saturate again the leader
+	CLUSTER_SATURATE_BOTHWAYS(l, m);
+	CLUSTER_SATURATE_BOTHWAYS(l, n);
+
+	//find out the server with the minimal election_timeout
+	int min_idx = m;
+	int another = n;
+	int min_et = CLUSTER_RAFT(m)->follower_state.randomized_election_timeout;
+	if (min_et > (int)CLUSTER_RAFT(n)->candidate_state.randomized_election_timeout) {
+		min_idx = n;
+		another = m;
+	}
+
+	//when the minimal election_timeout happen, another server most possibly
+	//still be follower cause the randomized election_timeout which avoid split votes
+	CLUSTER_STEP_UNTIL_STATE_IS(min_idx, RAFT_CANDIDATE, 2000);
+	ASSERT_FOLLOWER(another);
+	return MUNIT_OK;
+}
+
+TEST(paper_test, candidateElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_RAFT(i)->io->random = test_random;
+	CLUSTER_RAFT(j)->io->random = test_random;
+	CLUSTER_RAFT(k)->io->random = test_random;
+	CLUSTER_SATURATE_BOTHWAYS(i,j);
+	CLUSTER_SATURATE_BOTHWAYS(i,k);
+	CLUSTER_SATURATE_BOTHWAYS(j,k);
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	ASSERT_CANDIDATE(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+	raft_term t1 = CLUSTER_TERM(i);
+	raft_term t2 = CLUSTER_TERM(i);
+	raft_term t3 = CLUSTER_TERM(i);
+	munit_assert_llong(t1, ==, t2);
+	munit_assert_llong(t1, ==, t3);
+	int et[3] = {0};
+	et[i] = CLUSTER_RAFT(i)->candidate_state.randomized_election_timeout;
+	et[j] = CLUSTER_RAFT(j)->candidate_state.randomized_election_timeout;
+	et[k] = CLUSTER_RAFT(k)->candidate_state.randomized_election_timeout;
+
+	//select the minimal election_timeout server
+	int min_et = et[i],
+		min_idx = i;
+	for (int idx = 1; idx < 3; idx++) {
+		if (et[idx] < min_et) {
+			min_et = et[idx];
+			min_idx = idx;
+		}
+	}
+
+	//wait for it's new term, indicate it start a new round request vote
+	CLUSTER_STEP_UNTIL_TERM_IS(min_idx, t1+1, 2000);
+
+	//randomized election_timeout to ensure that,
+	//at the same time, only one server will election_timeout and
+	//start request_vote_rpc for avoid split votes
+	switch (min_idx) {
+		case 0:
+			ASSERT_TERM(1,t1);
+			ASSERT_TERM(2,t1);
+			break;
+		case 1:
+			ASSERT_TERM(0,t1);
+			ASSERT_TERM(2,t1);
+			break;
+		case 2:
+			ASSERT_TERM(0,t1);
+			ASSERT_TERM(1,t1);
+			break;
+	}
+
+	return MUNIT_OK;
+}
+
+// tests that when receiving client proposals,
+// the leader appends the proposal to its log as a new entry, then issues
+// AppendEntries RPCs in parallel to each of the other servers to replicate
+// the entry. Also, when sending an AppendEntries RPC, the leader includes
+// the index and term of the entry in its log that immediately precedes
+// the new entries.
+// Also, it writes the new entry into stable storage.
+// Reference: section 5.3
+static void test_free_req(struct raft_apply *req, int status, void *result)
+{
+	(void)status;
+	free(result);
+	free(req);
+}
+
+TEST(paper_test, leaderStartReplication, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//the leader append an entry, and replicate to all the followers
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
+
+	//make sure the follower recv the append entry
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
+
+	return MUNIT_OK;
+}
+
+
+//when leader recv enough AE_RESULTS, then it will apply the entry,
+//then test leader return a commit to the client
+TEST(paper_test, leaderCommitEntry, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//the leader append an entry, and replicate to all the followers
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
+
+	//make sure the follower recv the append entry
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
+
+	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(k, i, 100);
+
+	//make sure the leader recv two AR_RESULT
+	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
+
+	//step leader apply the entry and update the commit index
+	CLUSTER_STEP_UNTIL_APPLIED(i, 2, 2000);
+
+	//make sure the entry set a commit state
+	munit_assert_int(f->cluster.commit_index, ==, 2);
+
+	return MUNIT_OK;
+}
+
+struct ae_cnt {
+	unsigned i;
+	unsigned n;
+};
+
+static bool server_send_n_append_entry(
+	struct raft_fixture *f,
+	void *arg)
+{
+	struct ae_cnt *a = arg;
+	unsigned n = raft_fixture_n_send(f, a->i, RAFT_IO_APPEND_ENTRIES);
+	return a->n == n;
+}
+
+static bool server_recv_n_append_entry(
+	struct raft_fixture *f,
+	void *arg)
+{
+	struct ae_cnt *a = arg;
+	unsigned n = raft_fixture_n_recv(f, a->i, RAFT_IO_APPEND_ENTRIES);
+	return a->n == n;
+}
+
+//after leader committed, the next heartbeat will notify follower to commit
+TEST(paper_test, followerCommitEntry, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//the leader append an entry, and replicate to all the followers
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
+
+	//make sure the follower recv the append entry
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
+
+	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(k, i, 100);
+
+	//make sure the leader recv two AR_RESULT
+	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
+
+	//step leader apply the entry and update the commit index
+	CLUSTER_STEP_UNTIL_APPLIED(i, 2, 2000);
+
+	//make sure the entry set a commit state
+	munit_assert_int(f->cluster.servers[i].raft.commit_index, ==, 2);
+	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 1);
+
+	//step until I send a heartbeat
+	unsigned send_cnt = CLUSTER_N_SEND(i, RAFT_IO_APPEND_ENTRIES);
+	unsigned recv_cnt = CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES);
+	struct ae_cnt arg = {i, send_cnt+1};
+	CLUSTER_STEP_UNTIL(server_send_n_append_entry, &arg,200);
+	arg.i = j;
+	arg.n = recv_cnt+1;
+	CLUSTER_STEP_UNTIL(server_recv_n_append_entry, &arg,200);
+
+	//once the follower recv the heartbeat with new commit index,
+	//then it immediately commit the same commit_index log
+	munit_assert_int(f->cluster.servers[j].raft.commit_index, ==, 2);
+	return MUNIT_OK;
+}
+
+//test once leader recv a majority, then it will start apply and set commit
+TEST(paper_test, leaderAcknownledgeCommit, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//the leader append an entry, and replicate to all the followers
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
+
+	//make sure the follower recv the append entry
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
+	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
+
+	//ONLY recv one result, but still be a majority
+	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
+
+	//make sure the leader recv two AR_RESULT
+	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,1);
+
+	//step leader apply the entry and update the commit index
+	CLUSTER_STEP_UNTIL_APPLIED(i, 2, 2000);
+
+	//make sure the entry set a commit state
+	munit_assert_int(f->cluster.commit_index, ==, 2);
+
+	return MUNIT_OK;
+}
+
+
+TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, followerAppendEntry, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+TEST(paper_test, leaderSyncFollowerLog, setUp, tearDown, 0, NULL)
+{
+	return MUNIT_OK;
+}
+
+struct ae_result_cnt {
+	unsigned i;
+	unsigned n;
+};
+
+static bool server_recv_n_append_entry_result(
+	struct raft_fixture *f,
+	void *arg)
+{
+	struct ae_result_cnt *a = arg;
+	unsigned n = raft_fixture_n_recv(f, a->i, RAFT_IO_APPEND_ENTRIES_RESULT);
+	return a->n == n;
+}
+
+//test the vote_request include the candidate's log and are sent to all of the other nodes
+TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	struct raft_apply *req1;
+	struct raft_apply *req2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//the leader append two entries, and replicate to all the followers
+	req1 = munit_malloc(sizeof(struct raft_apply));
+	req2 = munit_malloc(sizeof(struct raft_apply));
+	CLUSTER_APPLY_ADD_X(i, req1, 1, test_free_req);
+	CLUSTER_APPLY_ADD_X(i, req2, 2, test_free_req);
+
+	struct ae_result_cnt arg = {i, 4};
+	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
+	raft_term t1 = CLUSTER_TERM(i);
+
+	//saturate for let I start a new election
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 4000);
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+
+	//check candidate's RV detail
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster, i, j, CLUSTER_TERM(i), t1, 3, 200);
+
+	// all of the other nodes recv RV
+	CLUSTER_N_RECV(j,RAFT_IO_REQUEST_VOTE);
+	CLUSTER_N_RECV(k,RAFT_IO_REQUEST_VOTE);
+
+	return MUNIT_OK;
+}
+
+//test voter response the request_vote and check the expect granted
+TEST(paper_test, voter, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	struct raft_apply *req1;
+	struct raft_apply *req2;
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//the leader append two entries, and replicate to all the followers
+	req1 = munit_malloc(sizeof(struct raft_apply));
+	req2 = munit_malloc(sizeof(struct raft_apply));
+	CLUSTER_APPLY_ADD_X(i, req1, 1, test_free_req);
+	CLUSTER_APPLY_ADD_X(i, req2, 2, test_free_req);
+
+	struct ae_result_cnt arg = {i, 4};
+	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
+
+	//saturate for let J become candidate firstly
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_SATURATE_BOTHWAYS(j, k);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	CLUSTER_RAFT(i)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
+	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 3000;
+	CLUSTER_RAFT(i)->election_timeout = 1000;
+
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1000);
+	ASSERT_FOLLOWER(k);
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+	CLUSTER_DESATURATE_BOTHWAYS(j, k);
+
+	//check candidate's RV detail
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster, j, i, 3, 2, 3, 200);
+
+	//mock RV's last_log_term - 1, so the voter will reject
+	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, 3, 1, 3);
+	munit_assert_true(done);
+	ASSERT_TERM(i, 2);
+	ASSERT_FOLLOWER(i);
+	raft_fixture_step_until_rv_response(&f->cluster, i, j, 2, false, 200);
+	ASSERT_TERM(k, 2);
+	ASSERT_FOLLOWER(k);
+	raft_fixture_step_until_rv_response(&f->cluster, k, j, 2, true, 200);
+	return MUNIT_OK;
+}
+
+TEST(paper_test, leaderOnlyCommitLogFromCurrentTerm, setUp, tearDown, 0, NULL)
+{
 	return MUNIT_OK;
 }

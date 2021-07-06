@@ -82,6 +82,8 @@ libtest_la_SOURCES += \
   test/lib/cluster.c
 
 test_integration_core_SOURCES = \
+  src/configuration.c \
+  src/log.c \
   test/integration/main_core.c \
   test/integration/test_apply.c \
   test/integration/test_assign.c \

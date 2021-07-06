@@ -885,8 +885,8 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(k);
 
 	//the leader append two entries, and replicate to all the followers
-	req1 = munit_malloc(sizeof *req);
-	req2 = munit_malloc(sizeof *req);
+	req1 = munit_malloc(sizeof(struct raft_apply));
+	req2 = munit_malloc(sizeof(struct raft_apply));
 	CLUSTER_APPLY_ADD_X(i, req1, 1, test_free_req);
 	CLUSTER_APPLY_ADD_X(i, req2, 2, test_free_req);
 

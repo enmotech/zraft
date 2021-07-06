@@ -873,6 +873,7 @@ static void ioMethodRaftPermit(
 static void ioResetCkposi(struct raft_io *io)
 {
 	//mock
+	(void)io;
 }
 
 struct copy_chunk_posi  ioRepBoundary(struct raft_io *io)
@@ -1905,7 +1906,7 @@ static bool mockRV(struct raft_fixture *f,
 	struct io *io;
 	struct raft_message *message;
 	queue *head;
-	raft = raft_fixture_get(f, expect->src);
+	raft = raft_fixture_get(f, mock->src);
 	io = raft->io->impl;
 	QUEUE_FOREACH(head, &io->requests)
 	{
@@ -1921,16 +1922,15 @@ static bool mockRV(struct raft_fixture *f,
 			if (message->server_id != expect->dst+1)
 				continue;
 
-			struct raft_request_vote rv = message->request_vote;
-			rv.term = mock->candidate_term;
-			rv.last_log_index = mock->last_log_index;
-			rv.last_log_term = mock->last_log_term;
+			message->request_vote.term = mock->candidate_term;
+			message->request_vote.last_log_index = mock->last_log_index;
+			message->request_vote.last_log_term = mock->last_log_term;
 			return true;
 		}
 	}
 
 	return false;
-};
+}
 
 bool raft_fixture_step_rv_mock(struct raft_fixture *f,
 									unsigned i,

@@ -950,7 +950,9 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	raft_fixture_step_until_rv_for_send(
 		&f->cluster, i, j, CLUSTER_TERM(i), t1, 3, 200);
 
-	raft_fixture_step_rv_mock(&f->cluster, i, j, CLUSTER_TERM(i), t1, );
+	raft_fixture_step_rv_mock(&f->cluster, i, j, CLUSTER_TERM(i), t2-1, 3);
+
+	raft_fixture_step_until_rv_response(j, i, t2, false, 200);
 	return MUNIT_OK;
 }
 

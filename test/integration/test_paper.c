@@ -954,6 +954,12 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
+	raft_term t4 = CLUSTER_TERM(i);
+	raft_term t5 = CLUSTER_TERM(j);
+	raft_term t6 = CLUSTER_TERM(k);
+	munit_assert_llong(t4, ==, t5);
+	munit_assert_llong(t4, ==, t6);
+
 	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
 	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
 	CLUSTER_RAFT(i)->election_timeout = 1000;
@@ -970,10 +976,10 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 
 	//mock RV's last_log_term - 1, so the voter will reject
 	raft_fixture_step_rv_mock(&f->cluster, j, i, CLUSTER_TERM(j), t1-1, i2);
-	ASSERT_TERM(i, t1);
+	ASSERT_TERM(i, t4);
 	ASSERT_FOLLOWER(i);
 	raft_fixture_step_until_rv_response(&f->cluster, i, j, t1, false, 200);
-	ASSERT_TERM(k, t3);
+	ASSERT_TERM(k, t6);
 	ASSERT_FOLLOWER(k);
 	raft_fixture_step_until_rv_response(&f->cluster, k, j, t3, true, 200);
 	return MUNIT_OK;

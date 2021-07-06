@@ -944,12 +944,15 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	raft_index i3 = logLastIndex(&f->cluster.servers[k].raft.log);
 	munit_assert_llong(t1, ==, t2);
 	munit_assert_llong(t1, ==, t3);
-	//saturate for let I start a new election
+	munit_assert_llong(i1, ==, i2);
+	munit_assert_llong(i1, ==, i3);
+
+	//saturate for let J become candidate firstly
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 	CLUSTER_SATURATE_BOTHWAYS(j, k);
-
-	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1100);
+	raft_fixture_set_election_timeout_min(&f->cluster, j);
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
 	ASSERT_FOLLOWER(i);
 	ASSERT_FOLLOWER(k);
 	CLUSTER_DESATURATE_BOTHWAYS(i, j);
@@ -966,8 +969,6 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	raft_fixture_step_until_rv_response(&f->cluster, i, j, t1, false, 200);
 	ASSERT_FOLLOWER(k);
 	raft_fixture_step_until_rv_response(&f->cluster, k, j, t3, true, 200);
-	(void)i2;
-	(void)i3;
 	return MUNIT_OK;
 }
 

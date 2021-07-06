@@ -944,17 +944,14 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
-	raft_term t4 = CLUSTER_TERM(i);
-	raft_term t5 = CLUSTER_TERM(j);
-	raft_term t6 = CLUSTER_TERM(k);
-	munit_assert_llong(t4, ==, t5);
-	munit_assert_llong(t4, ==, t6);
+
 	CLUSTER_RAFT(i)->election_timer_start = CLUSTER_TIME;
 	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME;
 	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME;
 	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
 	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 3000;
 	CLUSTER_RAFT(i)->election_timeout = 1000;
+
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1000);
 	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1000);
 	ASSERT_FOLLOWER(k);
@@ -967,14 +964,14 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 		&f->cluster, j, i, CLUSTER_TERM(j), t2, i2, 200);
 
 	//mock RV's last_log_term - 1, so the voter will reject
-	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, CLUSTER_TERM(j), t1-1, i2);
+	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, 3, 1, 3);
 	munit_assert_true(done);
-	ASSERT_TERM(i, t4);
+	ASSERT_TERM(i, 2);
 	ASSERT_FOLLOWER(i);
-	raft_fixture_step_until_rv_response(&f->cluster, i, j, t1, false, 200);
-	ASSERT_TERM(k, t6);
+	raft_fixture_step_until_rv_response(&f->cluster, i, j, 2, false, 200);
+	ASSERT_TERM(k, 2);
 	ASSERT_FOLLOWER(k);
-	raft_fixture_step_until_rv_response(&f->cluster, k, j, t3, true, 200);
+	raft_fixture_step_until_rv_response(&f->cluster, k, j, 2, true, 200);
 	return MUNIT_OK;
 }
 

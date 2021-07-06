@@ -968,10 +968,12 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	raft_fixture_step_until_rv_for_send(
 		&f->cluster, j, i, CLUSTER_TERM(j), t2, i2, 200);
 
-	//set rv last_log_term - 1, so the voter will reject
+	//mock RV's last_log_term - 1, so the voter will reject
 	raft_fixture_step_rv_mock(&f->cluster, j, i, CLUSTER_TERM(j), t1-1, i2);
+	ASSERT_TERM(i, t1);
 	ASSERT_FOLLOWER(i);
 	raft_fixture_step_until_rv_response(&f->cluster, i, j, t1, false, 200);
+	ASSERT_TERM(k, t3);
 	ASSERT_FOLLOWER(k);
 	raft_fixture_step_until_rv_response(&f->cluster, k, j, t3, true, 200);
 	return MUNIT_OK;

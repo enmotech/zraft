@@ -943,7 +943,9 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
 	raft_term t1 = logLastTerm(&f->cluster.servers[i].raft.log);
 	raft_term t2 = logLastTerm(&f->cluster.servers[j].raft.log);
+	raft_term t3 = logLastTerm(&f->cluster.servers[k].raft.log);
 	munit_assert_llong(t1, ==, t2);
+	munit_assert_llong(t1, ==, t3);
 	//saturate for let I start a new election
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
@@ -956,10 +958,11 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	raft_fixture_step_until_rv_for_send(
 		&f->cluster, i, j, CLUSTER_TERM(i), t1, 3, 200);
 
+	//set rv last_log_term - 1, so the voter will reject
 	raft_fixture_step_rv_mock(&f->cluster, i, j, CLUSTER_TERM(i), t2-1, 3);
 
 	raft_fixture_step_until_rv_response(&f->cluster, j, i, t2, false, 200);
-	raft_fixture_step_until_rv_response(&f->cluster, k, i, t2, true, 200);
+	raft_fixture_step_until_rv_response(&f->cluster, k, i, t3, true, 200);
 	return MUNIT_OK;
 }
 

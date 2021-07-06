@@ -964,18 +964,19 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
 	CLUSTER_RAFT(i)->election_timeout = 1000;
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1101);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1);
 	ASSERT_FOLLOWER(k);
 	CLUSTER_DESATURATE_BOTHWAYS(i, j);
 	CLUSTER_DESATURATE_BOTHWAYS(i, k);
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
 	//check candidate's RV detail
-	raft_fixture_step_until_rv_for_send(
-		&f->cluster, j, i, CLUSTER_TERM(j), t2, i2, 200);
+	//raft_fixture_step_until_rv_for_send(
+	//	&f->cluster, j, i, CLUSTER_TERM(j), t2, i2, 200);
 
 	//mock RV's last_log_term - 1, so the voter will reject
-	raft_fixture_step_rv_mock(&f->cluster, j, i, CLUSTER_TERM(j), t1-1, i2);
+	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, CLUSTER_TERM(j), t1-1, i2);
+	munit_assert_true(done);
 	ASSERT_TERM(i, t4);
 	ASSERT_FOLLOWER(i);
 	raft_fixture_step_until_rv_response(&f->cluster, i, j, t1, false, 200);

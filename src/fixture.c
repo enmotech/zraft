@@ -1919,7 +1919,7 @@ static bool mockRV(struct raft_fixture *f,
 				continue;
 			if (message->type != RAFT_IO_REQUEST_VOTE)
 				continue;
-			if (message->server_id != expect->dst+1)
+			if (message->server_id != mock->dst+1)
 				continue;
 
 			message->request_vote.term = mock->candidate_term;
@@ -1937,7 +1937,7 @@ bool raft_fixture_step_rv_mock(struct raft_fixture *f,
 									unsigned j,
 									raft_term candidate_term,
 									raft_term last_log_term,
-									raft_index last_log_index);
+									raft_index last_log_index)
 {
 	struct step_send_rv mock = {i, j, candidate_term, last_log_term, last_log_index};
 	return mockRV(f, &mock);

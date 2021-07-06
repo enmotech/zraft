@@ -922,10 +922,6 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	struct raft_apply *req1;
 	struct raft_apply *req2;
 
-	//set server J and K max randomized election_timeout
-	raft_fixture_set_randomized_election_timeout(&f->cluster, i, 1000);
-	raft_fixture_set_randomized_election_timeout(&f->cluster, j, 2000);
-	raft_fixture_set_randomized_election_timeout(&f->cluster, k, 2000);
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
 	ASSERT_LEADER(i);
@@ -951,21 +947,25 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	//saturate for let I start a new election
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_SATURATE_BOTHWAYS(j, k);
 
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 500);
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1100);
+	ASSERT_FOLLOWER(i);
+	ASSERT_FOLLOWER(k);
 	CLUSTER_DESATURATE_BOTHWAYS(i, j);
 	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
 	//check candidate's RV detail
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, i, j, CLUSTER_TERM(i), t1, i1, 200);
+		&f->cluster, j, i, CLUSTER_TERM(j), t2, i2, 200);
 
 	//set rv last_log_term - 1, so the voter will reject
-	raft_fixture_step_rv_mock(&f->cluster, i, j, CLUSTER_TERM(i), t2-1, i1);
-	ASSERT_FOLLOWER(j);
-	raft_fixture_step_until_rv_response(&f->cluster, j, i, t2, false, 200);
+	raft_fixture_step_rv_mock(&f->cluster, j, i, CLUSTER_TERM(j), t1-1, i2);
+	ASSERT_FOLLOWER(i);
+	raft_fixture_step_until_rv_response(&f->cluster, i, j, t1, false, 200);
 	ASSERT_FOLLOWER(k);
-	raft_fixture_step_until_rv_response(&f->cluster, k, i, t3, true, 200);
+	raft_fixture_step_until_rv_response(&f->cluster, k, j, t3, true, 200);
 	(void)i2;
 	(void)i3;
 	return MUNIT_OK;

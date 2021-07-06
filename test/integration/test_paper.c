@@ -955,6 +955,7 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
 	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
+	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
 	CLUSTER_RAFT(i)->election_timeout = 1000;
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
 	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1101);

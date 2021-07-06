@@ -967,6 +967,8 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	raft_fixture_step_until_rv_response(&f->cluster, j, i, t2, false, 200);
 	ASSERT_FOLLOWER(k);
 	raft_fixture_step_until_rv_response(&f->cluster, k, i, t3, true, 200);
+	(void)i2;
+	(void)i3;
 	return MUNIT_OK;
 }
 

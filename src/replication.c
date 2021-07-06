@@ -90,12 +90,13 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 {
 	struct sendAppendEntries *req = send->data;
 	struct raft *r = req->raft;
-	unsigned i = configurationIndexOf(&r->configuration, req->server_id);
+	unsigned i;
 
 	if (r->state == RAFT_UNAVAILABLE) {
 		raft_free(req);
 		return;
 	}
+	i = configurationIndexOf(&r->configuration, req->server_id);
 
 	if (r->state == RAFT_LEADER && i < r->configuration.n) {
 		if (status != 0) {
@@ -2495,7 +2496,7 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 
 	ab->expect_num = (int)(to_commit_index - r->last_applying);
 	ab->applied_num = 0;
-
+	/* optimized barrier, which takes effect without any log */
 	struct raft_barrier *barrier = getFirstOptBarrier(r);
 
 	for (index = r->last_applying + 1; index <= to_commit_index; index++) {

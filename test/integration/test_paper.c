@@ -898,9 +898,19 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 3000);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_CANDIDATE, 4000);
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+
+	//check candidate's RV detail
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, i, j, CLUSTER_TERM(i), t1, 2, 200);
+		&f->cluster, i, j, CLUSTER_TERM(i), t1, 3, 200);
+
+
+	// all of the other nodes recv RV
+	CLUSTER_N_RECV(j,RAFT_IO_REQUEST_VOTE);
+	CLUSTER_N_RECV(k,RAFT_IO_REQUEST_VOTE);
+
 	return MUNIT_OK;
 }
 

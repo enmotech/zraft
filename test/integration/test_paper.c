@@ -959,11 +959,13 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	raft_term t6 = CLUSTER_TERM(k);
 	munit_assert_llong(t4, ==, t5);
 	munit_assert_llong(t4, ==, t6);
-
+	CLUSTER_RAFT(i)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME;
 	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
 	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
 	CLUSTER_RAFT(i)->election_timeout = 1000;
-	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1000);
 	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1);
 	ASSERT_FOLLOWER(k);
 	CLUSTER_DESATURATE_BOTHWAYS(i, j);

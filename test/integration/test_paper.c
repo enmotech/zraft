@@ -860,19 +860,10 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	//the leader append an entry, and replicate to all the followers
 	struct raft_apply *req = munit_malloc(sizeof *req);
 	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
-	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
-	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
 
-	//make sure J recv the append entry
-	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
-	munit_assert_int(CLUSTER_N_RECV(k, RAFT_IO_APPEND_ENTRIES), == ,1);
-
-	//J reply this AE
-	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
-	CLUSTER_STEP_UNTIL_DELIVERED(k, i, 100);
-
-	//make sure I recv one RV_RESULT
-	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
+	//step until I recv all the AE_RESULT
+	struct ae_result_cnt arg = {i, 2};
+	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
 
 	//saturate all servers
 	CLUSTER_SATURATE_BOTHWAYS(i, j);

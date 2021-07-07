@@ -124,14 +124,13 @@ int recvAppendEntries(struct raft *r,
     r->election_timer_start = r->io->time(r->io);
 
 	if (args->pi.replicating) {
-		const struct raft_server *server = configurationGet(&r->configuration, r->id);
+		struct raft_server *server = (struct raft_server *)configurationGet(&r->configuration, r->id);
 		if (!r->pgrep_reported && server && r->role_change_cb) {
-			struct raft_server server_cp = *server;
-			server_cp.pre_role = RAFT_STANDBY;
-			r->role_change_cb(r, &server_cp);
+			server->role = RAFT_STANDBY;
+			r->role_change_cb(r, server);
 			r->pgrep_reported = true;
-			ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] pre_role[%d].",
-				   rkey(r), r->state, __func__, server_cp.pre_role);
+			ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+				   rkey(r), r->state, __func__, server->role);
 		}
 	} else {
 		if (rv == 0 && r->state_change_cb)

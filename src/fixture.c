@@ -1866,7 +1866,9 @@ static bool hasAEForSend(struct raft_fixture *f, void *arg)
 				continue;
 			if (message->server_id != expect->dst+1)
 				continue;
-
+			if (message->append_entries.n_entries == 0)
+				continue;
+	
 			struct raft_append_entries ae = message->append_entries;
 			assert(ae.term == expect->ae->term);
 			assert(ae.prev_log_index == expect->ae->prev_log_index);
@@ -1887,6 +1889,57 @@ bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
 {
 	struct step_send_ae target = {i, ae};
 	return raft_fixture_step_until(f, hasAEForSend, &target, max_msecs);;
+}
+
+struct step_ae_res {
+	unsigned src;
+	unsigned dst;
+	struct raft_append_entries_result *res;
+};
+
+static bool hasAEResponse(struct raft_fixture *f, void *arg)
+{
+	
+	struct step_ae_res *expect = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, expect->src);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_APPEND_ENTRIES_RESULT)
+				continue;
+			if (message->server_id != expect->dst+1)
+				continue;
+
+			struct raft_append_entries_result res = message->append_entries_result;
+			assert(res.last_log_index == expect->res->last_log_index);
+
+			return true;
+		}
+	}
+
+
+	return false;
+}
+
+bool raft_fixture_step_until_ae_response(struct raft_fixture *f,
+										 unsigned i,
+										 unsigned j,
+										 struct raft_append_entries_result *res,
+										 unsigned max_msecs)
+{
+	struct step_ae_res target = {i, j ,res};
+	return raft_fixture_step_until(f, hasAEResponse, &target, max_msecs);
 }
 
 struct step_rv_res {

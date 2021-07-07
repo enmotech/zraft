@@ -887,10 +887,13 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 		.prev_log_term = 1,
 		.src_server = i
 	};
+//	int flag=1;
+//	while(flag)
+//		sleep(2);
 	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
 	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
 	
-	struct ae_result_cnt arg = {i, 2};
+	struct ae_result_cnt arg = {i, 4};
 	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
 
 	//saturate all servers

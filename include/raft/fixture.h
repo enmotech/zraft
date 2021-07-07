@@ -324,6 +324,16 @@ RAFT_API bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
 										 struct raft_append_entries *ae,
 										 unsigned max_msecs);
 
+
+/**
+ * Step until there's a AE response form I to J
+ */
+RAFT_API bool raft_fixture_step_until_ae_response(struct raft_fixture *f,
+										 unsigned i,
+										 unsigned j,
+										 struct raft_append_entries_result *res,
+										 unsigned max_msecs);
+
 /**
  * Step for mock a quest vote to I
  */

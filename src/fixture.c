@@ -1844,7 +1844,7 @@ struct step_send_ae {
 	struct raft_append_entries *ae;
 };
 
-static hasAEForSend(struct raft_fixture *f, void *arg)
+static bool hasAEForSend(struct raft_fixture *f, void *arg)
 {
 	struct step_send_ae *expect = arg;
 	struct raft *raft;
@@ -1867,10 +1867,10 @@ static hasAEForSend(struct raft_fixture *f, void *arg)
 			if (message->server_id != expect->dst+1)
 				continue;
 
-			struct raft_append_entries ae = message->request_vote;
+			struct raft_append_entries ae = message->append_entries;
 			assert(ae.term == expect->ae->term);
-			assert(ae.last_log_index == expect->ae->last_log_index);
-			assert(ae.last_log_term == expect->ae->last_log_term);
+			assert(ae.prev_log_index == expect->ae->prev_log_index);
+			assert(ae.prev_log_term == expect->ae->prev_log_term);
 			assert(ae.n_entries == expect->ae->n_entries);
 
 			return true;

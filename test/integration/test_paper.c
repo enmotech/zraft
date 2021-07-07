@@ -481,7 +481,7 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 
 	CLUSTER_STEP_UNTIL_HAS_LEADER(3000);
 	unsigned  l = CLUSTER_LEADER;
-	unsigned  m, n;
+	unsigned  m = UINT32_MAX, n = UINT32_MAX;
 	switch(l) {
 		case 0:
 			m = 1;
@@ -556,7 +556,7 @@ TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 
 	//find out the leader and followers
 	unsigned  l = CLUSTER_LEADER;
-	unsigned  m, n;
+	unsigned  m = UINT32_MAX, n = UINT32_MAX;
 	switch(l) {
 		case 0:
 			m = 1;
@@ -881,7 +881,7 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 
 	//step until I send this AE
 	struct raft_append_entries ae = {
-		.term =  CLUSTER_TERM(),
+		.term =  CLUSTER_TERM(i),
 		.n_entries = 1,
 		.prev_log_index = 1,
 		.prev_log_term = 1,

@@ -963,15 +963,15 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	struct raft_request_vote rv = {
 		.term = CLUSTER_TERM(i),
 		.last_log_term = t1,
-		.last_log_index = 2,
+		.last_log_index = 3,
 		.candidate_id = i
 	};
+
+	// send RV to all of the other nodes
 	raft_fixture_step_until_rv_for_send(
 		&f->cluster, j, &rv, 200);
-
-	// all of the other nodes recv RV
-	CLUSTER_N_RECV(j,RAFT_IO_REQUEST_VOTE);
-	CLUSTER_N_RECV(k,RAFT_IO_REQUEST_VOTE);
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster, k, &rv, 200);
 
 	return MUNIT_OK;
 }

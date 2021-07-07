@@ -837,6 +837,20 @@ TEST(paper_test, leaderAcknownledgeCommit, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+struct ae_result_cnt {
+	unsigned i;
+	unsigned n;
+};
+
+static bool server_recv_n_append_entry_result(
+	struct raft_fixture *f,
+	void *arg)
+{
+	struct ae_result_cnt *a = arg;
+	unsigned n = raft_fixture_n_recv(f, a->i, RAFT_IO_APPEND_ENTRIES_RESULT);
+	return a->n == n;
+}
+
 // tests that when leader commits a log entry,
 // it also commits all preceding entries in the leader’s log, including
 // entries created by previous leaders.
@@ -906,20 +920,6 @@ TEST(paper_test, followerAppendEntry, setUp, tearDown, 0, NULL)
 TEST(paper_test, leaderSyncFollowerLog, setUp, tearDown, 0, NULL)
 {
 	return MUNIT_OK;
-}
-
-struct ae_result_cnt {
-	unsigned i;
-	unsigned n;
-};
-
-static bool server_recv_n_append_entry_result(
-	struct raft_fixture *f,
-	void *arg)
-{
-	struct ae_result_cnt *a = arg;
-	unsigned n = raft_fixture_n_recv(f, a->i, RAFT_IO_APPEND_ENTRIES_RESULT);
-	return a->n == n;
 }
 
 //test the vote_request include the candidate's log and are sent to all of the other nodes

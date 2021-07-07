@@ -865,12 +865,14 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 
 	//make sure J recv the append entry
 	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
+	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES), == ,1);
 
 	//J reply this AE
 	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(k, i, 100);
 
 	//make sure I recv one RV_RESULT
-	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,1);
+	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,2);
 
 	//saturate all servers
 	CLUSTER_SATURATE_BOTHWAYS(i, j);

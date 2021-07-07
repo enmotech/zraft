@@ -1914,7 +1914,7 @@ static bool mockRV(struct raft_fixture *f,
 	struct io *io;
 	struct raft_message *message;
 	queue *head;
-	raft = raft_fixture_get(f, mock->src);
+	raft = raft_fixture_get(f, mock->rv->candidate_id);
 	io = raft->io->impl;
 	QUEUE_FOREACH(head, &io->requests)
 	{

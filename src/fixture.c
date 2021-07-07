@@ -1802,7 +1802,7 @@ static bool hasRVForSend(struct raft_fixture *f,
 	struct io *io;
 	struct raft_message *message;
 	queue *head;
-	raft = raft_fixture_get(f, expect->rv->candidate_id);
+	raft = raft_fixture_get(f, (unsigned)expect->rv->candidate_id);
 	io = raft->io->impl;
 	QUEUE_FOREACH(head, &io->requests)
 	{
@@ -1850,6 +1850,8 @@ bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
 										unsigned max_msecs)
 {
 	struct step_send_ae target = {i, ae};
+	(void)target;
+	(void)max_msecs;
 	return false;
 }
 

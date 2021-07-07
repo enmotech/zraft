@@ -304,7 +304,7 @@ RAFT_API bool raft_fixture_step_until_delivered(struct raft_fixture *f,
  */
 RAFT_API bool raft_fixture_step_until_rv_for_send(struct raft_fixture *f,
 												 unsigned i,
-												 struct raft_request_vote *rv
+												 struct raft_request_vote *rv,
 												 unsigned max_msecs);
 
 /**

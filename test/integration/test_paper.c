@@ -896,8 +896,14 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	munit_assert_llong(before, ==, after);
 
 	//check candidate's RV detail
+	struct raft_request_vote rv = {
+		.term = 3,
+		.last_log_term = 1,
+		.last_log_index = 2,
+		.candidate_id = j
+	};
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, j, k, 3, 1, 2, 200);
+		&f->cluster, k, &rv, 200);
 
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 2000);
 	CLUSTER_STEP_UNTIL_APPLIED(j, 2, 2000);
@@ -954,8 +960,14 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(i, k);
 
 	//check candidate's RV detail
+	struct raft_request_vote rv = {
+		.term = CLUSTER_TERM(i),
+		.last_log_term = t1,
+		.last_log_index = 2,
+		.candidate_id = i
+	};
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, i, j, CLUSTER_TERM(i), t1, 3, 200);
+		&f->cluster, j, CLUSTER_TERM(i), t1, 3, 200);
 
 	// all of the other nodes recv RV
 	CLUSTER_N_RECV(j,RAFT_IO_REQUEST_VOTE);
@@ -1010,18 +1022,29 @@ TEST(paper_test, voterRejectLowerLastLogTerm, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
 	//check candidate's RV detail
+	struct raft_request_vote rv = {
+		.term = 4,
+		.last_log_term = 2,
+		.last_log_index = 3,
+		.candidate_id = j
+	};
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, j, i, 4, 2, 3, 200);
+		&f->cluster, i, &rv, 200);
 
 	//mock a lower last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
-	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, 4, t1-1, 3);
+	rv.last_log_index = t1-1;
+	bool done = raft_fixture_step_rv_mock(&f->cluster, i, &rv);
 	munit_assert_true(done);
 
 	ASSERT_TERM(i, 2);
 	ASSERT_FOLLOWER(i);
 	//J won't grant this, cause I send a lower last_log_index request_vote
-	raft_fixture_step_until_rv_response(&f->cluster, i, j, 4, false, 200);
+	struct raft_request_vote_result res = {
+		.term = 4,
+		.vote_granted = false
+	};
+	raft_fixture_step_until_rv_response(&f->cluster, i, j, &res, 200);
 
 	return MUNIT_OK;
 }
@@ -1071,18 +1094,29 @@ TEST(paper_test, voterGrantEqualLastLogTerm, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
 	//check candidate's RV detail
+	struct raft_request_vote rv = {
+		.term = 4,
+		.last_log_term = 2,
+		.last_log_index = 3,
+		.candidate_id = j
+	};
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, j, i, 4, 2, 3, 200);
+		&f->cluster, i, &rv, 200);
 
 	//mock a equal last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
-	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, 4, t1, 3);
+	rv.last_log_index = t1;
+	bool done = raft_fixture_step_rv_mock(&f->cluster, i, &rv);
 	munit_assert_true(done);
 
 	ASSERT_TERM(i, 2);
 	ASSERT_FOLLOWER(i);
 	//J will grant this, cause I send a equal last_log_index request_vote
-	raft_fixture_step_until_rv_response(&f->cluster, i, j, 4, true, 200);
+	struct raft_request_vote_result res = {
+		.term = 4,
+		.vote_granted = true
+	};
+	raft_fixture_step_until_rv_response(&f->cluster, i, j, &res, 200);
 
 	return MUNIT_OK;
 }
@@ -1132,18 +1166,29 @@ TEST(paper_test, voterGrantHigherLastLogTerm, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
 	//check candidate's RV detail
+	struct raft_request_vote rv = {
+		.term = 4,
+		.last_log_term = 2,
+		.last_log_index = 3,
+		.candidate_id = j
+	};
 	raft_fixture_step_until_rv_for_send(
 		&f->cluster, j, i, 4, 2, 3, 200);
 
 	//mock a higher last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
-	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, 4, t1+1, 3);
+	rv.last_log_index = t1 + 1;
+	bool done = raft_fixture_step_rv_mock(&f->cluster, i, &rv);
 	munit_assert_true(done);
 
 	ASSERT_TERM(i, 2);
 	ASSERT_FOLLOWER(i);
 	//J will grant this, cause I send a higher last_log_index request_vote
-	raft_fixture_step_until_rv_response(&f->cluster, i, j, 4, true, 200);
+	struct raft_request_vote_result res = {
+		.term = 4,
+		.vote_granted = true
+	};
+	raft_fixture_step_until_rv_response(&f->cluster, i, j, &res, 200);
 
 	return MUNIT_OK;
 }

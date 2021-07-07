@@ -300,14 +300,11 @@ RAFT_API bool raft_fixture_step_until_delivered(struct raft_fixture *f,
                                                 unsigned max_msecs);
 
 /**
- * Step the cluster until the server i have a request_vote for send to j
+ * Step the until cluster got a request_vote for send to i
  */
 RAFT_API bool raft_fixture_step_until_rv_for_send(struct raft_fixture *f,
 												 unsigned i,
-												 unsigned j,
-												 raft_term candidate_term,
-												 raft_term last_log_term,
-												 raft_index last_log_index,
+												 struct raft_request_vote *rv
 												 unsigned max_msecs);
 
 /**
@@ -316,19 +313,15 @@ RAFT_API bool raft_fixture_step_until_rv_for_send(struct raft_fixture *f,
 RAFT_API bool raft_fixture_step_until_rv_response(struct raft_fixture *f,
 										 unsigned i,
 										 unsigned j,
-										 raft_term term,
-										 bool granted,
+										 struct raft_request_vote_result *res,
 										 unsigned max_msecs);
 
 /**
- * Step for mock a quest vote
+ * Step for mock a quest vote to I
  */
 RAFT_API bool raft_fixture_step_rv_mock(struct raft_fixture *f,
-									 unsigned i,
-									 unsigned j,
-									 raft_term candidate_term,
-									 raft_term last_log_term,
-									 raft_index last_log_index);
+									 	unsigned i,
+										struct raft_request_vote *rv);
 
 /**
  * Set a function to be called after every time a fixture event occurs as

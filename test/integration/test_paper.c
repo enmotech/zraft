@@ -878,21 +878,19 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(j, k);
 
 	//set election_timeout for elect J be the new leader
-	CLUSTER_RAFT(i)->election_timer_start = CLUSTER_TIME;
-	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME;
-	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME - 1000;
 	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
-	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 3000;
-	CLUSTER_RAFT(i)->election_timeout = 1000;
+	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
 
-	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1001);
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 100);
 	ASSERT_FOLLOWER(k);
-	CLUSTER_DESATURATE_BOTHWAYS(i, j);
-	CLUSTER_DESATURATE_BOTHWAYS(i, k);
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 	raft_index after = CLUSTER_RAFT(j)->commit_index;
 	munit_assert_llong(before, ==, after);
+
+	//check candidate's RV detail
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster, j, k, 3, 1, 2, 200);
 
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 2000);
 	CLUSTER_STEP_UNTIL_APPLIED(j, 2, 2000);

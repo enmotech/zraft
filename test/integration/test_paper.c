@@ -837,14 +837,44 @@ TEST(paper_test, leaderAcknownledgeCommit, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-
+// tests that when leader commits a log entry,
+// it also commits all preceding entries in the leader’s log, including
+// entries created by previous leaders.
+// Also, it applies the entry to its local state machine (in log order).
+// Reference: section 5.3
 TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 {
+	//I be the first leader, then add two entries like a,b...
+	//Once J commit a, saturate all servers, let J be a new leader
+	//Test that J will push the commit_index to b
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	raft_index before = CLUSTER_RAFT(j)->commit_index;
+
+	//the leader append an entry, and replicate to all the followers
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, j, 100);
+	CLUSTER_STEP_UNTIL_DELIVERED(i, k, 100);
+
+	//make sure the follower recv the append entry
+	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
+
+	raft_index after = CLUSTER_RAFT(j)->commit_index;
+	munit_assert_llong(before, ==, after);
+
 	return MUNIT_OK;
 }
 
 TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
 {
+	struct raft_entry entry;
 	return MUNIT_OK;
 }
 

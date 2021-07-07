@@ -888,8 +888,8 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	raft_index after = CLUSTER_RAFT(j)->commit_index;
 	munit_assert_llong(before, ==, after);
 
-	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 1000);
-	CLUSTER_STEP_UNTIL_APPLIED(j, 2);
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_APPLIED(j, 2, 2000);
 	after = CLUSTER_RAFT(j)->commit_index;
 	munit_assert_llong(before, ==, after);
 
@@ -898,7 +898,6 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 
 TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
 {
-	struct raft_entry entry;
 	return MUNIT_OK;
 }
 

@@ -967,7 +967,7 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 		.candidate_id = i
 	};
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, j, CLUSTER_TERM(i), t1, 3, 200);
+		&f->cluster, j, &rv, 200);
 
 	// all of the other nodes recv RV
 	CLUSTER_N_RECV(j,RAFT_IO_REQUEST_VOTE);
@@ -1173,7 +1173,7 @@ TEST(paper_test, voterGrantHigherLastLogTerm, setUp, tearDown, 0, NULL)
 		.candidate_id = j
 	};
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, j, i, 4, 2, 3, 200);
+		&f->cluster,i, &rv, 200);
 
 	//mock a higher last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));

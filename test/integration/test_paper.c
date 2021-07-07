@@ -1033,7 +1033,7 @@ TEST(paper_test, voterRejectLowerLastLogTerm, setUp, tearDown, 0, NULL)
 
 	//mock a lower last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
-	rv.last_log_index = t1-1;
+	rv.last_log_term = t1-1;
 	bool done = raft_fixture_step_rv_mock(&f->cluster, i, &rv);
 	munit_assert_true(done);
 
@@ -1105,7 +1105,7 @@ TEST(paper_test, voterGrantEqualLastLogTerm, setUp, tearDown, 0, NULL)
 
 	//mock a equal last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
-	rv.last_log_index = t1;
+	rv.last_log_term = t1;
 	bool done = raft_fixture_step_rv_mock(&f->cluster, i, &rv);
 	munit_assert_true(done);
 
@@ -1177,7 +1177,7 @@ TEST(paper_test, voterGrantHigherLastLogTerm, setUp, tearDown, 0, NULL)
 
 	//mock a higher last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
-	rv.last_log_index = t1 + 1;
+	rv.last_log_term = t1 + 1;
 	bool done = raft_fixture_step_rv_mock(&f->cluster, i, &rv);
 	munit_assert_true(done);
 

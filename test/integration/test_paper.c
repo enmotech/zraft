@@ -481,7 +481,7 @@ TEST(paper_test, followerElectionTimeoutRandomized, setUp, tearDown, 0, NULL)
 
 	CLUSTER_STEP_UNTIL_HAS_LEADER(3000);
 	unsigned  l = CLUSTER_LEADER;
-	unsigned  m, n;
+	unsigned  m = UINT32_MAX, n = UINT32_MAX;
 	switch(l) {
 		case 0:
 			m = 1;
@@ -556,7 +556,7 @@ TEST(paper_test, followerElectionTimeoutNonconflict, setUp, tearDown, 0, NULL)
 
 	//find out the leader and followers
 	unsigned  l = CLUSTER_LEADER;
-	unsigned  m, n;
+	unsigned  m = UINT32_MAX, n = UINT32_MAX;
 	switch(l) {
 		case 0:
 			m = 1;
@@ -825,7 +825,7 @@ TEST(paper_test, leaderAcknownledgeCommit, setUp, tearDown, 0, NULL)
 	//ONLY recv one result, but still be a majority
 	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
 
-	//make sure the leader recv two AR_RESULT
+	//make sure the leader recv two RV_RESULT
 	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,1);
 
 	//step leader apply the entry and update the commit index
@@ -837,9 +837,93 @@ TEST(paper_test, leaderAcknownledgeCommit, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+struct ae_result_cnt {
+	unsigned i;
+	unsigned n;
+};
 
+static bool server_recv_n_append_entry_result(
+	struct raft_fixture *f,
+	void *arg)
+{
+	struct ae_result_cnt *a = arg;
+	unsigned n = raft_fixture_n_recv(f, a->i, RAFT_IO_APPEND_ENTRIES_RESULT);
+	return a->n == n;
+}
+
+// tests that when leader commits a log entry,
+// it also commits all preceding entries in the leader’s log, including
+// entries created by previous leaders.
+// Also, it applies the entry to its local state machine (in log order).
+// Reference: section 5.3
 TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 {
+	//I be the first leader, then add two entries like a,b...
+	//Once J commit a, saturate all servers, let J be a new leader
+	//Test that J will push the commit_index to b
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	raft_index before = CLUSTER_RAFT(j)->commit_index;
+
+	//the leader append an entry, and replicate to all the followers
+	struct raft_entry et = {
+		.term = CLUSTER_TERM(i),
+		.type = RAFT_COMMAND
+	} ;
+	FsmEncodeSetX(123, &et.buf);
+	CLUSTER_ADD_ENTRY(i, &et);
+
+	//step until I send this AE
+	struct raft_append_entries ae = {
+		.term =  CLUSTER_TERM(i),
+		.n_entries = 1,
+		.prev_log_index = 1,
+		.prev_log_term = 1,
+		.src_server = i
+	};
+	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
+	
+	struct ae_result_cnt arg = {i, 2};
+	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
+
+	//saturate all servers
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_SATURATE_BOTHWAYS(j, k);
+
+	//set election_timeout for elect J be the new leader
+	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME - 1000;
+	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
+	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
+
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 100);
+	ASSERT_FOLLOWER(k);
+	CLUSTER_DESATURATE_BOTHWAYS(j, k);
+	raft_index after = CLUSTER_RAFT(j)->commit_index;
+	munit_assert_llong(before, ==, after);
+
+	//check candidate's RV detail
+	struct raft_request_vote rv = {
+		.term = 3,
+		.last_log_term = 1,
+		.last_log_index = 2,
+		.candidate_id = j
+	};
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster, k, &rv, 200);
+
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_APPLIED(j, 2, 2000);
+	after = CLUSTER_RAFT(j)->commit_index;
+	munit_assert_llong(before, ==, after);
+
 	return MUNIT_OK;
 }
 
@@ -856,20 +940,6 @@ TEST(paper_test, followerAppendEntry, setUp, tearDown, 0, NULL)
 TEST(paper_test, leaderSyncFollowerLog, setUp, tearDown, 0, NULL)
 {
 	return MUNIT_OK;
-}
-
-struct ae_result_cnt {
-	unsigned i;
-	unsigned n;
-};
-
-static bool server_recv_n_append_entry_result(
-	struct raft_fixture *f,
-	void *arg)
-{
-	struct ae_result_cnt *a = arg;
-	unsigned n = raft_fixture_n_recv(f, a->i, RAFT_IO_APPEND_ENTRIES_RESULT);
-	return a->n == n;
 }
 
 //test the vote_request include the candidate's log and are sent to all of the other nodes
@@ -904,18 +974,24 @@ TEST(paper_test, requestVote, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(i, k);
 
 	//check candidate's RV detail
-	raft_fixture_step_until_rv_for_send(
-		&f->cluster, i, j, CLUSTER_TERM(i), t1, 3, 200);
+	struct raft_request_vote rv = {
+		.term = CLUSTER_TERM(i),
+		.last_log_term = t1,
+		.last_log_index = 3,
+		.candidate_id = i
+	};
 
-	// all of the other nodes recv RV
-	CLUSTER_N_RECV(j,RAFT_IO_REQUEST_VOTE);
-	CLUSTER_N_RECV(k,RAFT_IO_REQUEST_VOTE);
+	// send RV to all of the other nodes
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster, j, &rv, 200);
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster, k, &rv, 200);
 
 	return MUNIT_OK;
 }
 
 //test voter response the request_vote and check the expect granted
-TEST(paper_test, voter, setUp, tearDown, 0, NULL)
+TEST(paper_test, voterRejectLowerLastLogTerm, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
 	unsigned i=0, j=1, k=2;
@@ -952,26 +1028,182 @@ TEST(paper_test, voter, setUp, tearDown, 0, NULL)
 	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 3000;
 	CLUSTER_RAFT(i)->election_timeout = 1000;
 
-	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1001);
 	ASSERT_FOLLOWER(k);
 	CLUSTER_DESATURATE_BOTHWAYS(i, j);
 	CLUSTER_DESATURATE_BOTHWAYS(i, k);
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
 	//check candidate's RV detail
+	struct raft_request_vote rv = {
+		.term = 4,
+		.last_log_term = 2,
+		.last_log_index = 3,
+		.candidate_id = j
+	};
 	raft_fixture_step_until_rv_for_send(
-		&f->cluster, j, i, 3, 2, 3, 200);
+		&f->cluster, i, &rv, 200);
 
-	//mock RV's last_log_term - 1, so the voter will reject
-	bool done = raft_fixture_step_rv_mock(&f->cluster, j, i, 3, 1, 3);
+	//mock a lower last_log_term
+	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
+	rv.last_log_term = t1-1;
+	bool done = raft_fixture_step_rv_mock(&f->cluster, i, &rv);
 	munit_assert_true(done);
+
 	ASSERT_TERM(i, 2);
 	ASSERT_FOLLOWER(i);
-	raft_fixture_step_until_rv_response(&f->cluster, i, j, 2, false, 200);
-	ASSERT_TERM(k, 2);
+	//J won't grant this, cause I send a lower last_log_index request_vote
+	struct raft_request_vote_result res = {
+		.term = 4,
+		.vote_granted = false
+	};
+	raft_fixture_step_until_rv_response(&f->cluster, i, j, &res, 200);
+
+	return MUNIT_OK;
+}
+
+TEST(paper_test, voterGrantEqualLastLogTerm, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	struct raft_apply *req1;
+	struct raft_apply *req2;
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
-	raft_fixture_step_until_rv_response(&f->cluster, k, j, 2, true, 200);
+
+	//the leader append two entries, and replicate to all the followers
+	req1 = munit_malloc(sizeof(struct raft_apply));
+	req2 = munit_malloc(sizeof(struct raft_apply));
+	CLUSTER_APPLY_ADD_X(i, req1, 1, test_free_req);
+	CLUSTER_APPLY_ADD_X(i, req2, 2, test_free_req);
+
+	struct ae_result_cnt arg = {i, 4};
+	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
+
+	//saturate for let J become candidate firstly
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_SATURATE_BOTHWAYS(j, k);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	CLUSTER_RAFT(i)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
+	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 3000;
+	CLUSTER_RAFT(i)->election_timeout = 1000;
+
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1001);
+	ASSERT_FOLLOWER(k);
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+	CLUSTER_DESATURATE_BOTHWAYS(j, k);
+
+	//check candidate's RV detail
+	struct raft_request_vote rv = {
+		.term = 4,
+		.last_log_term = 2,
+		.last_log_index = 3,
+		.candidate_id = j
+	};
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster, i, &rv, 200);
+
+	//mock a equal last_log_term
+	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
+	rv.last_log_term = t1;
+	bool done = raft_fixture_step_rv_mock(&f->cluster, i, &rv);
+	munit_assert_true(done);
+
+	ASSERT_TERM(i, 2);
+	ASSERT_FOLLOWER(i);
+	//J will grant this, cause I send a equal last_log_index request_vote
+	struct raft_request_vote_result res = {
+		.term = 4,
+		.vote_granted = true
+	};
+	raft_fixture_step_until_rv_response(&f->cluster, i, j, &res, 200);
+
+	return MUNIT_OK;
+}
+
+TEST(paper_test, voterGrantHigherLastLogTerm, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	struct raft_apply *req1;
+	struct raft_apply *req2;
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//the leader append two entries, and replicate to all the followers
+	req1 = munit_malloc(sizeof(struct raft_apply));
+	req2 = munit_malloc(sizeof(struct raft_apply));
+	CLUSTER_APPLY_ADD_X(i, req1, 1, test_free_req);
+	CLUSTER_APPLY_ADD_X(i, req2, 2, test_free_req);
+
+	struct ae_result_cnt arg = {i, 4};
+	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
+
+	//saturate for let J become candidate firstly
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_SATURATE_BOTHWAYS(j, k);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	CLUSTER_RAFT(i)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
+	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 3000;
+	CLUSTER_RAFT(i)->election_timeout = 1000;
+
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1001);
+	ASSERT_FOLLOWER(k);
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+	CLUSTER_DESATURATE_BOTHWAYS(j, k);
+
+	//check candidate's RV detail
+	struct raft_request_vote rv = {
+		.term = 4,
+		.last_log_term = 2,
+		.last_log_index = 3,
+		.candidate_id = j
+	};
+	raft_fixture_step_until_rv_for_send(
+		&f->cluster,i, &rv, 200);
+
+	//mock a higher last_log_term
+	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
+	rv.last_log_term = t1 + 1;
+	bool done = raft_fixture_step_rv_mock(&f->cluster, i, &rv);
+	munit_assert_true(done);
+
+	ASSERT_TERM(i, 2);
+	ASSERT_FOLLOWER(i);
+	//J will grant this, cause I send a higher last_log_index request_vote
+	struct raft_request_vote_result res = {
+		.term = 4,
+		.vote_granted = true
+	};
+	raft_fixture_step_until_rv_response(&f->cluster, i, j, &res, 200);
+
 	return MUNIT_OK;
 }
 

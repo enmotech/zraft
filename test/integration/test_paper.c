@@ -825,7 +825,7 @@ TEST(paper_test, leaderAcknownledgeCommit, setUp, tearDown, 0, NULL)
 	//ONLY recv one result, but still be a majority
 	CLUSTER_STEP_UNTIL_DELIVERED(j, i, 100);
 
-	//make sure the leader recv two AR_RESULT
+	//make sure the leader recv two RV_RESULT
 	munit_assert_int(CLUSTER_N_RECV(i, RAFT_IO_APPEND_ENTRIES_RESULT), == ,1);
 
 	//step leader apply the entry and update the commit index
@@ -866,7 +866,31 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	//make sure the follower recv the append entry
 	munit_assert_int(CLUSTER_N_RECV(j, RAFT_IO_APPEND_ENTRIES), == ,1);
 
+	//saturate all servers
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_SATURATE_BOTHWAYS(j, k);
+
+	//set election_timeout for elect J be the new leader
+	CLUSTER_RAFT(i)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
+	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 3000;
+	CLUSTER_RAFT(i)->election_timeout = 1000;
+
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
+	CLUSTER_STEP_UNTIL_STATE_IS(i, RAFT_FOLLOWER, 1001);
+	ASSERT_FOLLOWER(k);
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 	raft_index after = CLUSTER_RAFT(j)->commit_index;
+	munit_assert_llong(before, ==, after);
+
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 1000);
+	CLUSTER_STEP_UNTIL_APPLIED(j, 2);
+	after = CLUSTER_RAFT(j)->commit_index;
 	munit_assert_llong(before, ==, after);
 
 	return MUNIT_OK;

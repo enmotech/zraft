@@ -872,10 +872,24 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	raft_index before = CLUSTER_RAFT(j)->commit_index;
 
 	//the leader append an entry, and replicate to all the followers
-	struct raft_apply *req = munit_malloc(sizeof *req);
-	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+	struct raft_entry et = {
+		.term = CLUSTER_TERM(i),
+		.type = RAFT_COMMAND
+	} ;
+	FsmEncodeSetX(123, &et.buf);
+	CLUSTER_ADD_ENTRY(i, &et);
 
-	//step until I recv all the AE_RESULT
+	//step until I send this AE
+	struct raft_append_entries ae = {
+		.term =  CLUSTER_TERM(),
+		.n_entries = 1,
+		.prev_log_index = 1,
+		.prev_log_term = 1,
+		.src_server = i
+	};
+	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
+	
 	struct ae_result_cnt arg = {i, 2};
 	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
 

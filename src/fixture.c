@@ -1844,15 +1844,49 @@ struct step_send_ae {
 	struct raft_append_entries *ae;
 };
 
+static hasAEForSend(struct raft_fixture *f, void *arg)
+{
+	struct step_send_ae *expect = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)expect->ae->src_server);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_APPEND_ENTRIES)
+				continue;
+			if (message->server_id != expect->dst+1)
+				continue;
+
+			struct raft_append_entries ae = message->request_vote;
+			assert(ae.term == expect->ae->term);
+			assert(ae.last_log_index == expect->ae->last_log_index);
+			assert(ae.last_log_term == expect->ae->last_log_term);
+			assert(ae.n_entries == expect->ae->n_entries);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
 										unsigned i,
 										struct raft_append_entries *ae,
 										unsigned max_msecs)
 {
 	struct step_send_ae target = {i, ae};
-	(void)target;
-	(void)max_msecs;
-	return false;
+	return raft_fixture_step_until(f, hasAEForSend, &target, max_msecs);;
 }
 
 struct step_rv_res {

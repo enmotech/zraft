@@ -317,6 +317,14 @@ RAFT_API bool raft_fixture_step_until_rv_response(struct raft_fixture *f,
 										 unsigned max_msecs);
 
 /**
+ *  Step until there's a AE from leader to dst I
+ */
+RAFT_API bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
+										 unsigned i,
+										 struct raft_append_entries *ae,
+										 unsigned max_msecs);
+
+/**
  * Step for mock a quest vote to I
  */
 RAFT_API bool raft_fixture_step_rv_mock(struct raft_fixture *f,

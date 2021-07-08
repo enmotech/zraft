@@ -1923,6 +1923,7 @@ static bool hasAEResponse(struct raft_fixture *f, void *arg)
 
 			struct raft_append_entries_result res = message->append_entries_result;
 			assert(res.last_log_index == expect->res->last_log_index);
+			assert(res.rejected == expect->res->rejected);
 
 			return true;
 		}
@@ -1991,6 +1992,50 @@ bool raft_fixture_step_until_rv_response(struct raft_fixture *f,
 {
 	struct step_rv_res target = {i, j, res};
 	return raft_fixture_step_until(f, hasRVResponse, &target, max_msecs);
+}
+
+static bool mockAE(struct raft_fixture *f, void *arg)
+{
+	struct step_send_ae *mock = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)mock->ae->src_server);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_APPEND_ENTRIES)
+				continue;
+			if (message->server_id != mock->dst+1)
+				continue;
+			if (message->append_entries.n_entries == 0)
+				continue;
+	
+		message->append_entries.term = mock->ae->term;
+		message->append_entries.prev_log_index = mock->ae->prev_log_index;
+		message->append_entries.prev_log_term = mock->ae->prev_log_term;
+		message->append_entries.n_entries = mock->ae->n_entries;
+		return true;
+		}
+	}
+
+	return false;
+}
+
+bool raft_fixture_step_ae_mock(struct raft_fixture *f,
+									 	unsigned i,
+										struct raft_append_entries *ae)
+{
+	struct step_send_ae mock = {i, ae};
+	return mockAE(f, &mock); 
 }
 
 static bool mockRV(struct raft_fixture *f,

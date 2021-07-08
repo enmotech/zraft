@@ -940,8 +940,97 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+//test the Append_entries rpc with a mismatch prev_log_index and prev_log_term
 TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	raft_index before = CLUSTER_RAFT(j)->commit_index;
+
+	//the leader append an entry, and replicate to all the followers
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+
+	//step until I send this AE
+	struct raft_append_entries ae = {
+		.term =  2,
+		.n_entries = 1,
+		.prev_log_index = 1,
+		.prev_log_term = 1,
+		.src_server = i
+	};
+	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
+	
+	struct raft_append_entries_result res = {
+		.term = CLUSTER_TERM(i),
+		.rejected = 0,
+		.last_log_index = 2 
+	};
+
+	//step until J, K response this entry
+	raft_fixture_step_until_ae_response(&f->cluster, j, i, &res, 200);
+	raft_fixture_step_until_ae_response(&f->cluster, k, i, &res, 200);
+
+	//change the Leader's term and do above steps again
+	CLUSTER_RAFT(i)->current_term = 10;
+
+	struct raft_apply *req1 = munit_malloc(sizeof *req1);
+	CLUSTER_APPLY_ADD_X(i, req1, 1, test_free_req);
+
+	ae.term = 10;
+	ae.prev_log_index = 2;
+	ae.prev_log_term = 2;
+
+	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
+	
+	res.term = 10;
+	res.rejected = 0;
+	res.last_log_index = 3;
+
+	raft_fixture_step_until_ae_response(&f->cluster, j, i, &res, 200);
+	raft_fixture_step_until_ae_response(&f->cluster, k, i, &res, 200);
+	
+	raft_index i1 = logLastIndex(&(CLUSTER_RAFT(k)->log));
+	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(k)->log));
+
+	munit_assert_llong(i1, ==, 3);
+	munit_assert_llong(t1, ==, 10);
+
+	//add another entry 
+	struct raft_apply *req2 = munit_malloc(sizeof *req2);
+	CLUSTER_APPLY_ADD_X(i, req2, 1, test_free_req);
+
+	ae.term =  10;
+	ae.prev_log_index = 3;
+	ae.prev_log_term = 10;
+
+	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
+	ae.prev_log_term = 2; //mock a mismatch term
+	raft_fixture_step_ae_mock(&f->cluster, j, &ae);
+
+	ae.prev_log_term = 10;
+	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
+	ae.prev_log_term = 2;  
+	ae.prev_log_index = 4; //mock a mismatch index
+	raft_fixture_step_ae_mock(&f->cluster, k, &ae);
+
+	//check the rejected index
+	res.rejected = 3;
+	res.last_log_index = 3;
+	raft_fixture_step_until_ae_response(&f->cluster, j, i, &res, 200);
+
+	res.rejected = 4;
+	res.last_log_index = 3;
+	raft_fixture_step_until_ae_response(&f->cluster, k, i, &res, 200);
+	
 	return MUNIT_OK;
 }
 

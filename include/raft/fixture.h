@@ -341,6 +341,14 @@ RAFT_API bool raft_fixture_step_rv_mock(struct raft_fixture *f,
 									 	unsigned i,
 										struct raft_request_vote *rv);
 
+
+/**
+ * Step for mock a append_entry to I
+ */
+RAFT_API bool raft_fixture_step_ae_mock(struct raft_fixture *f,
+									 	unsigned i,
+										struct raft_append_entries *ae);
+
 /**
  * Set a function to be called after every time a fixture event occurs as
  * consequence of a step.

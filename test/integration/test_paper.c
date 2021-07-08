@@ -873,15 +873,10 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(k);
 
 	raft_index before = CLUSTER_RAFT(j)->commit_index;
-	raft_index ri = logLastIndex(&(CLUSTER_RAFT(j)->log));
 
 	//the leader append an entry, and replicate to all the followers
-	struct raft_entry et = {
-		.term = CLUSTER_TERM(i),
-		.type = RAFT_COMMAND
-	} ;
-	FsmEncodeSetX(123, &et.buf);
-	CLUSTER_ADD_ENTRY(i, &et);
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
 
 	//step until I send this AE
 	struct raft_append_entries ae = {
@@ -903,7 +898,6 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	raft_fixture_step_until_ae_response(&f->cluster, j, i, &res, 2000);
 	raft_fixture_step_until_ae_response(&f->cluster, k, i, &res, 2000);
 
-	ri = logLastIndex(&(CLUSTER_RAFT(j)->log));
 	//saturate all servers
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
@@ -924,8 +918,8 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	//check candidate's RV detail
 	struct raft_request_vote rv = {
 		.term = 3,
-		.last_log_term = 1,
-		.last_log_index = 1,
+		.last_log_term = 2,
+		.last_log_index = 2,
 		.candidate_id = j
 	};
 	raft_fixture_step_until_rv_for_send(
@@ -937,9 +931,11 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	};
 	raft_fixture_step_until_rv_response(&f->cluster, k, j, &rv_res, 200);
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 2000);
-	CLUSTER_STEP_UNTIL_APPLIED(j, 2, 2000);
+
+	//step until leader commit precede log
+	CLUSTER_STEP_UNTIL_APPLIED(j, 2, 200);
 	after = CLUSTER_RAFT(j)->commit_index;
-	munit_assert_llong(before, ==, after);
+	munit_assert_llong(before+1, ==, after);
 
 	return MUNIT_OK;
 }

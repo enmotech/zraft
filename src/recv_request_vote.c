@@ -125,7 +125,8 @@ int recvRequestVote(struct raft *r,
      */
 
 	has_leader = r->state == RAFT_LEADER ||
-			(r->state == RAFT_FOLLOWER && r->follower_state.current_leader.id != 0);
+			(r->state == RAFT_FOLLOWER && r->follower_state.current_leader.id != 0 && 
+			(r->io->time(r->io) - r->election_timer_start) < r->election_timeout);
 
 	if (has_leader && !args->disrupt_leader) {
 		tracef("local server has a leader -> reject ");

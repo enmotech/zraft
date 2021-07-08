@@ -861,6 +861,9 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	//I be the first leader, then add two entries like a,b...
 	//Once J commit a, saturate all servers, let J be a new leader
 	//Test that J will push the commit_index to b
+//	int flag=1;
+//	while(flag)
+//		sleep(2);
 	struct fixture *f = data;
 	unsigned i=0, j=1, k=2;
 	CLUSTER_START;
@@ -870,6 +873,7 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(k);
 
 	raft_index before = CLUSTER_RAFT(j)->commit_index;
+	raft_index ri = logLastIndex(&(CLUSTER_RAFT(j)->log));
 
 	//the leader append an entry, and replicate to all the followers
 	struct raft_entry et = {
@@ -887,32 +891,31 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 		.prev_log_term = 1,
 		.src_server = i
 	};
-//	int flag=1;
-//	while(flag)
-//		sleep(2);
 	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
 	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
 	
 	struct raft_append_entries_result res = {
 		.term = CLUSTER_TERM(i),
 		.rejected = 0,
-		.last_log_index = 1 
+		.last_log_index = 2 
 	};
 
-	raft_fixture_step_until_ae_response(&f->cluster, j, i, &res, 200);
-	raft_fixture_step_until_ae_response(&f->cluster, k, i, &res, 200);
+	raft_fixture_step_until_ae_response(&f->cluster, j, i, &res, 2000);
+	raft_fixture_step_until_ae_response(&f->cluster, k, i, &res, 2000);
 
+	ri = logLastIndex(&(CLUSTER_RAFT(j)->log));
 	//saturate all servers
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 	CLUSTER_SATURATE_BOTHWAYS(j, k);
 
 	//set election_timeout for elect J be the new leader
-//	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME - 1000;
-//	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
-//	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
-
-	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 2000);
+	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME - 1000;
+	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME - 1000;
+	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
+	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
+	raft_time now = CLUSTER_TIME;
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
 	ASSERT_FOLLOWER(k);
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 	raft_index after = CLUSTER_RAFT(j)->commit_index;

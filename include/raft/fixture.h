@@ -335,7 +335,7 @@ RAFT_API bool raft_fixture_step_until_ae_response(struct raft_fixture *f,
 										 unsigned max_msecs);
 
 /**
- * Step for mock a quest vote to I
+ * Step for mock a request vote to I
  */
 RAFT_API bool raft_fixture_step_rv_mock(struct raft_fixture *f,
 									 	unsigned i,

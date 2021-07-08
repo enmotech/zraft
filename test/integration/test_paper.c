@@ -893,8 +893,14 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
 	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
 	
-	struct ae_result_cnt arg = {i, 4};
-	CLUSTER_STEP_UNTIL(server_recv_n_append_entry_result, &arg,400);
+	struct raft_append_entries_result res = {
+		.term = CLUSTER_TERM(i),
+		.rejected = 0,
+		.last_log_index = 1 
+	};
+
+	raft_fixture_step_until_ae_response(&f->cluster, j, i, &res, 200);
+	raft_fixture_step_until_ae_response(&f->cluster, k, i, &res, 200);
 
 	//saturate all servers
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
@@ -902,11 +908,11 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(j, k);
 
 	//set election_timeout for elect J be the new leader
-	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME - 1000;
-	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
-	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
+//	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME - 1000;
+//	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
+//	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
 
-	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 100);
+	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 2000);
 	ASSERT_FOLLOWER(k);
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 	raft_index after = CLUSTER_RAFT(j)->commit_index;
@@ -916,12 +922,17 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	struct raft_request_vote rv = {
 		.term = 3,
 		.last_log_term = 1,
-		.last_log_index = 2,
+		.last_log_index = 1,
 		.candidate_id = j
 	};
 	raft_fixture_step_until_rv_for_send(
 		&f->cluster, k, &rv, 200);
 
+	struct raft_request_vote_result rv_res = {
+		.term  = 3,
+		.vote_granted = true
+	};
+	raft_fixture_step_until_rv_response(&f->cluster, k, j, &rv_res, 200);
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 2000);
 	CLUSTER_STEP_UNTIL_APPLIED(j, 2, 2000);
 	after = CLUSTER_RAFT(j)->commit_index;

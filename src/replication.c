@@ -423,24 +423,31 @@ static void assignRoleCb(struct raft_change *req, int status)
 	(void)status;
 	struct assign_result *_result = req->data;
 	struct raft *r = _result->r;
-	struct raft_server *server = (struct raft_server *)configurationGet(&r->configuration, _result->id);
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s]: server[%lld] role:[%d] return.",
-		   rkey(r), r->state, __func__, server->id, server->role);
+	if (status == 0) {
+		struct raft_server *server = (struct raft_server *)configurationGet(&r->configuration, _result->id);
 
-	if (server->role == RAFT_VOTER)
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: server[%lld] role:[%d] return.",
+			   rkey(r), r->state, __func__, server->id, server->role);
+
 		r->leader_state.promotee_id = 0;
+		server->pre_role = RAFT_UNKNOW;
 
-	server->pre_role = RAFT_UNKNOW;
+		/* Notify the upper module the role changed. */
+		if (r->role_change_cb) {
+			ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+				   rkey(r), r->state, __func__, server->role);
+			r->role_change_cb(r, server);
+		}
+	} else if (status == RAFT_LEADERSHIPLOST) {
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: lost leadership while asigning a new role to server[%lld]",
+			   rkey(r), r->state, __func__, _result->id);
+	} else {
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: asigning a new role to server[%lld] failed",
+			   rkey(r), r->state, __func__, _result->id);
+	}
 	raft_free(_result);
 	raft_free(req);
-
-	/* Notify the upper module the role changed. */
-	if (r->role_change_cb) {
-		ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
-			   rkey(r), r->state, __func__, server->role);
-		r->role_change_cb(r, server);
-	}
 }
 
 static void assignRole(struct raft *r, struct raft_server *server, int role)

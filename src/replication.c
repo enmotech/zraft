@@ -2594,6 +2594,16 @@ void replicationQuorum(struct raft *r, const raft_index index)
 	// assert(logTermOf(&r->log, index) > 0);
 	assert(logTermOf(&r->log, index) <= r->current_term);
 
+	/*
+	 * From Section 3.6.2:
+	 *
+	 *   Raft never commits log entries from previous terms by counting
+	 *   replicas. Only log entries from the leader's current term are commited
+	 *   by counting replicas.
+	 */
+	if (logTermOf(&r->log, index) < r->current_term)
+		return;
+
 	for (i = 0; i < r->configuration.n; i++) {
 		struct raft_server *server = &r->configuration.servers[i];
 		if (server->role != RAFT_VOTER) {

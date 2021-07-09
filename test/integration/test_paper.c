@@ -19,6 +19,8 @@ struct fixture
 #define CLUSTER_N 3
 #endif
 
+struct raft_entry g_et;
+
 static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
 	struct fixture *f = munit_malloc(sizeof *f);
@@ -861,9 +863,6 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	//I be the first leader, then add two entries like a,b...
 	//Once J commit a, saturate all servers, let J be a new leader
 	//Test that J will push the commit_index to b
-//	int flag=1;
-//	while(flag)
-//		sleep(2);
 	struct fixture *f = data;
 	unsigned i=0, j=1, k=2;
 	CLUSTER_START;
@@ -932,15 +931,18 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	raft_fixture_step_until_rv_response(&f->cluster, k, j, &rv_res, 200);
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_LEADER, 2000);
 
+	struct raft_apply *req1 = munit_malloc(sizeof *req1);
+	CLUSTER_APPLY_ADD_X(j, req1, 1, test_free_req);
+
 	//step until leader commit precede log
-	CLUSTER_STEP_UNTIL_APPLIED(j, 2, 200);
+	CLUSTER_STEP_UNTIL_APPLIED(j, 3, 400);
 	after = CLUSTER_RAFT(j)->commit_index;
-	munit_assert_llong(before+1, ==, after);
+	munit_assert_llong(before+2, ==, after);
 
 	return MUNIT_OK;
 }
 
-//test the Append_entries rpc with a mismatch prev_log_index and prev_log_term
+//test the Append_entries rpc with a mismatch prev_log_index or prev_log_term
 TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
@@ -1034,8 +1036,84 @@ TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+//test follower delete the conflict while the append_entries check pass
 TEST(paper_test, followerAppendEntry, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+
+	//add two same entries
+	g_et.term = 2;
+	g_et.type = RAFT_COMMAND;
+	FsmEncodeSetX(123, &g_et.buf);
+	CLUSTER_ADD_ENTRY(i, &g_et);
+	FsmEncodeSetX(123, &g_et.buf);
+	CLUSTER_ADD_ENTRY(j, &g_et);
+
+	g_et.term = 3;
+	FsmEncodeSetX(123, &g_et.buf);
+	CLUSTER_ADD_ENTRY(i, &g_et);
+	FsmEncodeSetX(123, &g_et.buf);
+	CLUSTER_ADD_ENTRY(j, &g_et);
+
+	//add two conflict entries
+	g_et.term = 4;
+	FsmEncodeSetX(123, &g_et.buf);
+	CLUSTER_ADD_ENTRY(i, &g_et);
+	g_et.term = 3;
+	FsmEncodeSetX(123, &g_et.buf);
+	CLUSTER_ADD_ENTRY(j, &g_et);
+
+	g_et.term = 5;
+	FsmEncodeSetX(123, &g_et.buf);
+	CLUSTER_ADD_ENTRY(i, &g_et);
+	g_et.term = 4;
+	FsmEncodeSetX(123, &g_et.buf);
+	CLUSTER_ADD_ENTRY(j, &g_et);
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+	CLUSTER_SATURATE_BOTHWAYS(j, k);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+
+	//check term and inedx
+	raft_index i1 = logLastIndex(&(CLUSTER_RAFT(i)->log));
+	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
+	munit_assert_llong(i1, ==, 5);
+	munit_assert_llong(t1, ==, 5);
+
+	i1 = logLastIndex(&(CLUSTER_RAFT(j)->log));
+	t1 = logLastTerm(&(CLUSTER_RAFT(j)->log));
+	munit_assert_llong(i1, ==, 5);
+	munit_assert_llong(t1, ==, 4);
+	
+	//leader add another entry 
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+
+	//wait for the first reject
+	struct raft_append_entries_result ae_res = {
+		.last_log_index = 5,
+		.rejected = 5
+	};
+	raft_fixture_step_until_ae_response(&f->cluster, j, i, &ae_res, 200);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(15);
+	//wait for the second reject
+	ae_res.last_log_index = 5;
+	ae_res.rejected = 4;
+	raft_fixture_step_until_ae_response(&f->cluster, j, i, &ae_res, 200);
+	
+	CLUSTER_STEP_UNTIL_ELAPSED(15);
+	//waite for the third accpet
+	ae_res.last_log_index = 6;
+	ae_res.rejected = 0;
+	raft_fixture_step_until_ae_response(&f->cluster, j, i, &ae_res, 200);
+
+	munit_assert_llong(logLastIndex(&(CLUSTER_RAFT(j)->log)), ==, 6);
 	return MUNIT_OK;
 }
 

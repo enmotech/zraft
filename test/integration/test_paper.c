@@ -1089,6 +1089,10 @@ TEST(paper_test, followerAppendEntry, setUp, tearDown, 0, NULL)
 	t1 = logLastTerm(&(CLUSTER_RAFT(j)->log));
 	munit_assert_llong(i1, ==, 5);
 	munit_assert_llong(t1, ==, 4);
+	t1 = logTermOf(&(CLUSTER_RAFT(j)->log), 4);
+	munit_assert_llong(t1, ==, 3);
+	t1 = logTermOf(&(CLUSTER_RAFT(j)->log), 5);
+	munit_assert_llong(t1, ==, 4);
 	
 	//leader add another entry 
 	struct raft_apply *req = munit_malloc(sizeof *req);
@@ -1113,7 +1117,12 @@ TEST(paper_test, followerAppendEntry, setUp, tearDown, 0, NULL)
 	ae_res.rejected = 0;
 	raft_fixture_step_until_ae_response(&f->cluster, j, i, &ae_res, 200);
 
-	munit_assert_llong(logLastIndex(&(CLUSTER_RAFT(j)->log)), ==, 6);
+	//ensure the conflict entries has been delete
+	raft_term t2 = logTermOf(&(CLUSTER_RAFT(j)->log), 4);
+	munit_assert_llong(t2, !=, 3);
+	munit_assert_llong(t2, ==, 4);
+	t2 = logTermOf(&(CLUSTER_RAFT(j)->log), 5);
+	munit_assert_llong(t2, ==, 5);
 	return MUNIT_OK;
 }
 

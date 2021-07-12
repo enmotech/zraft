@@ -2503,8 +2503,6 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 
 	ab->expect_num = (int)(to_commit_index - r->last_applying);
 	ab->applied_num = 0;
-	/* optimized barrier, which takes effect without any log */
-	struct raft_barrier *barrier = getFirstOptBarrier(r);
 
 	for (index = r->last_applying + 1; index <= to_commit_index; index++) {
 		const struct raft_entry *entry = logGet(&r->log, index);
@@ -2546,10 +2544,11 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 			raft_free(ab);
 			break;
 		}
-
+		/* optimized barrier, which takes effect without any log */
+		struct raft_barrier *barrier = getFirstOptBarrier(r);
 		r->last_applying = index;
 		if (barrier != NULL &&
-		    barrier->index == r->last_applying) {
+		    barrier->index == index) {
 			QUEUE_REMOVE(&(barrier->queue));
 			barrier->cb(barrier, 0);
 		}

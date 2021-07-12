@@ -136,7 +136,7 @@ int raft_optbarrier(struct raft *r,
 		goto err;
 	}
 	/* Index of the barrier entry being appended. */
-	index = logLastIndex(&r->log);
+	index = r->commit_index;
 	req->type = RAFT_BARRIER;
 	req->index = index;
 	req->cb = cb;

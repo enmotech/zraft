@@ -853,7 +853,7 @@ static bool server_recv_n_append_entry_result(
 	return a->n == n;
 }
 
-// tests that when leader commits a log entry,
+// tests that when leader commits a current term log entry,
 // it also commits all preceding entries in the leader’s log, including
 // entries created by previous leaders.
 // Also, it applies the entry to its local state machine (in log order).
@@ -907,7 +907,6 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME - 1000;
 	CLUSTER_RAFT(j)->follower_state.randomized_election_timeout = 1000;
 	CLUSTER_RAFT(k)->follower_state.randomized_election_timeout = 2000;
-	raft_time now = CLUSTER_TIME;
 	CLUSTER_STEP_UNTIL_STATE_IS(j, RAFT_CANDIDATE, 1001);
 	ASSERT_FOLLOWER(k);
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
@@ -952,8 +951,6 @@ TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
-
-	raft_index before = CLUSTER_RAFT(j)->commit_index;
 
 	//the leader append an entry, and replicate to all the followers
 	struct raft_apply *req = munit_malloc(sizeof *req);
@@ -1396,7 +1393,74 @@ TEST(paper_test, voterGrantHigherLastLogTerm, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(paper_test, leaderOnlyCommitLogFromCurrentTerm, setUp, tearDown, 0, NULL)
+struct raft_entry g_et1;
+struct raft_entry g_et2;
+struct raft_entry g_et3;
+//leader won's commit prev term log directly
+TEST(paper_test, leaderDoNotCommitPrevTermLog, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	g_et1.term = 1;
+	g_et1.type = RAFT_COMMAND;
+	g_et2.term = 1;
+	g_et2.type = RAFT_COMMAND;
+	g_et3.term = 1;
+	g_et3.type = RAFT_COMMAND;
+	FsmEncodeSetX(123, &g_et1.buf);
+	FsmEncodeSetX(123, &g_et2.buf);
+	FsmEncodeSetX(123, &g_et3.buf);
+	CLUSTER_ADD_ENTRY(i, &g_et1); //index is 2
+	CLUSTER_ADD_ENTRY(i, &g_et2); //index is 3 
+	CLUSTER_ADD_ENTRY(i, &g_et3); //index is 4
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+	munit_assert_llong(4, ==, logLastIndex(&(CLUSTER_RAFT(i)->log)));
+	ASSERT_TERM(i, 2);
+	//wait for enough time
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+
+	//check the commit_idex only point to the configuration log
+	raft_index commit_index = CLUSTER_RAFT(i)->commit_index;
+	munit_assert_llong(commit_index, ==, 1);
+	
+	return MUNIT_OK;
+}
+
+struct raft_entry g_et3;
+TEST(paper_test, leaderCommitCurrentTermLog, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+	g_et1.term = 2;
+	g_et1.type = RAFT_COMMAND;
+	g_et2.term = 2;
+	g_et2.type = RAFT_COMMAND;
+	g_et3.term = 2;
+	g_et3.type = RAFT_COMMAND;
+	FsmEncodeSetX(123, &g_et1.buf);
+	FsmEncodeSetX(123, &g_et2.buf);
+	FsmEncodeSetX(123, &g_et3.buf);
+	CLUSTER_ADD_ENTRY(i, &g_et1); //index is 2
+	CLUSTER_ADD_ENTRY(i, &g_et2); //index is 3 
+	CLUSTER_ADD_ENTRY(i, &g_et3); //index is 4
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+	munit_assert_llong(4, ==, logLastIndex(&(CLUSTER_RAFT(i)->log)));
+	ASSERT_TERM(i, 2);
+
+	//wait for enough time
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+
+	//check the commit_idex point to the last log
+	raft_index commit_index = CLUSTER_RAFT(i)->commit_index;
+	munit_assert_llong(commit_index, ==, 4);
+	
 	return MUNIT_OK;
 }

@@ -41,7 +41,7 @@ static int refsTryInsert(struct raft_entry_ref *table,
 {
     struct raft_entry_ref *bucket;    /* Bucket associated with this index. */
     struct raft_entry_ref *next_slot; /* For traversing the bucket slots. */
-    struct raft_entry_ref *last_slot; /* To track the last traversed slot. */
+    struct raft_entry_ref *last_slot = NULL; /* To track the last traversed slot. */
     struct raft_entry_ref *slot;      /* Actual slot to use for this entry. */
     size_t key;
 

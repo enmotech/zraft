@@ -226,7 +226,7 @@ else
 endif
 
 if SANITIZE_ENABLED
-  AM_CFLAGS += -fsanitize=address
+  AM_CFLAGS += -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=leak -fsanitize=undefined -fsanitize-recover=all -fcf-protection=full -fstack-protector-all
 endif
 
 if CODE_COVERAGE_ENABLED

@@ -1109,7 +1109,7 @@ TEST(paper_test, followerAppendEntry, setUp, tearDown, 0, NULL)
 	raft_fixture_step_until_ae_response(&f->cluster, j, i, &ae_res, 200);
 	
 	CLUSTER_STEP_UNTIL_ELAPSED(15);
-	//waite for the third accpet
+	//wait for the third accpet
 	ae_res.last_log_index = 6;
 	ae_res.rejected = 0;
 	raft_fixture_step_until_ae_response(&f->cluster, j, i, &ae_res, 200);
@@ -1123,8 +1123,99 @@ TEST(paper_test, followerAppendEntry, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
+//before election. three servers got diffrent logs.
+//after a leader comes out, leader will broadcast heartbeat and
+//sync log imediately. a few moments later, follower will have the
+//same logs with leader, it means they will have the same log index and term
+struct raft_entry g_et_1[10];
+struct raft_entry g_et_2[10];
+struct raft_entry g_et_3[10];
 TEST(paper_test, leaderSyncFollowerLog, setUp, tearDown, 0, NULL)
 {
+	struct fixture *f = data;
+	unsigned i=0, j=1, k=2;
+
+	//add diffrent entries for each server
+	for (uint8_t a = 0; a < 10; a++) {
+		g_et_1[a].type = RAFT_COMMAND;
+		FsmEncodeSetX(123, &g_et_1[a].buf);
+
+		g_et_2[a].type = RAFT_COMMAND;
+		FsmEncodeSetX(123, &g_et_2[a].buf);
+
+		g_et_3[a].type = RAFT_COMMAND;
+		FsmEncodeSetX(123, &g_et_3[a].buf);
+	}
+
+	//server I add 10 entries, from term 2 to 6.
+	g_et_1[0].term = 2;
+	g_et_1[1].term = 2;
+	g_et_1[2].term = 3;
+	g_et_1[3].term = 3;
+	g_et_1[4].term = 3;
+	g_et_1[5].term = 3;
+	g_et_1[6].term = 4;
+	g_et_1[7].term = 4;
+	g_et_1[8].term = 5;
+	g_et_1[9].term = 6;
+	for (uint8_t a = 0; a < 10; a++)
+		CLUSTER_ADD_ENTRY(i, &g_et_1[a]);
+	
+	//server J add 8 entries, from term 2 to 6.
+	g_et_2[0].term = 2;
+	g_et_2[1].term = 2;
+	g_et_2[2].term = 3;
+	g_et_2[3].term = 3;
+	g_et_2[4].term = 3;
+	g_et_2[5].term = 4;
+	g_et_2[6].term = 5;
+	g_et_2[7].term = 6;
+	for (uint8_t a = 0; a < 8; a++)
+		CLUSTER_ADD_ENTRY(j, &g_et_2[a]);
+
+	//server J add 12 entries, but only from term 2 to 3
+	g_et_3[0].term = 2;
+	g_et_3[1].term = 2;
+	g_et_3[2].term = 2;
+	g_et_3[3].term = 2;
+	g_et_3[4].term = 2;
+	g_et_3[5].term = 2;
+	g_et_3[6].term = 2;
+	g_et_3[7].term = 3;
+	g_et_3[8].term = 3;
+	g_et_3[9].term = 3;
+	g_et_2[8].term = 3;
+	g_et_2[9].term = 3;
+	for (uint8_t a = 0; a < 10; a++)
+		CLUSTER_ADD_ENTRY(k, &g_et_3[a]);
+
+	CLUSTER_ADD_ENTRY(k, &g_et_2[8]);
+	CLUSTER_ADD_ENTRY(k, &g_et_2[9]);
+
+	//elect a leader
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	//change the term
+	CLUSTER_RAFT(i)->current_term = 7;
+	CLUSTER_RAFT(j)->current_term = 7;
+	CLUSTER_RAFT(k)->current_term = 7;
+
+	//wait for several heartbeat ticks
+	CLUSTER_STEP_UNTIL_ELAPSED(1000);	
+
+	//check the log consistency of servers
+	for (uint8_t a = 1; a < 11; a++) {
+		raft_term t1 = logTermOf(&(CLUSTER_RAFT(i)->log), a); 
+		raft_term t2 = logTermOf(&(CLUSTER_RAFT(j)->log), a); 
+		raft_term t3 = logTermOf(&(CLUSTER_RAFT(k)->log), a); 
+		munit_assert_llong(t1, ==, t2);
+		munit_assert_llong(t1, ==, t3);
+	}
+	
 	return MUNIT_OK;
 }
 
@@ -1430,7 +1521,6 @@ TEST(paper_test, leaderDoNotCommitPrevTermLog, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-struct raft_entry g_et3;
 TEST(paper_test, leaderCommitCurrentTermLog, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;

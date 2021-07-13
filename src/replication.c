@@ -93,8 +93,7 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 	unsigned i;
 
 	if (r->state == RAFT_UNAVAILABLE) {
-		raft_free(req);
-		return;
+		goto err_release_log;
 	}
 	i = configurationIndexOf(&r->configuration, req->server_id);
 
@@ -107,6 +106,7 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 		}
 	}
 
+err_release_log:
 	/* Tell the log that we're done referencing these entries. */
 	logRelease(&r->log, req->index, req->entries, req->n);
 	raft_free(req);

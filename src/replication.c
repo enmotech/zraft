@@ -2102,7 +2102,8 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 		r->io->pgrep_raft_unpermit(r->io, &pi);
 		pi.permit = false;
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: release pgrep permit.", rkey(r), r->state, __func__);
-		replicationApply(r);
+		if(RAFT_UNAVAILABLE != r->state)
+			replicationApply(r);
 		return;
 	}
 

@@ -90,12 +90,12 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 {
 	struct sendAppendEntries *req = send->data;
 	struct raft *r = req->raft;
-	unsigned i = configurationIndexOf(&r->configuration, req->server_id);
+	unsigned i;
 
 	if (r->state == RAFT_UNAVAILABLE) {
-		raft_free(req);
-		return;
+		goto err_release_log;
 	}
+	i = configurationIndexOf(&r->configuration, req->server_id);
 
 	if (r->state == RAFT_LEADER && i < r->configuration.n) {
 		if (status != 0) {
@@ -106,6 +106,7 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 		}
 	}
 
+err_release_log:
 	/* Tell the log that we're done referencing these entries. */
 	logRelease(&r->log, req->index, req->entries, req->n);
 	raft_free(req);
@@ -422,24 +423,31 @@ static void assignRoleCb(struct raft_change *req, int status)
 	(void)status;
 	struct assign_result *_result = req->data;
 	struct raft *r = _result->r;
-	struct raft_server *server = (struct raft_server *)configurationGet(&r->configuration, _result->id);
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s]: server[%lld] role:[%d] return.",
-		   rkey(r), r->state, __func__, server->id, server->role);
+	if (status == 0) {
+		struct raft_server *server = (struct raft_server *)configurationGet(&r->configuration, _result->id);
 
-	if (server->role == RAFT_VOTER)
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: server[%lld] role:[%d] return.",
+			   rkey(r), r->state, __func__, server->id, server->role);
+
 		r->leader_state.promotee_id = 0;
+		server->pre_role = RAFT_UNKNOW;
 
-	server->pre_role = RAFT_UNKNOW;
+		/* Notify the upper module the role changed. */
+		if (r->role_change_cb) {
+			ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+				   rkey(r), r->state, __func__, server->role);
+			r->role_change_cb(r, server);
+		}
+	} else if (status == RAFT_LEADERSHIPLOST) {
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: lost leadership while asigning a new role to server[%lld]",
+			   rkey(r), r->state, __func__, _result->id);
+	} else {
+		ZSINFO(gzlog, "[raft][%d][%d][%s]: asigning a new role to server[%lld] failed",
+			   rkey(r), r->state, __func__, _result->id);
+	}
 	raft_free(_result);
 	raft_free(req);
-
-	/* Notify the upper module the role changed. */
-	if (r->role_change_cb) {
-		ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
-			   rkey(r), r->state, __func__, server->role);
-		r->role_change_cb(r, server);
-	}
 }
 
 static void assignRole(struct raft *r, struct raft_server *server, int role)
@@ -2094,7 +2102,8 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 		r->io->pgrep_raft_unpermit(r->io, &pi);
 		pi.permit = false;
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: release pgrep permit.", rkey(r), r->state, __func__);
-		replicationApply(r);
+		if(RAFT_UNAVAILABLE != r->state)
+			replicationApply(r);
 		return;
 	}
 
@@ -2496,8 +2505,6 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 	ab->expect_num = (int)(to_commit_index - r->last_applying);
 	ab->applied_num = 0;
 
-	struct raft_barrier *barrier = getFirstOptBarrier(r);
-
 	for (index = r->last_applying + 1; index <= to_commit_index; index++) {
 		const struct raft_entry *entry = logGet(&r->log, index);
 
@@ -2538,10 +2545,11 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 			raft_free(ab);
 			break;
 		}
-
+		/* optimized barrier, which takes effect without any log */
+		struct raft_barrier *barrier = getFirstOptBarrier(r);
 		r->last_applying = index;
 		if (barrier != NULL &&
-		    barrier->index == r->last_applying) {
+		    barrier->index == index) {
 			QUEUE_REMOVE(&(barrier->queue));
 			barrier->cb(barrier, 0);
 		}
@@ -2585,6 +2593,16 @@ void replicationQuorum(struct raft *r, const raft_index index)
 	}
 	// assert(logTermOf(&r->log, index) > 0);
 	assert(logTermOf(&r->log, index) <= r->current_term);
+
+	/*
+	 * From Section 3.6.2:
+	 *
+	 *   Raft never commits log entries from previous terms by counting
+	 *   replicas. Only log entries from the leader's current term are commited
+	 *   by counting replicas.
+	 */
+	if (logTermOf(&r->log, index) < r->current_term)
+		return;
 
 	for (i = 0; i < r->configuration.n; i++) {
 		struct raft_server *server = &r->configuration.servers[i];

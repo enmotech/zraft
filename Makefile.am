@@ -82,6 +82,8 @@ libtest_la_SOURCES += \
   test/lib/cluster.c
 
 test_integration_core_SOURCES = \
+  src/configuration.c \
+  src/log.c \
   test/integration/main_core.c \
   test/integration/test_apply.c \
   test/integration/test_assign.c \
@@ -224,7 +226,7 @@ else
 endif
 
 if SANITIZE_ENABLED
-  AM_CFLAGS += -fsanitize=address
+  AM_CFLAGS += -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=leak -fsanitize=undefined -fsanitize-recover=all -fcf-protection=full -fstack-protector-all
 endif
 
 if CODE_COVERAGE_ENABLED

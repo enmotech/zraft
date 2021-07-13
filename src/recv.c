@@ -369,7 +369,7 @@ int recvUpdateLeader(struct raft *r, const raft_id id, const char *address)
      * done. */
 	if (r->follower_state.current_leader.address != NULL &&
 	    strcmp(address, r->follower_state.current_leader.address) == 0) {
-		return 0;
+		return RAFT_BADID;
 	}
 
 	if (r->follower_state.current_leader.address != NULL) {

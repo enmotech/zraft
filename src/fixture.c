@@ -870,6 +870,19 @@ static void ioMethodRaftPermit(
 	pi->permit = true;
 }
 
+static void ioResetCkposi(struct raft_io *io)
+{
+	//mock
+	(void)io;
+}
+
+struct copy_chunk_posi  ioRepBoundary(struct raft_io *io)
+{
+	(void)io;
+	struct copy_chunk_posi ccp = {UINT64_MAX, UINT32_MAX};
+	return ccp;
+}
+
 static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 {
     struct io *io;
@@ -914,6 +927,8 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->set_meta = ioMethodSetTermVote;
 	raft_io->pgrep_raft_permit = ioMethodRaftPermit;
 	raft_io->pgrep_raft_unpermit = ioMethodRaftUnpermit;
+	raft_io->pgrep_reset_ckposi = ioResetCkposi;
+	raft_io->pgrep_boundary = ioRepBoundary;
     return 0;
 }
 
@@ -1772,6 +1787,297 @@ bool raft_fixture_step_until_delivered(struct raft_fixture *f,
 {
     struct step_deliver target = {i, j};
     return raft_fixture_step_until(f, hasDelivered, &target, max_msecs);
+}
+
+struct step_send_rv {
+	unsigned dst;
+	struct raft_request_vote *rv;
+};
+
+static bool hasRVForSend(struct raft_fixture *f,
+	void *arg)
+{
+	struct step_send_rv *expect = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)expect->rv->candidate_id);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_REQUEST_VOTE)
+				continue;
+			if (message->server_id != expect->dst+1)
+				continue;
+
+			struct raft_request_vote rv = message->request_vote;
+			assert(rv.term == expect->rv->term);
+			assert(rv.last_log_index == expect->rv->last_log_index);
+			assert(rv.last_log_term == expect->rv->last_log_term);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool raft_fixture_step_until_rv_for_send(struct raft_fixture *f,
+									   	unsigned i,
+									   	struct raft_request_vote *rv,
+									   	unsigned max_msecs)
+{
+	struct step_send_rv target = {i, rv};
+	return raft_fixture_step_until(f, hasRVForSend, &target, max_msecs);
+}
+
+struct step_send_ae {
+	unsigned dst;
+	struct raft_append_entries *ae;
+};
+
+static bool hasAEForSend(struct raft_fixture *f, void *arg)
+{
+	struct step_send_ae *expect = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)expect->ae->src_server);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_APPEND_ENTRIES)
+				continue;
+			if (message->server_id != expect->dst+1)
+				continue;
+			if (message->append_entries.n_entries == 0)
+				continue;
+	
+			struct raft_append_entries ae = message->append_entries;
+			assert(ae.term == expect->ae->term);
+			assert(ae.prev_log_index == expect->ae->prev_log_index);
+			assert(ae.prev_log_term == expect->ae->prev_log_term);
+			assert(ae.n_entries == expect->ae->n_entries);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
+										unsigned i,
+										struct raft_append_entries *ae,
+										unsigned max_msecs)
+{
+	struct step_send_ae target = {i, ae};
+	return raft_fixture_step_until(f, hasAEForSend, &target, max_msecs);;
+}
+
+struct step_ae_res {
+	unsigned src;
+	unsigned dst;
+	struct raft_append_entries_result *res;
+};
+
+static bool hasAEResponse(struct raft_fixture *f, void *arg)
+{
+	
+	struct step_ae_res *expect = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, expect->src);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_APPEND_ENTRIES_RESULT)
+				continue;
+			if (message->server_id != expect->dst+1)
+				continue;
+
+			struct raft_append_entries_result res = message->append_entries_result;
+			assert(res.last_log_index == expect->res->last_log_index);
+			assert(res.rejected == expect->res->rejected);
+
+			return true;
+		}
+	}
+
+
+	return false;
+}
+
+bool raft_fixture_step_until_ae_response(struct raft_fixture *f,
+										 unsigned i,
+										 unsigned j,
+										 struct raft_append_entries_result *res,
+										 unsigned max_msecs)
+{
+	struct step_ae_res target = {i, j ,res};
+	return raft_fixture_step_until(f, hasAEResponse, &target, max_msecs);
+}
+
+struct step_rv_res {
+	unsigned src;
+	unsigned dst;
+	struct raft_request_vote_result *res;
+};
+
+static bool hasRVResponse(struct raft_fixture *f,
+						  void *arg)
+{
+	struct step_rv_res *expect = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, expect->src);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_REQUEST_VOTE_RESULT)
+				continue;
+			if (message->server_id != expect->dst+1)
+				continue;
+
+			struct raft_request_vote_result res = message->request_vote_result;
+			assert(res.term == expect->res->term);
+			assert(res.vote_granted == expect->res->vote_granted);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool raft_fixture_step_until_rv_response(struct raft_fixture *f,
+										 unsigned i,
+										 unsigned j,
+										 struct raft_request_vote_result *res,
+										 unsigned max_msecs)
+{
+	struct step_rv_res target = {i, j, res};
+	return raft_fixture_step_until(f, hasRVResponse, &target, max_msecs);
+}
+
+static bool mockAE(struct raft_fixture *f, void *arg)
+{
+	struct step_send_ae *mock = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)mock->ae->src_server);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_APPEND_ENTRIES)
+				continue;
+			if (message->server_id != mock->dst+1)
+				continue;
+			if (message->append_entries.n_entries == 0)
+				continue;
+	
+		message->append_entries.term = mock->ae->term;
+		message->append_entries.prev_log_index = mock->ae->prev_log_index;
+		message->append_entries.prev_log_term = mock->ae->prev_log_term;
+		message->append_entries.n_entries = mock->ae->n_entries;
+		return true;
+		}
+	}
+
+	return false;
+}
+
+bool raft_fixture_step_ae_mock(struct raft_fixture *f,
+									 	unsigned i,
+										struct raft_append_entries *ae)
+{
+	struct step_send_ae mock = {i, ae};
+	return mockAE(f, &mock); 
+}
+
+static bool mockRV(struct raft_fixture *f,
+					  void *arg)
+{
+	struct step_send_rv *mock = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)mock->rv->candidate_id);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_REQUEST_VOTE)
+				continue;
+			if (message->server_id != mock->dst+1)
+				continue;
+
+			message->request_vote.term = mock->rv->term;
+			message->request_vote.last_log_index = mock->rv->last_log_index;
+			message->request_vote.last_log_term = mock->rv->last_log_term;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool raft_fixture_step_rv_mock(struct raft_fixture *f,
+								unsigned i,
+								struct raft_request_vote *rv)
+{
+	struct step_send_rv mock = {i, rv};
+	return mockRV(f, &mock);
 }
 
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)

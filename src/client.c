@@ -136,7 +136,7 @@ int raft_optbarrier(struct raft *r,
 		goto err;
 	}
 	/* Index of the barrier entry being appended. */
-	index = logLastIndex(&r->log);
+	index = r->commit_index;
 	req->type = RAFT_BARRIER;
 	req->index = index;
 	req->cb = cb;
@@ -272,8 +272,7 @@ int raft_assign(struct raft *r,
 
     if (role != RAFT_STANDBY &&
 	role != RAFT_VOTER &&
-	role != RAFT_SPARE &&
-	role != RAFT_DYING) {
+	role != RAFT_SPARE) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
         return rv;
@@ -305,9 +304,6 @@ int raft_assign(struct raft *r,
             case RAFT_SPARE:
                 name = "spare";
                 break;
-	    case RAFT_DYING:
-		name = "dying";
-		break;
             default:
                 name = NULL;
                 assert(0);

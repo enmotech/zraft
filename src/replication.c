@@ -2537,13 +2537,20 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 			raft_free(ab);
 			break;
 		}
+
+		r->last_applying = index;
 		/* optimized barrier, which takes effect without any log */
 		struct raft_barrier *barrier = getFirstOptBarrier(r);
-		r->last_applying = index;
-		if (barrier != NULL &&
-		    barrier->index == index) {
-			QUEUE_REMOVE(&(barrier->queue));
-			barrier->cb(barrier, 0);
+
+		while (barrier != NULL) {
+			if (barrier->index == index) {
+				QUEUE_REMOVE(&(barrier->queue));
+				barrier->cb(barrier, 0);
+				barrier = getFirstOptBarrier(r);
+			} else {
+				assert(barrier->index > index);
+				break;
+			}
 		}
 		ZSINFO(gzlog, "[raft][%d][%d][%s] update last_applying[%lld].",
 			   rkey(r), r->state, __func__, r->last_applying);

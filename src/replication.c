@@ -2593,7 +2593,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 	 *   replicas. Only log entries from the leader's current term are commited
 	 *   by counting replicas.
 	 */
-	if (logTermOf(&r->log, index) < r->current_term)
+	if (logTermOf(&r->log, index) != r->current_term)
 		return;
 
 	for (i = 0; i < r->configuration.n; i++) {

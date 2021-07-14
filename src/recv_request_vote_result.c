@@ -7,7 +7,7 @@
 #include "recv.h"
 #include "replication.h"
 #include "tracing.h"
-
+#include "log.h"
 /* Set to 1 to enable tracing. */
 #if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -132,8 +132,22 @@ int recvRequestVoteResult(struct raft *r,
 				if (rv != 0) {
 					return rv;
 				}
+				/* add a non-op log */
+				struct raft_buffer buf;
+
+				buf.len = 8;
+				buf.base = raft_malloc(buf.len);
+				if (buf.base == NULL)
+				    return RAFT_NOMEM;
+				raft_index index = logLastIndex(&r->log) + 1;
+				rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
+				if (rv != 0)
+					return  rv;
 				/* Send initial heartbeat. */
-				replicationHeartbeat(r);
+				rv = replicationTrigger(r, index);
+
+				return rv;
+				//replicationHeartbeat(r);
 			}
 		} else {
 			tracef("votes quorum not reached");

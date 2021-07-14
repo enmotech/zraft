@@ -128,11 +128,10 @@ static int sendAppendEntries(struct raft *r,
 	raft_index optimistic_next_index;
 	int rv;
 
-	args->pkt = rand();
+	args->pkt = (uint32_t)(r->io->random(r->io, 0, INT32_MAX));
 	args->term = r->current_term;
 	args->prev_log_index = prev_index;
 	args->prev_log_term = prev_term;
-	args->src_server = r->id;
 	args->pi = pi;
 
 
@@ -184,7 +183,7 @@ static int sendAppendEntries(struct raft *r,
 	 */
 	args->leader_commit = r->commit_index;
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: "
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s]: "
 		   "send %u entries starting at %llu to server "
 		   "%llu (last index %llu, last applied %llu)",
 		   rkey(r), r->state, args->pkt, __func__,
@@ -1202,20 +1201,13 @@ void sendAppendEntriesResult(
 	message.server_address = r->follower_state.current_leader.address;
 	message.append_entries_result = *result;
 
-	if (args->src_server != (raft_id)-1 &&
-		args->src_server != message.server_id) {
-		ZSWARNING(gzlog, "[raft][%d][%d][pkt:%d][%s]: leader changed, discard this packet.",
-				  rkey(r), r->state, args->pkt, __func__);
-		return;
-	}
-
 	req = raft_malloc(sizeof*req);
 	if (req == NULL) {
 		return;
 	}
 	req->data = r;
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s] permit[%d] time[%ld].",
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s] permit[%d] time[%ld].",
 		   rkey(r), r->state, args->pkt, __func__, result->pi.permit, result->pi.time);
 
 	const struct raft_server *me = configurationGet(&r->configuration, r->id);
@@ -1604,7 +1596,7 @@ abort:
 int sync_pgrep_index(struct raft *r,
 					 const struct raft_append_entries *args)
 {
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s].", rkey(r), r->state, args->pkt, __func__);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s].", rkey(r), r->state, args->pkt, __func__);
 
 	int rv;
 	raft_index last_index = r->log.snapshot.last_index;
@@ -1634,7 +1626,7 @@ roll_back:
 	r->log.snapshot.last_term = last_term;
 	r->configuration_index = configuration_index;
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s] failed[%d].", rkey(r), r->state, args->pkt, __func__, rv);
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s] failed[%d].", rkey(r), r->state, args->pkt, __func__, rv);
 
 	return rv;
 }
@@ -1650,7 +1642,7 @@ static int checkPgreplicating(
 
 	if (args->pi.replicating) {
 
-		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s] dump replicating[%d]: "
+		ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s] dump replicating[%d]: "
 			   "last_stored[%lld] last_applied[%lld] last_applying[%lld] "
 			   "prev_log_index[%lld] n_entries[%d]",
 			   rkey(r), r->state, args->pkt, __func__, args->pi.replicating,
@@ -1661,14 +1653,14 @@ static int checkPgreplicating(
 			r->last_append_time = 0;
 
 		if (args->pi.time <= r->last_append_time) {
-			ZSWARNING(gzlog, "[raft][%d][%d][pkt:%d] message out of date time[%ld] last_append_time[%ld].",
+			ZSWARNING(gzlog, "[raft][%d][%d][pkt:%u] message out of date time[%ld] last_append_time[%ld].",
 					  rkey(r), r->state, args->pkt, args->pi.time, r->last_append_time);
 			return RAFT_DISCARD;
 		}
 
 		r->last_append_time = args->pi.time;
 		r->last_append_term = r->current_term;
-		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] update last_append_time[%ld].",
+		ZSINFO(gzlog, "[raft][%d][%d][pkt:%u] update last_append_time[%ld].",
 			   rkey(r), r->state, args->pkt, r->last_append_time);
 
 		/* If it's the first message, just reply the last_stored index. */
@@ -1693,21 +1685,21 @@ static int checkPgreplicating(
 
 			/* There are some entries applying, can not truncate log. */
 			if (r->last_applying != r->last_applied) {
-				ZSWARNING(gzlog, "[raft][%d][%d][pkt:%d] There are some "
+				ZSWARNING(gzlog, "[raft][%d][%d][pkt:%u] There are some "
 						  "entries applying, can not truncate log.",
 						  rkey(r), r->state, args->pkt);
 				rv = RAFT_APPLY_BUSY;
 				goto async_false;
 			}
 
-			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] logTruncate to [%lld] nums[%ld].",
+			ZSINFO(gzlog, "[raft][%d][%d][pkt:%u] logTruncate to [%lld] nums[%ld].",
 				   rkey(r), r->state, args->pkt, r->log.offset + 1, logNumEntries(&r->log));
 
 			rv = try_truncate(r, r->log.offset + 1);
 			if (rv != 0)
 				goto async_false;
 
-			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] after logTruncate to [%lld] nums[%ld].",
+			ZSINFO(gzlog, "[raft][%d][%d][pkt:%u] after logTruncate to [%lld] nums[%ld].",
 				   rkey(r), r->state, args->pkt, r->log.offset + 1, logNumEntries(&r->log));
 
 			rv = sync_pgrep_index(r, args);
@@ -1720,7 +1712,7 @@ static int checkPgreplicating(
 		*i = r->last_stored - args->prev_log_index;
 		*n = args->n_entries - *i;
 
-		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s] dump after: "
+		ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s] dump after: "
 			   "last_stored[%lld] last_applied[%lld] last_applying[%lld] "
 			   "prev_log_index[%lld] n_entries[%d]",
 			   rkey(r), r->state, args->pkt, __func__, r->last_stored,
@@ -1729,7 +1721,7 @@ static int checkPgreplicating(
 		/* The leader's send log entries behind me, just reply success. */
 		if (args->prev_log_index + args->n_entries <= r->last_stored) {
 			*n = 0;
-			ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] I have the log entries already.",
+			ZSINFO(gzlog, "[raft][%d][%d][pkt:%u] I have the log entries already.",
 				   rkey(r), r->state, args->pkt);
 			rv = 0;
 			goto async_false;
@@ -1739,7 +1731,7 @@ static int checkPgreplicating(
 		r->io->pgrep_reset_ckposi(r->io);
 		r->last_append_time = args->pi.time;
 		r->last_append_term = r->current_term;
-		ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] update last_append_time[%ld].",
+		ZSINFO(gzlog, "[raft][%d][%d][pkt:%u] update last_append_time[%ld].",
 			   rkey(r), r->state, args->pkt, r->last_append_time);
 	}
 
@@ -1775,7 +1767,7 @@ int replicationAppend(struct raft *r,
 	*rejected = args->prev_log_index;
 	*async = false;
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: replicating[%d] permit[%d] "
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s]: replicating[%d] permit[%d] "
 		   "last_applying[%lld] last_applied[%lld] last_stored[%lld]",
 		   rkey(r), r->state, args->pkt, __func__, args->pi.replicating,
 		   args->pi.permit, r->last_applying, r->last_applied, r->last_stored);
@@ -1898,7 +1890,7 @@ int replicationAppend(struct raft *r,
 
 	assert(request->args.n_entries == n);
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d] will io->append req_index[%lld] "
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u] will io->append req_index[%lld] "
 		   "n_entries[%d] n[%ld] last_index[%lld].",
 		   rkey(r), r->state, args->pkt, request->index,
 		   request->args.n_entries, n, logLastIndex(&r->log));
@@ -1931,7 +1923,7 @@ err_after_request_alloc:
 
 err:
 	assert(rv != 0);
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s] error[%d].",
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s] error[%d].",
 		   rkey(r), r->state, args->pkt, __func__, rv);
 	return rv;
 }
@@ -2130,7 +2122,7 @@ void replicationApplyFollowerCb(
 	result.term = r->current_term;
 	result.pkt = args->pkt;
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: sendAppendEntriesResult.",
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s]: sendAppendEntriesResult.",
 		   rkey(r), r->state, args->pkt, __func__);
 
 	sendAppendEntriesResult(r, &result, args);

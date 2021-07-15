@@ -2559,10 +2559,10 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 				QUEUE_REMOVE(&(barrier->queue));
 				barrier->cb(barrier, 0);
 				barrier = getFirstOptBarrier(r);
-			} else {
-				assert(barrier->index > index);
-				break;
+				continue;
 			}
+			assert(barrier->index > index);
+			break;
 		}
 		ZSINFO(gzlog, "[raft][%d][%d][%s] update last_applying[%lld].",
 			   rkey(r), r->state, __func__, r->last_applying);

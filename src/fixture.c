@@ -1840,6 +1840,7 @@ bool raft_fixture_step_until_rv_for_send(struct raft_fixture *f,
 }
 
 struct step_send_ae {
+	unsigned src;
 	unsigned dst;
 	struct raft_append_entries *ae;
 };
@@ -1851,7 +1852,7 @@ static bool hasAEForSend(struct raft_fixture *f, void *arg)
 	struct io *io;
 	struct raft_message *message;
 	queue *head;
-	raft = raft_fixture_get(f, (unsigned)expect->ae->src_server);
+	raft = raft_fixture_get(f, (unsigned)expect->src);
 	io = raft->io->impl;
 	QUEUE_FOREACH(head, &io->requests)
 	{
@@ -1884,10 +1885,11 @@ static bool hasAEForSend(struct raft_fixture *f, void *arg)
 
 bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
 										unsigned i,
+										unsigned j,
 										struct raft_append_entries *ae,
 										unsigned max_msecs)
 {
-	struct step_send_ae target = {i, ae};
+	struct step_send_ae target = {i, j, ae};
 	return raft_fixture_step_until(f, hasAEForSend, &target, max_msecs);;
 }
 
@@ -2001,7 +2003,7 @@ static bool mockAE(struct raft_fixture *f, void *arg)
 	struct io *io;
 	struct raft_message *message;
 	queue *head;
-	raft = raft_fixture_get(f, (unsigned)mock->ae->src_server);
+	raft = raft_fixture_get(f, (unsigned)mock->src);
 	io = raft->io->impl;
 	QUEUE_FOREACH(head, &io->requests)
 	{
@@ -2032,9 +2034,10 @@ static bool mockAE(struct raft_fixture *f, void *arg)
 
 bool raft_fixture_step_ae_mock(struct raft_fixture *f,
 									 	unsigned i,
+									 	unsigned j,
 										struct raft_append_entries *ae)
 {
-	struct step_send_ae mock = {i, ae};
+	struct step_send_ae mock = {i, j, ae};
 	return mockAE(f, &mock); 
 }
 

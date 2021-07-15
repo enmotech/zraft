@@ -2193,7 +2193,8 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 	applySectionCallbackCheck(r, request->ab, request->pi, request->extra);
 
 	raft_free(request);
-	if (r->last_applying == r->last_applied) {
+	if (r->state != RAFT_UNAVAILABLE &&
+	    r->last_applying == r->last_applied) {
 		int rv = replicationApply(r);
 
 		if (rv != 0) {

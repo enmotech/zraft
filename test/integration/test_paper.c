@@ -883,10 +883,9 @@ TEST(paper_test, leaderCommitPrecedingEntry, setUp, tearDown, 0, NULL)
 		.n_entries = 1,
 		.prev_log_index = 1,
 		.prev_log_term = 1,
-		.src_server = i
 	};
-	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
-	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, i, j, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, i, k, &ae, 200);
 	
 	struct raft_append_entries_result res = {
 		.term = CLUSTER_TERM(i),
@@ -962,10 +961,9 @@ TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
 		.n_entries = 1,
 		.prev_log_index = 1,
 		.prev_log_term = 1,
-		.src_server = i
 	};
-	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
-	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, i, j, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, i, k, &ae, 200);
 	
 	struct raft_append_entries_result res = {
 		.term = CLUSTER_TERM(i),
@@ -987,8 +985,8 @@ TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
 	ae.prev_log_index = 2;
 	ae.prev_log_term = 2;
 
-	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
-	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, i, j, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, i, k, &ae, 200);
 	
 	res.term = 10;
 	res.rejected = 0;
@@ -1011,15 +1009,15 @@ TEST(paper_test, followerCheckMsgAPP, setUp, tearDown, 0, NULL)
 	ae.prev_log_index = 3;
 	ae.prev_log_term = 10;
 
-	raft_fixture_step_until_ae_for_send(&f->cluster, j, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, i, j, &ae, 200);
 	ae.prev_log_term = 2; //mock a mismatch term
-	raft_fixture_step_ae_mock(&f->cluster, j, &ae);
+	raft_fixture_step_ae_mock(&f->cluster, i, j, &ae);
 
 	ae.prev_log_term = 10;
-	raft_fixture_step_until_ae_for_send(&f->cluster, k, &ae, 200);
+	raft_fixture_step_until_ae_for_send(&f->cluster, i, k, &ae, 200);
 	ae.prev_log_term = 2;  
 	ae.prev_log_index = 4; //mock a mismatch index
-	raft_fixture_step_ae_mock(&f->cluster, k, &ae);
+	raft_fixture_step_ae_mock(&f->cluster, i, k, &ae);
 
 	//check the rejected index
 	res.rejected = 3;

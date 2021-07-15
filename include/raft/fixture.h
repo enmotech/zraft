@@ -321,6 +321,7 @@ RAFT_API bool raft_fixture_step_until_rv_response(struct raft_fixture *f,
  */
 RAFT_API bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
 										 unsigned i,
+										 unsigned j,
 										 struct raft_append_entries *ae,
 										 unsigned max_msecs);
 
@@ -347,6 +348,7 @@ RAFT_API bool raft_fixture_step_rv_mock(struct raft_fixture *f,
  */
 RAFT_API bool raft_fixture_step_ae_mock(struct raft_fixture *f,
 									 	unsigned i,
+									 	unsigned j,
 										struct raft_append_entries *ae);
 
 /**

@@ -132,6 +132,7 @@ int recvRequestVoteResult(struct raft *r,
 				if (rv != 0) {
 					return rv;
 				}
+#ifndef RAFT_TEST
 				/* add a non-op log */
 				struct raft_buffer buf;
 
@@ -147,7 +148,9 @@ int recvRequestVoteResult(struct raft *r,
 				rv = replicationTrigger(r, index);
 
 				return rv;
-				//replicationHeartbeat(r);
+#else
+				replicationHeartbeat(r);
+#endif
 			}
 		} else {
 			tracef("votes quorum not reached");

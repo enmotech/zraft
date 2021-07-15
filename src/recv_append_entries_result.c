@@ -35,7 +35,7 @@ int recvAppendEntriesResult(struct raft *r,
 
 	(void)(address);
 	
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: peer[%lld] replicating[%u] "
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s]: peer[%lld] replicating[%u] "
 		   "permit[%d] pi.time[%ld] rejected[%lld] last_log_index[%lld]",
 		   rkey(r), r->state, result->pkt, __func__, id, result->pi.replicating,
 		   result->pi.permit, result->pi.time, result->rejected, result->last_log_index);

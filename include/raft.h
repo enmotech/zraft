@@ -348,12 +348,12 @@ struct raft_request_vote_result
  * also used as heartbeat (figure 3.1).
  */
 struct raft_append_entries {
-	int pkt;						/* Packket id. */
+	uint32_t pkt;						/* Packket id. */
 	raft_term term;                 /* Leader's term. */
 	raft_index prev_log_index;      /* Index of log entry preceeding new ones. */
 	raft_term prev_log_term;        /* Term of entry at prev_log_index. */
 	raft_index leader_commit;       /* Leader's commit index. */
-	raft_id src_server;				/* The request from. */
+	//raft_id src_server;				/* The request from. */
 	struct pgrep_permit_info pi;    /* pgrep: The permission granted from pgrep. */
 	struct raft_entry *entries;     /* Log entries to append. */
 	unsigned n_entries;             /* Size of the log entries array. */
@@ -363,7 +363,7 @@ struct raft_append_entries {
  * Hold the result of an AppendEntries RPC (figure 3.1).
  */
 struct raft_append_entries_result {
-	int pkt;						/* Packket id. */
+	uint32_t pkt;						/* Packket id. */
 	raft_term term;                 /* Receiver's current_term. */
 	raft_index rejected;            /* If non-zero, the index that was rejected. */
 	raft_index last_log_index;      /* Receiver's last log entry index, as hint. */

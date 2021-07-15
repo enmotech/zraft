@@ -41,7 +41,7 @@ int recvAppendEntries(struct raft *r,
     assert(args != NULL);
     assert(address != NULL);
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%d][%s]: replicating[%d] permit[%d] "
+	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s]: replicating[%d] permit[%d] "
 		   "args->term[%lld] prev_log_index[%lld] entries[%d]",
 		   rkey(r), r->state, args->pkt, __func__, args->pi.replicating,
 		   args->pi.permit, args->term, args->prev_log_index, args->n_entries);

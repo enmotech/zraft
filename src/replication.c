@@ -2094,7 +2094,8 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 		r->io->pgrep_raft_unpermit(r->io, &pi);
 		pi.permit = false;
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: release pgrep permit.", rkey(r), r->state, __func__);
-		if(RAFT_UNAVAILABLE != r->state)
+		if(r->state == RAFT_LEADER ||
+		   r->state == RAFT_FOLLOWER)
 			replicationApply(r);
 		return;
 	}
@@ -2193,13 +2194,15 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 	applySectionCallbackCheck(r, request->ab, request->pi, request->extra);
 
 	raft_free(request);
-	if (r->state != RAFT_UNAVAILABLE &&
-	    r->last_applying == r->last_applied) {
-		int rv = replicationApply(r);
+	if (r->last_applying == r->last_applied) {
+		if (r->state == RAFT_LEADER ||
+		    r->state == RAFT_FOLLOWER) {
+			int rv = replicationApply(r);
 
-		if (rv != 0) {
-			ZSINFO(gzlog, "[raft][%d][%d] |%d-%lld| replicationApply() failed.",
-				   rkey(r), r->state, rkey(r), index);
+			if (rv != 0) {
+				ZSINFO(gzlog, "[raft][%d][%d] |%d-%lld| replicationApply() failed.",
+				       rkey(r), r->state, rkey(r), index);
+			}
 		}
 	}
 }

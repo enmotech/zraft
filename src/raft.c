@@ -68,6 +68,7 @@ int raft_init(struct raft *r,
     r->close_cb = NULL;
     memset(r->errmsg, 0, sizeof r->errmsg);
     r->pre_vote = false;
+    r->no_op = false;
     r->max_catch_up_rounds = DEFAULT_MAX_CATCH_UP_ROUNDS;
     r->max_catch_up_round_duration = DEFAULT_MAX_CATCH_UP_ROUND_DURATION;
 	r->last_append_time = 0;
@@ -162,6 +163,11 @@ void raft_set_max_catch_up_round_duration(struct raft *r, unsigned msecs)
 void raft_set_pre_vote(struct raft *r, bool enabled)
 {
     r->pre_vote = enabled;
+}
+
+void raft_set_no_op(struct raft *r, bool enabled)
+{
+	r->no_op = enabled;
 }
 
 const char *raft_errmsg(struct raft *r)

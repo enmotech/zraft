@@ -232,7 +232,7 @@ static int sendAppendEntries(struct raft *r,
 	message.server_id = server->id;
 	message.server_address = server->address;
 
-	req = raft_malloc(sizeof*req);
+	req = raft_malloc(sizeof(*req));
 	if (req == NULL) {
 		rv = RAFT_NOMEM;
 		goto err_after_entries_acquired;

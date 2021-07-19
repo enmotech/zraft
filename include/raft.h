@@ -1036,6 +1036,10 @@ struct raft
 	/* Whether to use pre-vote to avoid disconnected servers disrupting the
      * current leader, as described in 4.2.3 and 9.6. */
 	bool pre_vote;
+        /* Whether to use a no-op entry when a leader is elected in order to decide
+         * where to commit, as described in 6.4
+         */
+        bool no_op;
 
 	/* Limit how long to wait for a stand-by to catch-up with the log when its
      * being promoted to voter. */
@@ -1148,7 +1152,7 @@ RAFT_API void raft_set_snapshot_threshold(struct raft *r, unsigned n);
  * Enable or disable pre-vote support. Pre-vote is turned off by default.
  */
 RAFT_API void raft_set_pre_vote(struct raft *r, bool enabled);
-
+RAFT_API void raft_set_no_op(struct raft *r, bool enabled);
 /**
  * Number of outstanding log entries to keep in the log after a snapshot has
  * been taken. This avoids sending snapshots when a follower is behind by just a

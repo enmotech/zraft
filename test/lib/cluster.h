@@ -196,6 +196,21 @@
         munit_assert_true(done);                                               \
     }
 
+#define CLUSTER_STEP_UNTIL_APPENDED(I, INDEX, MAX_MSECS)                        \
+    {                                                                          \
+	bool done;                                                             \
+	done =                                                                 \
+	    raft_fixture_step_until_appended(&f->cluster, I, INDEX, MAX_MSECS); \
+	munit_assert_true(done);                                               \
+    }
+#define CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(I, INDEX, MAX_MSECS)                        \
+    {                                                                          \
+	bool done;                                                             \
+	done =                                                                 \
+	    raft_fixture_step_until_append_confirmed(&f->cluster, I, INDEX, MAX_MSECS); \
+	munit_assert_true(done);                                               \
+    }
+
 /* Step the cluster until the state of the server with the given index matches
  * the given value, or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_STATE_IS(I, STATE, MAX_MSECS)               \

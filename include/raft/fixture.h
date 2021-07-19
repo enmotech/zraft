@@ -262,7 +262,14 @@ RAFT_API bool raft_fixture_step_until_applied(struct raft_fixture *f,
                                               unsigned i,
                                               raft_index index,
                                               unsigned max_msecs);
-
+RAFT_API bool raft_fixture_step_until_appended(struct raft_fixture *f,
+				      unsigned i,
+				      raft_index index,
+				      unsigned max_msecs);
+RAFT_API bool raft_fixture_step_until_append_confirmed(struct raft_fixture *f,
+					      unsigned i,
+					      raft_index index,
+					      unsigned max_msecs);
 /**
  * Step the cluster until the state of the @i'th server matches the given one,
  * or @max_msecs have elapsed.

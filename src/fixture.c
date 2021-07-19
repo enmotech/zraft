@@ -1676,6 +1676,69 @@ bool raft_fixture_step_until_applied(struct raft_fixture *f,
     return raft_fixture_step_until(f, hasAppliedIndex, &apply, max_msecs);
 }
 
+static bool hasAppendedIndex(struct raft_fixture *f, void *arg)
+{
+	struct step_apply *apply = (struct step_apply *)arg;
+	struct raft *raft;
+	unsigned n = 0;
+	unsigned i;
+
+	if (apply->i < f->n) {
+	    raft = raft_fixture_get(f, apply->i);
+	    return raft_last_index(raft) >= apply->index;
+	}
+
+	for (i = 0; i < f->n; i++) {
+	    raft = raft_fixture_get(f, i);
+	    if (raft_last_index(raft) >= apply->index) {
+		n++;
+	    }
+	}
+	return n == f->n;
+}
+
+
+static bool hasConfirmedAppendIndex(struct raft_fixture *f, void *arg)
+{
+	struct step_apply *apply = (struct step_apply *)arg;
+	struct raft *raft;
+	unsigned n = 0;
+	unsigned i;
+
+	if (f->leader_id)
+		return false;
+	raft = raft_fixture_get(f, f->leader_id);
+	assert(raft->state == RAFT_LEADER);
+	i = apply->i;
+	if (i < f->n)
+	    return raft->leader_state.progress[i].match_index >= apply->index;
+
+	for (i = 0; i < f->n; i++) {
+	    if (raft->leader_state.progress[i].match_index >= apply->index) {
+		n++;
+	    }
+	}
+	return n == f->n;
+}
+
+bool raft_fixture_step_until_appended(struct raft_fixture *f,
+				      unsigned i,
+				      raft_index index,
+				      unsigned max_msecs)
+{
+	struct step_apply apply = {i, index};
+	return raft_fixture_step_until(f, hasAppendedIndex, &apply, max_msecs);
+}
+
+bool raft_fixture_step_until_append_confirmed(struct raft_fixture *f,
+					      unsigned i,
+					      raft_index index,
+					      unsigned max_msecs)
+{
+	struct step_apply apply = {i, index};
+	return raft_fixture_step_until(f, hasConfirmedAppendIndex, &apply, max_msecs);
+}
+
 struct step_state
 {
     unsigned i;

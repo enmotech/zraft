@@ -395,6 +395,42 @@
     cluster_randomize_init(&f->cluster); \
     raft_fixture_hook(&f->cluster, cluster_randomize)
 
+	/* Step until there's a append_entries rpc send form I to J */
+#define CLUSTER_STEP_UNTIL_AE(I, J, AE, MAX_MSECS)										 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_ae_for_send (&f->cluster, I, J, AE, MAX_MSECS);		 \
+        munit_assert_true(done);														 \
+    }
+
+/* Step until there's a append_entries response send form I to J */
+#define CLUSTER_STEP_UNTIL_AE_RES(I, J, AE_RES, MAX_MSECS)								 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_ae_response (&f->cluster, I, J, AE_RES, MAX_MSECS);  \
+        munit_assert_true(done);														 \
+    }
+
+/* Step until there's a request_vote send to I */
+#define CLUSTER_STEP_UNTIL_RV(I, RV, MAX_MSECS)										 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_rv_for_send(&f->cluster, I, RV, MAX_MSECS);		 \
+        munit_assert_true(done);														 \
+    }
+
+/* Step until there's a request_vote response send form I to J */
+#define CLUSTER_STEP_UNTIL_RV_RES(I, J, RV_RES, MAX_MSECS)								 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_rv_response(&f->cluster, I, J, RV_RES, MAX_MSECS);   \
+        munit_assert_true(done);														 \
+    }
+
 void cluster_randomize_init(struct raft_fixture *f);
 void cluster_randomize(struct raft_fixture *f,
                        struct raft_fixture_event *event);

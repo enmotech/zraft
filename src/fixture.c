@@ -1867,14 +1867,16 @@ static bool hasAEForSend(struct raft_fixture *f, void *arg)
 				continue;
 			if (message->server_id != expect->dst+1)
 				continue;
-			if (message->append_entries.n_entries == 0)
-				continue;
 	
 			struct raft_append_entries ae = message->append_entries;
-			assert(ae.term == expect->ae->term);
-			assert(ae.prev_log_index == expect->ae->prev_log_index);
-			assert(ae.prev_log_term == expect->ae->prev_log_term);
-			assert(ae.n_entries == expect->ae->n_entries);
+			if (ae.term != expect->ae->term)
+				continue;
+			if (ae.prev_log_index != expect->ae->prev_log_index)
+				continue;
+			if (ae.prev_log_term != expect->ae->prev_log_term)
+				continue;
+			if (ae.n_entries != expect->ae->n_entries)
+				continue;
 
 			return true;
 		}

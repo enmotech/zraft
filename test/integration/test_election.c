@@ -717,3 +717,106 @@ TEST(election, preVoteWithcandidateCrash, setUp, tearDown, 0, cluster_3_params)
 
     return MUNIT_OK;
 }
+
+#define ASSERT_COMMIT_INDEX(I, INDEX)  \
+{                                                    \
+    struct raft *raft_ = CLUSTER_RAFT(I);            \
+    munit_assert_int(raft_->commit_index, ==, INDEX); \
+}
+
+
+/* etcd_raft_test */
+// TestCannotCommitWithoutNewTermEntry tests the entries cannot be committed
+// when leader changes, no new proposal comes in and no_op disabled
+TEST(election, CannotCommitWithoutNewTermEntry, setUp, tearDown, 0, cluster_5_params)
+{
+	struct fixture *f = data;
+	struct raft_apply req1;
+	struct raft_apply req2;
+
+	(void)params;
+	CLUSTER_START;
+	/* elect server 0 as the leader*/
+	CLUSTER_ELECT(0);
+	ASSERT_TERM(0, 2);
+	/* Disconnect server 0 from all others except server 1. */
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	CLUSTER_SATURATE_BOTHWAYS(0, 3);
+	CLUSTER_SATURATE_BOTHWAYS(0, 4);
+	/* append two entries */
+	CLUSTER_APPLY_ADD_X(0, &req1, 1, NULL);
+	CLUSTER_APPLY_ADD_X(0, &req2, 1, NULL);
+	/* wait until server 0 replicates all entries to server 1 */
+	CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(1, 3, 500);
+	/* server 1 is still the leader */
+	ASSERT_LEADER(0);
+	ASSERT_COMMIT_INDEX(0, 1);
+	/* disconnect server 0 from server 1 */
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 1100);
+	/* resume the network */
+	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+	CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+	CLUSTER_DESATURATE_BOTHWAYS(0, 3);
+	CLUSTER_DESATURATE_BOTHWAYS(0, 4);
+	/* elect server 1 as the leader */
+	CLUSTER_ELECT(1);
+	ASSERT_TERM(1, 3);
+	/* wait until all entries replicates to other servers */
+	CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(5, 3, 1000);
+	/* server 1 should not commit index from pervious terms */
+	ASSERT_COMMIT_INDEX(1, 1);
+	/* append an entry at current term */
+	CLUSTER_APPLY_ADD_X(1, &req1, 1, NULL);
+	/* expect the committed to be advanced */
+	CLUSTER_STEP_UNTIL_APPLIED(5, 4, 3000);
+
+	return MUNIT_OK;
+}
+// TestCommitWithoutNewTermEntry tests the entries could be committed
+// when leader changes, no new proposal comes in and no_op enabled
+TEST(election, CommitWithoutNewTermEntry, setUp, tearDown, 0, cluster_5_params)
+{
+	struct fixture *f = data;
+	struct raft_apply req1;
+	struct raft_apply req2;
+
+	(void)params;
+	/* enable no_op */
+	raft_set_no_op(CLUSTER_RAFT(0), true);
+	raft_set_no_op(CLUSTER_RAFT(1), true);
+	raft_set_no_op(CLUSTER_RAFT(2), true);
+	raft_set_no_op(CLUSTER_RAFT(3), true);
+	raft_set_no_op(CLUSTER_RAFT(4), true);
+	CLUSTER_START;
+	/* elect server 0 as the leader*/
+	CLUSTER_ELECT(0);
+	ASSERT_TERM(0, 2);
+	/* Disconnect server 0 from all others except server 1. */
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	CLUSTER_SATURATE_BOTHWAYS(0, 3);
+	CLUSTER_SATURATE_BOTHWAYS(0, 4);
+	/* append two entries */
+	CLUSTER_APPLY_ADD_X(0, &req1, 1, NULL);
+	CLUSTER_APPLY_ADD_X(0, &req2, 1, NULL);
+	/* wait until server 0 replicates all entries to server 1 */
+	CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(1, 4, 500);
+	/* server 1 is still the leader */
+	ASSERT_LEADER(0);
+	ASSERT_COMMIT_INDEX(0, 1);
+	/* disconnect server 0 from server 1 */
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 1100);
+	/* resume the network */
+	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+	CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+	CLUSTER_DESATURATE_BOTHWAYS(0, 3);
+	CLUSTER_DESATURATE_BOTHWAYS(0, 4);
+	/* elect server 1 as the leader */
+	CLUSTER_ELECT(1);
+	ASSERT_TERM(1, 3);
+	/* expect the committed to be advanced */
+	CLUSTER_STEP_UNTIL_APPLIED(5, 5, 3000);
+
+	return MUNIT_OK;
+}

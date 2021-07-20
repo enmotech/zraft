@@ -883,6 +883,26 @@ struct copy_chunk_posi  ioRepBoundary(struct raft_io *io)
 	return ccp;
 }
 
+int ioMethodPgRepTick(struct raft_io *io,
+		      raft_id src_server_id,
+		      raft_id dest_server_id,
+		      raft_term term,
+		      struct pgrep_permit_info *pi)
+{
+	(void)io;
+	(void)src_server_id;
+	(void)dest_server_id;
+	(void)term;
+	(void)pi;
+
+	return -3;
+}
+
+void ioMethodPgRepCancel(struct raft_io *io)
+{
+	(void)io;
+}
+
 static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 {
     struct io *io;
@@ -929,6 +949,8 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 	raft_io->pgrep_raft_unpermit = ioMethodRaftUnpermit;
 	raft_io->pgrep_reset_ckposi = ioResetCkposi;
 	raft_io->pgrep_boundary = ioRepBoundary;
+	raft_io->pgrep_tick = ioMethodPgRepTick;
+	raft_io->pgrep_cancel = ioMethodPgRepCancel;
     return 0;
 }
 
@@ -2313,6 +2335,40 @@ unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type)
 {
     struct io *io = f->servers[i].io.impl;
     return io->n_recv[type];
+}
+
+static bool raft_fixture_entry_cmp(const struct raft_entry *dst,
+				   const struct raft_entry *src)
+{
+	assert(dst);
+	assert(src);
+
+	return dst->term == src->term
+		&& dst->type == src->type
+		&& dst->buf.len == src->buf.len
+		&& memcmp(dst->buf.base, src->buf.base, dst->buf.len) == 0;
+}
+
+bool raft_fixture_log_cmp(struct raft_fixture *f, unsigned i, unsigned j)
+{
+	struct raft_log *log_i = &f->servers[i].raft.log;
+	struct raft_log *log_j = &f->servers[j].raft.log;
+	size_t num = logNumEntries(log_i);
+	raft_index last_index = logLastIndex(log_i);
+	raft_index index;
+
+	if (num != logNumEntries(log_j))
+		return false;
+	if (last_index != logLastIndex(log_j))
+		return false;
+	assert(last_index >= num);
+
+	for (index = last_index - num + 1; index <= last_index; ++index) {
+		if (!raft_fixture_entry_cmp(logGet(log_i, index),
+					    logGet(log_j, index)))
+					    return false;
+	}
+	return true;
 }
 
 #undef tracef

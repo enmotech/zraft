@@ -493,4 +493,9 @@ RAFT_API unsigned raft_fixture_n_recv(struct raft_fixture *f,
 
 RAFT_API void raft_fixture_set_election_timeout_min(struct raft_fixture *f,
 													unsigned i);
+/**
+ * Compare the logs between @i'th and @j'th server.
+ */
+
+RAFT_API bool raft_fixture_log_cmp(struct raft_fixture *f, unsigned i, unsigned j);
 #endif /* RAFT_FIXTURE_H */

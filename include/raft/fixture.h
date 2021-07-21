@@ -359,6 +359,15 @@ RAFT_API bool raft_fixture_step_ae_mock(struct raft_fixture *f,
 										struct raft_append_entries *ae);
 
 /**
+ * Return te append_entry's address for mock it more convenient 
+ */
+struct raft_append_entries *raft_fixture_get_ae_req(
+										struct raft_fixture *f,
+										unsigned i,
+										unsigned j,
+										struct raft_append_entries *ae);
+
+/**
  * Set a function to be called after every time a fixture event occurs as
  * consequence of a step.
  */

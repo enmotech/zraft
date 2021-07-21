@@ -1,0 +1,10 @@
+*.o
+*.lo
+*.log
+*.trs
+*.dirstamp
+test/unit/core
+test/unit/uv
+test/fuzzy/core
+test/integration/core
+test/integration/uv

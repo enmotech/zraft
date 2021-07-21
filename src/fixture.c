@@ -1685,12 +1685,12 @@ static bool hasAppendedIndex(struct raft_fixture *f, void *arg)
 
 	if (apply->i < f->n) {
 	    raft = raft_fixture_get(f, apply->i);
-	    return raft_last_index(raft) >= apply->index;
+	    return raft->last_stored >= apply->index;
 	}
 
 	for (i = 0; i < f->n; i++) {
 	    raft = raft_fixture_get(f, i);
-	    if (raft_last_index(raft) >= apply->index) {
+	    if (raft->last_stored >= apply->index) {
 		n++;
 	    }
 	}

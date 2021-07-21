@@ -821,7 +821,7 @@ TEST(election, CommitWithoutNewTermEntry, setUp, tearDown, 0, cluster_5_params)
 	return MUNIT_OK;
 }
 
-TEST(election, TestDuelingCandidates, setUp, tearDown, 0, cluster_3_params)
+TEST(election, DuelingCandidates, setUp, tearDown, 0, cluster_3_params)
 {
 	struct fixture *f = data;
 
@@ -830,57 +830,145 @@ TEST(election, TestDuelingCandidates, setUp, tearDown, 0, cluster_3_params)
 	raft_set_no_op(CLUSTER_RAFT(0), true);
 	raft_set_no_op(CLUSTER_RAFT(1), true);
 	raft_set_no_op(CLUSTER_RAFT(2), true);
-	/* prevent the follower from becoming a candidate */
-	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 5000);
-	raft_set_election_timeout(CLUSTER_RAFT(1), 3000);
+	/* server 0 and server 2 become candidates at the same time */
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 1000);
 	CLUSTER_START;
 	/* Disconnect server 0 from server 2. */
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
-	/* wait for server 0 to become the leader*/
-	STEP_UNTIL_LEADER(0);
-	/* prevent the leader from stepping down automatically */
-	raft_set_election_timeout(CLUSTER_RAFT(0), 4000);
-	ASSERT_TIME(1030);
-	ASSERT_TERM(0, 2);
-	CLUSTER_STEP_UNTIL_APPENDED(1, 2, 30);
-	ASSERT_TIME(1045);
-	/* disconnect server 1 from server 0 */
-	CLUSTER_SATURATE_BOTHWAYS(0, 1);
-	/* clear the current leader of server 1 */
-	CLUSTER_RAFT(1)->follower_state.current_leader.id = 0;
-	/* wait until server 2 to become a candidate */
+	STEP_UNTIL_CANDIDATE(0);
 	STEP_UNTIL_CANDIDATE(2);
-	ASSERT_TIME(1200);
+	ASSERT_TIME(1000);
+	ASSERT_TERM(0, 2);
 	ASSERT_TERM(2, 2);
-	/*  candidate 2 now increases its term and tries to vote again */
-	CLUSTER_STEP_UNTIL_TERM_IS(2, 3, 2500);
+	/* server 0 becomes leader since it receives votes from 0 and 1 */
+	STEP_UNTIL_LEADER(0);
+	ASSERT_TIME(1030);
+	CLUSTER_STEP_UNTIL_ELAPSED(15);
 	/* server 2 stays as candidate since it receives a vote from 2 and a rejection from 1 */
 	ASSERT_CANDIDATE(2);
-	ASSERT_TIME(2400);
+	CLUSTER_STEP_UNTIL_APPENDED(1, 2, 30);
+	ASSERT_TIME(1055);
+	CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(1, 2, 30);
+	ASSERT_TIME(1070);
+	ASSERT_TERM(0, 2);
+	ASSERT_TERM(1, 2);
+	ASSERT_TERM(2, 2);
+	/*  candidate 2 now increases its term and tries to vote again */
+	CLUSTER_STEP_UNTIL_TERM_IS(2, 3, 1000);
+	ASSERT_TIME(2000);
+	ASSERT_CANDIDATE(2);
 	/* server 0 is still the leader */
 	ASSERT_LEADER(0);
 	ASSERT_TERM(0, 2);
-	/* server 1 is still the follower */
+	/* server 1 is still a follower */
 	ASSERT_FOLLOWER(1);
 	ASSERT_TERM(1, 2);
-	/* resume the network */
-	CLUSTER_DESATURATE_BOTHWAYS(1, 2);
-	/* server 1 will update its term */
-	CLUSTER_STEP_UNTIL_TERM_IS(1, 3, 500);
+	/* prevent 1 from getting heatbeats */
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	/* clear its leader */
+	CLUSTER_RAFT(1)->follower_state.current_leader.id = 0;
+	/* server 1 will update its term since it receives a rv with a higher term */
+	CLUSTER_STEP_UNTIL_TERM_IS(1, 3, 20);
+	ASSERT_TIME(2015);
+	CLUSTER_STEP_UNTIL_ELAPSED(20);
+	/* 2 will stay candidate since 1 rejects its vote request since 2 does not have a long enough log */
 	ASSERT_CANDIDATE(2);
-	CLUSTER_DESATURATE_BOTHWAYS(0, 2);
-	ASSERT_TERM(0, 2);
-	/* resume connection between server 0 and server 1 */
+	/* restore the network */
 	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
-	CLUSTER_STEP_UNTIL_TERM_IS(0, 3, 500);
-	/* we expect it to disrupt the leader 0 since it has a higher term */
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 1000);
-	ASSERT_CANDIDATE(2);
-	/* 3 will finally be candidate since both 1 and 2 rejects its vote request since 3 does not have a long enough log */
-	CLUSTER_STEP_UNTIL_HAS_LEADER(2000);
+	CLUSTER_DESATURATE_BOTHWAYS(0, 2);
 	ASSERT_LEADER(0);
-	ASSERT_FOLLOWER(1);
+	ASSERT_TERM(0, 2);
+	/* we expect it to disrupt the leader 0 since it has a higher term */
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 200);
+	ASSERT_TIME(2130);
+	ASSERT_TERM(0, 3);
+	STEP_UNTIL_CANDIDATE(1);
+	/* 2 will finally be candidate since both 1 and 2 rejects its vote request since 3 does not have a long enough log */
+	ASSERT_CANDIDATE(2);
+	CLUSTER_STEP_UNTIL_HAS_LEADER(2000);
+	ASSERT_LEADER(1);
+	ASSERT_FOLLOWER(0);
 	ASSERT_FOLLOWER(2);
+
+	return MUNIT_OK;
+}
+
+TEST(election, DuelingPreCandidates, setUp, tearDown, 0, cluster_3_params)
+{
+	struct fixture *f = data;
+
+	(void)params;
+	/* enable no_op */
+	raft_set_no_op(CLUSTER_RAFT(0), true);
+	raft_set_no_op(CLUSTER_RAFT(1), true);
+	raft_set_no_op(CLUSTER_RAFT(2), true);
+	/* enable pre-vote */
+	raft_set_pre_vote(CLUSTER_RAFT(0), true);
+	raft_set_pre_vote(CLUSTER_RAFT(1), true);
+	raft_set_pre_vote(CLUSTER_RAFT(2), true);
+	/* server 0 and server 2 become candidates at the same time */
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 1000);
+	/* server 1 does not become candidate too soon */
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1500);
+	CLUSTER_START;
+	/* Disconnect server 0 from server 2. */
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	STEP_UNTIL_CANDIDATE(0);
+	STEP_UNTIL_CANDIDATE(2);
+	ASSERT_TIME(1000);
+	/* both server 0 and server 2 don't increase their term, since it's the pre-vote phase */
+	ASSERT_TERM(0, 1);
+	ASSERT_TERM(2, 1);
+	/* server 1 votes for both server 1 and server 2, so they increase their term */
+	CLUSTER_STEP_UNTIL_TERM_IS(0, 2, 40);
+	CLUSTER_STEP_UNTIL_TERM_IS(2, 2, 10);
+	ASSERT_TIME(1030);
+	ASSERT_TERM(2, 2);
+	/* server 0 becomes leader since it receives votes from 0 and 1 */
+	STEP_UNTIL_LEADER(0);
+	ASSERT_TIME(1060);
+	ASSERT_LEADER(0);
+	CLUSTER_STEP_UNTIL_ELAPSED(15);
+	/* server 2 remains candidate since server 1 voted for server 0 */
+	ASSERT_CANDIDATE(2);
+	CLUSTER_STEP_UNTIL_APPENDED(1, 2, 30);
+	ASSERT_TIME(1085);
+	CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(1, 2, 30);
+	ASSERT_TIME(1100);
+	/* server 0 is still the leader */
+	ASSERT_LEADER(0);
+	ASSERT_TERM(0, 2);
+	/* server 1 is still a follower */
+	ASSERT_FOLLOWER(1);
+	ASSERT_TERM(1, 2);
+	/* prevent 1 from getting heatbeats */
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	/* clear its leader */
+	CLUSTER_RAFT(1)->follower_state.current_leader.id = 0;
+	CLUSTER_STEP_UNTIL_ELAPSED(1100);
+	ASSERT_TIME(2200);
+	/* server 2 is still a candidate and does not increase its term */
+	ASSERT_CANDIDATE(2);
+	ASSERT_TERM(2, 2);
+	/* server 0 is still the leader */
+	ASSERT_LEADER(0);
+	ASSERT_TERM(0, 2);
+	/* server 1 is still a follower */
+	ASSERT_FOLLOWER(1);
+	ASSERT_TERM(1, 2);
+	/* restore the network */
+	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+	CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	/* server 2 will finally be a follower */
+	ASSERT_FOLLOWER(2);
+	ASSERT_TERM(2, 2);
+	/* server 0 is still the leader */
+	ASSERT_LEADER(0);
+	ASSERT_TERM(0, 2);
+	/* server 1 is still a follower */
+	ASSERT_FOLLOWER(1);
+	ASSERT_TERM(1, 2);
 
 	return MUNIT_OK;
 }

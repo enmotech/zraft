@@ -2150,6 +2150,57 @@ bool raft_fixture_step_ae_mock(struct raft_fixture *f,
 	return mockAE(f, &mock); 
 }
 
+struct raft_append_entries *getAE(
+	struct raft_fixture *f,
+	void *arg)
+{
+	struct step_send_ae *expect = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)expect->src);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_APPEND_ENTRIES)
+				continue;
+			if (message->server_id != expect->dst+1)
+				continue;
+	
+			struct raft_append_entries ae = message->append_entries;
+			if (ae.term != expect->ae->term)
+				continue;
+			if (ae.prev_log_index != expect->ae->prev_log_index)
+				continue;
+			if (ae.prev_log_term != expect->ae->prev_log_term)
+				continue;
+			if (ae.n_entries != expect->ae->n_entries)
+				continue;
+
+			return &message->append_entries;
+		}
+	}
+	return NULL;
+}
+
+struct raft_append_entries *raft_fixture_get_ae_req(
+	struct raft_fixture *f,
+	unsigned i,
+	unsigned j,
+	struct raft_append_entries *ae)
+{
+	struct step_send_ae mock = {i, j, ae};
+	return getAE(f, &mock); 
+}
+
 static bool mockRV(struct raft_fixture *f,
 					  void *arg)
 {

@@ -102,7 +102,9 @@ test_integration_core_SOURCES = \
   test/integration/test_transfer.c \
   test/integration/test_start.c \
   test/integration/test_paper.c \
-  test/integration/test_etcd.c
+  test/integration/test_etcd.c \
+  test/integration/test_sprint13.c
+
 test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_integration_core_LDFLAGS = -no-install
 test_integration_core_LDADD = libtest.la libraft.la

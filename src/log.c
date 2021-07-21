@@ -441,7 +441,7 @@ void logClose(struct raft_log *l)
                 if (entry->batch != batch) {
                     /* This batch was not released yet, so let's do it now. */
                     batch = entry->batch;
-                    raft_free(entry->batch);
+                    raft_batch_free(entry->batch);
                 }
             }
         }
@@ -857,6 +857,7 @@ static bool isBatchReferenced(struct raft_log *l, const void *batch)
     return false;
 }
 
+
 void logRelease(struct raft_log *l,
                 const raft_index index,
                 struct raft_entry entries[],
@@ -888,7 +889,7 @@ void logRelease(struct raft_log *l,
                 if (entry->batch != batch) {
                     if (!isBatchReferenced(l, entry->batch)) {
                         batch = entry->batch;
-                        raft_free(batch);
+                        raft_batch_free(batch);
                     }
                 }
             }
@@ -922,7 +923,7 @@ static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
         }
     } else {
         if (!isBatchReferenced(l, entry->batch)) {
-            raft_free(entry->batch);
+            raft_batch_free(entry->batch);
         }
     }
 }

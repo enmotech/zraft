@@ -1369,6 +1369,7 @@ struct raft_heap
 	void *(*realloc)(void *data, void *ptr, size_t size);
 	void *(*aligned_alloc)(void *data, size_t alignment, size_t size);
 	void (*aligned_free)(void *data, size_t alignment, void *ptr);
+	void (*batch_free)(void *data, void *batch);
 };
 
 RAFT_API void *raft_malloc(size_t size);
@@ -1377,6 +1378,7 @@ RAFT_API void *raft_calloc(size_t nmemb, size_t size);
 RAFT_API void *raft_realloc(void *ptr, size_t size);
 RAFT_API void *raft_aligned_alloc(size_t alignment, size_t size);
 RAFT_API void raft_aligned_free(size_t alignment, void *ptr);
+RAFT_API void raft_batch_free(void *ptr);
 
 /**
  * Use a custom dynamic memory allocator.

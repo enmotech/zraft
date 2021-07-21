@@ -1868,6 +1868,8 @@ int replicationAppend(struct raft *r,
 		 * However, this would lead to memory spikes in certain edge cases.
 		 * https://github.com/canonical/dqlite/issues/276
 		 */
+
+		/*
 		struct raft_entry copy = { 0 };
 		rv = entryCopy(entry, &copy);
 		if (rv != 0) {
@@ -1875,6 +1877,8 @@ int replicationAppend(struct raft *r,
 		}
 
 		rv = logAppend(&r->log, copy.term, copy.type, &copy.buf, NULL);
+		 */
+		rv = logAppend(&r->log, entry->term, entry->type, &entry->buf, entry->batch);
 		if (rv != 0) {
 			goto err_after_request_alloc;
 		}
@@ -1902,7 +1906,7 @@ int replicationAppend(struct raft *r,
 		goto err_after_acquire_entries;
 	}
 
-	entryBatchesDestroy(args->entries, args->n_entries);
+	raft_free(args->entries);
 	return 0;
 
 err_after_acquire_entries:

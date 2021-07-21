@@ -189,7 +189,7 @@ reply:
 
 	/* Free the entries batch, if any. */
 	if (args->n_entries > 0 && args->entries[0].batch != NULL) {
-		raft_free(args->entries[0].batch);
+		raft_batch_free(args->entries[0].batch);
 	}
 
 	if (args->entries != NULL) {

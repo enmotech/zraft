@@ -14,10 +14,6 @@ struct fixture
 {
 	FIXTURE_CLUSTER;
 };
-#ifdef CLUSTER_N
-#undef CLUSTER_N
-#define CLUSTER_N 3
-#endif
 
 struct raft_entry g_et;
 
@@ -25,7 +21,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
 	struct fixture *f = munit_malloc(sizeof *f);
 	unsigned i;
-	SETUP_CLUSTER(CLUSTER_N);
+	SETUP_CLUSTER(3);
 	CLUSTER_BOOTSTRAP;
 	for (i = 0; i < CLUSTER_N; i++) {
 		struct raft *raft = CLUSTER_RAFT(i);

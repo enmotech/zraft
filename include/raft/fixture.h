@@ -361,7 +361,7 @@ RAFT_API bool raft_fixture_step_ae_mock(struct raft_fixture *f,
 /**
  * Return te append_entry's address for mock it more convenient 
  */
-struct raft_append_entries *raft_fixture_get_ae_req(
+ RAFT_API struct raft_append_entries *raft_fixture_get_ae_req(
 										struct raft_fixture *f,
 										unsigned i,
 										unsigned j,

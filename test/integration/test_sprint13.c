@@ -4,6 +4,7 @@
 #include "../../src/election.h"
 #include "../../src/log.h"
 #include "../../src/progress.h"
+#include "../../src/byte.h"
 
 /******************************************************************************
  *
@@ -15,17 +16,12 @@ struct fixture
 {
 	FIXTURE_CLUSTER;
 };
-#ifdef CLUSTER_N
-#undef CLUSTER_N
-#define CLUSTER_N 3
-#endif
-
 
 static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 {
 	struct fixture *f = munit_malloc(sizeof *f);
 	unsigned i;
-	SETUP_CLUSTER(CLUSTER_N);
+	SETUP_CLUSTER(3);
 	CLUSTER_BOOTSTRAP;
 	for (i = 0; i < CLUSTER_N; i++) {
 		struct raft *raft = CLUSTER_RAFT(i);
@@ -508,6 +504,7 @@ TEST(sprint13_tsl, voteFromAnyState, setUp, tearDown, 0, NULL)
 
 	CLUSTER_STEP_UNTIL_ELAPSED(30);
 
+	//I be the leader, cause follower vote for it.
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
@@ -516,23 +513,33 @@ TEST(sprint13_tsl, voteFromAnyState, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 	CLUSTER_SATURATE_BOTHWAYS(j, k);
 	
-	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	CLUSTER_STEP_UNTIL_ELAPSED(1300);
+
+	ASSERT_FOLLOWER(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+	ASSERT_TERM(i, 2);
+	ASSERT_TERM(j, 3);
+	ASSERT_TERM(k, 3);
+
+	//mock a higher term.
+	CLUSTER_RAFT(i)->current_term = 3;
+	CLUSTER_STEP_UNTIL_ELAPSED(700);
 
 	ASSERT_CANDIDATE(i);
 	ASSERT_CANDIDATE(j);
 	ASSERT_CANDIDATE(k);
-	ASSERT_TERM(i, 3);
+	ASSERT_TERM(i, 4);
 	ASSERT_TERM(j, 3);
 	ASSERT_TERM(k, 3);
 
-	CLUSTER_RAFT(i)->current_term = 4;
-
-	CLUSTER_SATURATE_BOTHWAYS(i, j);
-	CLUSTER_SATURATE_BOTHWAYS(i, k);
-	CLUSTER_SATURATE_BOTHWAYS(j, k);
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
 	CLUSTER_STEP_UNTIL_ELAPSED(30);
 
+	//I be the leader, cause candidate vote for it.
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
@@ -545,6 +552,225 @@ TEST(sprint13_tsl, voteFromAnyState_prevote, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
 
+	CLUSTER_START;
+	ASSERT_FOLLOWER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
 
+	//set all server pre-vote true
+	raft_set_pre_vote(CLUSTER_RAFT(i), true);	
+	raft_set_pre_vote(CLUSTER_RAFT(j), true);	
+	raft_set_pre_vote(CLUSTER_RAFT(k), true);	
+
+	CLUSTER_STEP_UNTIL_ELAPSED(1000);
+
+	ASSERT_CANDIDATE(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(30);
+
+	//after pre-vote
+	ASSERT_CANDIDATE(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(30);
+
+	//after the real vote
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	CLUSTER_SATURATE_BOTHWAYS(i, j);
+	CLUSTER_SATURATE_BOTHWAYS(i, k);
+	CLUSTER_SATURATE_BOTHWAYS(j, k);
+	
+	CLUSTER_STEP_UNTIL_ELAPSED(1300);
+
+	ASSERT_FOLLOWER(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+	ASSERT_TERM(i, 2);
+	ASSERT_TERM(j, 2);
+	ASSERT_TERM(k, 2);
+
+	//mock a higher term
+	CLUSTER_RAFT(i)->current_term = 3;
+	CLUSTER_STEP_UNTIL_ELAPSED(700);
+
+	ASSERT_CANDIDATE(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+	ASSERT_TERM(i, 3);
+	ASSERT_TERM(j, 2);
+	ASSERT_TERM(k, 2);
+
+	CLUSTER_DESATURATE_BOTHWAYS(i, j);
+	CLUSTER_DESATURATE_BOTHWAYS(i, k);
+	CLUSTER_DESATURATE_BOTHWAYS(j, k);
+
+	//after pre-vote
+	CLUSTER_STEP_UNTIL_ELAPSED(30);
+
+	ASSERT_CANDIDATE(i);
+	ASSERT_CANDIDATE(j);
+	ASSERT_CANDIDATE(k);
+	ASSERT_TERM(i, 4);
+	ASSERT_TERM(j, 2);
+	ASSERT_TERM(k, 2);
+
+	//after real vote
+	CLUSTER_STEP_UNTIL_ELAPSED(30);
+
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	ASSERT_TERM(i, 4);
+	ASSERT_TERM(j, 4);
+	ASSERT_TERM(k, 4);
+
+	return MUNIT_OK;
+}
+
+TEST(sprint13_tsl, logReplication, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+	unsigned i=0,j=1,k=2;
+
+	//prepare persist entries
+	for (unsigned a = 0; a < 3; a++) {
+		g_et_0[a].term = 2;
+		g_et_0[a].type = RAFT_COMMAND;
+		FsmEncodeSetX((a+1)*111, &g_et_0[a].buf);
+	}
+
+	for (uint8_t a = 0; a < 3; a++)
+		CLUSTER_ADD_ENTRY(i, &g_et_0[a]);
+	
+
+	CLUSTER_START;
+
+	CLUSTER_STEP_UNTIL_ELAPSED(1030);
+	
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	ASSERT_FOLLOWER(k);
+
+	munit_assert_llong(4, ==, logLastIndex(&CLUSTER_RAFT(i)->log));
+	munit_assert_llong(1, ==, logLastIndex(&CLUSTER_RAFT(j)->log));
+	munit_assert_llong(1, ==, logLastIndex(&CLUSTER_RAFT(k)->log));
+
+	munit_assert_llong(2, ==, logTermOf(&CLUSTER_RAFT(i)->log, 2));
+	munit_assert_llong(2, ==, logTermOf(&CLUSTER_RAFT(i)->log, 3));
+	munit_assert_llong(2, ==, logTermOf(&CLUSTER_RAFT(i)->log, 4));
+
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);	
+	munit_assert_llong(1, ==, CLUSTER_RAFT(j)->commit_index);	
+	munit_assert_llong(1, ==, CLUSTER_RAFT(k)->commit_index);	
+
+	CLUSTER_STEP_UNTIL_ELAPSED(1000);
+
+	//all those logs has been replicated to followers
+	munit_assert_llong(4, ==, logLastIndex(&CLUSTER_RAFT(i)->log));
+	munit_assert_llong(4, ==, logLastIndex(&CLUSTER_RAFT(j)->log));
+	munit_assert_llong(4, ==, logLastIndex(&CLUSTER_RAFT(k)->log));
+
+	//check all the commit_index
+	munit_assert_llong(4, ==, CLUSTER_RAFT(i)->commit_index);	
+	munit_assert_llong(4, ==, CLUSTER_RAFT(j)->commit_index);	
+	munit_assert_llong(4, ==, CLUSTER_RAFT(k)->commit_index);	
+
+	//check the log data
+	void *base = NULL;
+	for (unsigned a = 1; a < 4; a++) {
+		base = (char *)CLUSTER_RAFT(i)->log.entries[a].buf.base + 8;
+		munit_assert_uint64(a*111, ==, byteGet64((const void **)&base));
+
+		base = (char *)CLUSTER_RAFT(j)->log.entries[a].buf.base + 8;
+		munit_assert_uint64(a*111, ==, byteGet64((const void **)&base));
+
+		base = (char *)CLUSTER_RAFT(k)->log.entries[a].buf.base + 8;
+		munit_assert_uint64(a*111, ==, byteGet64((const void **)&base));
+	}
+	
+	return MUNIT_OK;
+}
+
+static char *cluster_1[] = {"1", NULL};
+static MunitParameterEnum cluster_1_params[] = {
+	{CLUSTER_N_PARAM, cluster_1},
+	{NULL, NULL},
+};
+//test that single node cluster also can commit logs
+TEST(sprint13_tsl, singleNodeCommit, setUp, tearDown, 0, cluster_1_params)
+{
+	struct fixture *f = data;
+	//add some entries
+	for (unsigned a = 0; a < 3; a++) {
+		g_et_0[a].term = 1;
+		g_et_0[a].type = RAFT_COMMAND;
+		FsmEncodeSetX((a+1)*111, &g_et_0[a].buf);
+	}
+
+	for (uint8_t a = 0; a < 3; a++)
+		CLUSTER_ADD_ENTRY(0, &g_et_0[a]);
+
+	CLUSTER_START;		
+	ASSERT_LEADER(0);
+
+	munit_assert_llong(4, ==, logLastIndex(&CLUSTER_RAFT(0)->log));
+	munit_assert_llong(4, ==, CLUSTER_RAFT(0)->commit_index);	
+
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(0, req, 1, test_free_req);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(10);
+
+	munit_assert_llong(5, ==, logLastIndex(&CLUSTER_RAFT(0)->log));
+	munit_assert_llong(5, ==, CLUSTER_RAFT(0)->commit_index);	
+
+	return MUNIT_OK;
+}
+
+static char *cluster_2[] = {"2", NULL};
+static MunitParameterEnum cluster_2_params[] = {
+	{CLUSTER_N_PARAM, cluster_2},
+	{NULL, NULL},
+};
+
+TEST(sprint13_tsl, ignoreOldTermMessage, setUp, tearDown, 0, cluster_2_params)
+{
+	struct fixture *f = data;
+	unsigned i = 0,j = 1;
+	struct raft_append_entries *ae_ptr = NULL;
+
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_ELAPSED(1030);
+
+	ASSERT_LEADER(i);
+	ASSERT_FOLLOWER(j);
+	
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
+	
+	struct raft_append_entries ae = {
+		.prev_log_term = 1,
+		.prev_log_index = 1,
+		.term = 2,
+		.n_entries = 1
+	};
+	CLUSTER_STEP_UNTIL_AE(i, j, &ae, 200);
+	ae_ptr = raft_fixture_get_ae_req(&f->cluster, i, j, &ae);	
+	munit_assert_not_null(ae_ptr);
+
+	//mock a lower term
+	ae_ptr->term = 1;	
+
+	CLUSTER_STEP_UNTIL_ELAPSED(15);
+
+	//J ignore this AE, so that its last log index still be 1
+	munit_assert_llong(1, ==, logLastIndex(&CLUSTER_RAFT(j)->log));
 	return MUNIT_OK;
 }

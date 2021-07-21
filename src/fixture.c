@@ -2029,8 +2029,12 @@ static bool hasAEResponse(struct raft_fixture *f, void *arg)
 				continue;
 
 			struct raft_append_entries_result res = message->append_entries_result;
-			assert(res.last_log_index == expect->res->last_log_index);
-			assert(res.rejected == expect->res->rejected);
+			if (res.last_log_index != expect->res->last_log_index)
+				continue;
+			if (res.rejected != expect->res->rejected)
+				continue;
+			if (res.term != expect->res->term)
+				continue;
 
 			return true;
 		}

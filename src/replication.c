@@ -1187,10 +1187,9 @@ static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
 	HeapFree(req);
 }
 
-void sendAppendEntriesResult(
+static void sendAppendEntriesResult(
 	struct raft *r,
-	const struct raft_append_entries_result *result,
-	const struct raft_append_entries *args)
+	const struct raft_append_entries_result *result)
 {
 	struct raft_message message;
 	struct raft_io_send *req;
@@ -1365,7 +1364,7 @@ respond:
 		result.pi.replicating = PGREP_RND_ERR;
 	}
 
-	sendAppendEntriesResult(r, &result, args);
+	sendAppendEntriesResult(r, &result);
 
 out:
 	if (free_request) {
@@ -1987,7 +1986,7 @@ discard:
 respond:
 	if (r->state != RAFT_UNAVAILABLE) {
 		result.last_log_index = r->last_stored;
-		sendAppendEntriesResult(r, &result, NULL);
+		sendAppendEntriesResult(r, &result);
 	}
 
 	raft_free(request);
@@ -2126,7 +2125,7 @@ void replicationApplyFollowerCb(
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s]: sendAppendEntriesResult.",
 		   rkey(r), r->state, args->pkt, __func__);
 
-	sendAppendEntriesResult(r, &result, args);
+	sendAppendEntriesResult(r, &result);
 
 	logRelease(&r->log, request->index, request->args.entries,
 			   request->args.n_entries);

@@ -189,19 +189,19 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
     assert(server->role == RAFT_VOTER);
 
     if (n_voters == 1) {
-        tracef("self elect and convert to leader");
-	rv =  convertToLeader(r);
-	if (rv != 0)
-		return rv;
-	/* Check if we can commit some new entries. */
-	replicationQuorum(r, r->last_stored);
+            tracef("self elect and convert to leader");
+        rv =  convertToLeader(r);
+        if (rv != 0)
+            return rv;
+        /* Check if we can commit some new entries. */
+        replicationQuorum(r, r->last_stored);
 
-	rv = replicationApply(r);
-	if (rv != 0) {
-		/* TODO: just log the error? */
-		convertToUnavailable(r);
-	}
-	return rv;
+        rv = replicationApply(r);
+        if (rv != 0) {
+            /* TODO: just log the error? */
+            convertToUnavailable(r);
+        }
+        return rv;
     }
 
     /* Start a new election round */

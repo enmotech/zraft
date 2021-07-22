@@ -2625,7 +2625,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 	}
 
 	if (votes > configurationVoterCount(&r->configuration) / 2) {
-		r->commit_index = min(index, r->last_stored);
+		r->commit_index = index;
 		tracef("new commit index %llu", r->commit_index);
 	}
 

@@ -63,7 +63,7 @@ static void test_free_req(struct raft_apply *req, int status, void *result)
 	free(result);
 	free(req);
 }
-#include <unistd.h>
+
 //leader start replication, then check its progress: the State, Match Index,
 //Next Index.
 TEST(sprint13_tsl, progressLeader, setUp, tearDown, 0, NULL)
@@ -944,8 +944,6 @@ TEST(sprint13_tsl, commitWithEvenNodeMatchTerm, setUp, tearDown, 0, cluster_4_pa
 
 	//commit index will be 2 since reach a majority
 	munit_assert_llong(2, ==, CLUSTER_RAFT(i)->commit_index);
-	return MUNIT_OK;
-
 
 	return MUNIT_OK;
 }
@@ -1002,8 +1000,6 @@ TEST(sprint13_tsl, commitWithEvenNodeHigherTerm, setUp, tearDown, 0, cluster_4_p
 
 	//commit index still be 1 since leader won't commit preceding log 
 	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
-	return MUNIT_OK;
-
 
 	return MUNIT_OK;
 }

@@ -1207,7 +1207,7 @@ static void sendAppendEntriesResult(
 	req->data = r;
 
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s] permit[%d] time[%ld].",
-		   rkey(r), r->state, args->pkt, __func__, result->pi.permit, result->pi.time);
+		   rkey(r), r->state, result->pkt, __func__, result->pi.permit, result->pi.time);
 
 	const struct raft_server *me = configurationGet(&r->configuration, r->id);
 	int role = -1;

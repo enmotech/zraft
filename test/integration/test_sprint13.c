@@ -5,6 +5,7 @@
 #include "../../src/log.h"
 #include "../../src/progress.h"
 #include "../../src/byte.h"
+#include "../../src/replication.h"
 
 /******************************************************************************
  *
@@ -772,5 +773,237 @@ TEST(sprint13_tsl, ignoreOldTermMessage, setUp, tearDown, 0, cluster_2_params)
 
 	//J ignore this AE, so that its last log index still be 1
 	munit_assert_llong(1, ==, logLastIndex(&CLUSTER_RAFT(j)->log));
+	return MUNIT_OK;
+}
+
+//test that single node leader commit
+TEST(sprint13_tsl, commitWithSingleNode, setUp, tearDown, 0, cluster_1_params)
+{
+	struct fixture *f = data;
+	
+	CLUSTER_START;
+	ASSERT_LEADER(0);
+	munit_assert_llong(1, ==, CLUSTER_RAFT(0)->commit_index);
+
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(0, req, 1, test_free_req);
+
+	//mock a higher term
+	CLUSTER_RAFT(0)->current_term = 2;
+	CLUSTER_STEP_UNTIL_ELAPSED(10);
+
+	replicationQuorum(CLUSTER_RAFT(0), 2);
+	munit_assert_llong(1, ==, CLUSTER_RAFT(0)->commit_index);
+
+	struct raft_apply *req1 = munit_malloc(sizeof *req1);
+	CLUSTER_APPLY_ADD_X(0, req1, 1, test_free_req);
+	CLUSTER_STEP_UNTIL_ELAPSED(10);
+
+	//leader commit all the log
+	replicationQuorum(CLUSTER_RAFT(0), 3);
+	munit_assert_llong(3, ==, CLUSTER_RAFT(0)->commit_index);
+
+	return MUNIT_OK;
+}
+
+
+static char *cluster_4[] = {"4", NULL};
+static MunitParameterEnum cluster_4_params[] = {
+	{CLUSTER_N_PARAM, cluster_4},
+	{NULL, NULL},
+};
+extern void replicationQuorum(struct raft *r, const raft_index index);
+
+//test leader change commit index by check progress 
+TEST(sprint13_tsl, commitWithOddNodeMatchTerm, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i = 0,j = 1,k = 2;
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	
+	struct raft_progress *pr_i = &(CLUSTER_RAFT(i)->leader_state.progress[i]);
+	struct raft_progress *pr_j = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
+	struct raft_progress *pr_k = &(CLUSTER_RAFT(i)->leader_state.progress[k]);
+	munit_assert_not_null(pr_i);
+	munit_assert_not_null(pr_j);
+	munit_assert_not_null(pr_k);
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(0, req, 1, test_free_req);
+
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->last_stored);
+	CLUSTER_STEP_UNTIL_ELAPSED(10);
+	munit_assert_llong(2, ==, CLUSTER_RAFT(i)->last_stored);
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 1;
+	pr_k->match_index = 1;
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 2;
+	pr_k->match_index = 1;
+
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	munit_assert_llong(2, ==, CLUSTER_RAFT(i)->commit_index);
+	return MUNIT_OK;
+}
+
+TEST(sprint13_tsl, commitWithOddNodeHigherTerm, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	unsigned i = 0,j = 1,k = 2;
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	
+	struct raft_progress *pr_i = &(CLUSTER_RAFT(i)->leader_state.progress[i]);
+	struct raft_progress *pr_j = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
+	struct raft_progress *pr_k = &(CLUSTER_RAFT(i)->leader_state.progress[k]);
+	munit_assert_not_null(pr_i);
+	munit_assert_not_null(pr_j);
+	munit_assert_not_null(pr_k);
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(0, req, 1, test_free_req);
+
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->last_stored);
+	CLUSTER_STEP_UNTIL_ELAPSED(10);
+	munit_assert_llong(2, ==, CLUSTER_RAFT(i)->last_stored);
+
+	//mock a higher term
+	CLUSTER_RAFT(i)->current_term = 3;
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 1;
+	pr_k->match_index = 1;
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	//commit index still be 1 since not reach majority
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 2;
+	pr_k->match_index = 1;
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	//commit index still be 1 since leader won't commit preceding log 
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+	return MUNIT_OK;
+}
+
+TEST(sprint13_tsl, commitWithEvenNodeMatchTerm, setUp, tearDown, 0, cluster_4_params)
+{
+	struct fixture *f = data;
+	unsigned i = 0,j = 1,k = 2, l = 3;
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	
+	struct raft_progress *pr_i = &(CLUSTER_RAFT(i)->leader_state.progress[i]);
+	struct raft_progress *pr_j = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
+	struct raft_progress *pr_k = &(CLUSTER_RAFT(i)->leader_state.progress[k]);
+	struct raft_progress *pr_l = &(CLUSTER_RAFT(i)->leader_state.progress[l]);
+	munit_assert_not_null(pr_i);
+	munit_assert_not_null(pr_j);
+	munit_assert_not_null(pr_k);
+	munit_assert_not_null(pr_l);
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(0, req, 1, test_free_req);
+
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->last_stored);
+	CLUSTER_STEP_UNTIL_ELAPSED(10);
+	munit_assert_llong(2, ==, CLUSTER_RAFT(i)->last_stored);
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 1;
+	pr_k->match_index = 1;
+	pr_l->match_index = 1;
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	//commit index still be 1 since not reach majority
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 2;
+	pr_k->match_index = 1;
+	pr_l->match_index = 1;
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	//commit index still be 1 since not reach majority
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 2;
+	pr_k->match_index = 2;
+	pr_l->match_index = 1;
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	//commit index will be 2 since reach a majority
+	munit_assert_llong(2, ==, CLUSTER_RAFT(i)->commit_index);
+	return MUNIT_OK;
+
+
+	return MUNIT_OK;
+}
+
+TEST(sprint13_tsl, commitWithEvenNodeHigherTerm, setUp, tearDown, 0, cluster_4_params)
+{
+	struct fixture *f = data;
+	unsigned i = 0,j = 1,k = 2, l = 3;
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	
+	struct raft_progress *pr_i = &(CLUSTER_RAFT(i)->leader_state.progress[i]);
+	struct raft_progress *pr_j = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
+	struct raft_progress *pr_k = &(CLUSTER_RAFT(i)->leader_state.progress[k]);
+	struct raft_progress *pr_l = &(CLUSTER_RAFT(i)->leader_state.progress[l]);
+	munit_assert_not_null(pr_i);
+	munit_assert_not_null(pr_j);
+	munit_assert_not_null(pr_k);
+	munit_assert_not_null(pr_l);
+	struct raft_apply *req = munit_malloc(sizeof *req);
+	CLUSTER_APPLY_ADD_X(0, req, 1, test_free_req);
+
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->last_stored);
+	CLUSTER_STEP_UNTIL_ELAPSED(10);
+	munit_assert_llong(2, ==, CLUSTER_RAFT(i)->last_stored);
+
+	//mock a higher term
+	CLUSTER_RAFT(i)->current_term = 3;
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 1;
+	pr_k->match_index = 1;
+	pr_l->match_index = 1;
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	//commit index still be 1 since not reach majority
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 2;
+	pr_k->match_index = 1;
+	pr_l->match_index = 1;
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	//commit index still be 1 since not reach majority
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+
+	pr_i->match_index = 2;
+	pr_j->match_index = 2;
+	pr_k->match_index = 2;
+	pr_l->match_index = 1;
+	replicationQuorum(CLUSTER_RAFT(i), 2);
+
+	//commit index still be 1 since leader won't commit preceding log 
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+	return MUNIT_OK;
+
+
 	return MUNIT_OK;
 }

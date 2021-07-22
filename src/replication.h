@@ -96,6 +96,6 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
  *
  *   If there exists an N such that N > commitIndex, a majority of
  *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N */
-void replicationQuorum(struct raft *r, const raft_index index);
+RAFT_API void replicationQuorum(struct raft *r, const raft_index index);
 
 #endif /* REPLICATION_H_ */

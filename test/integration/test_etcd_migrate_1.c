@@ -237,9 +237,9 @@ raft_free(_buf.base);                                     \
 } while (0)
 
 
-SUITE(etcd)
+SUITE(etcd_migrate)
 
-TEST(etcd,
+TEST(etcd_migrate,
      learnerPromotion,
      setUp,
      tearDown,
@@ -273,7 +273,7 @@ TEST(etcd,
 	return MUNIT_OK;
 }
 
-TEST(etcd, candidateConcede, setUp, tearDown, 0, cluster_3_params)
+TEST(etcd_migrate, candidateConcede, setUp, tearDown, 0, cluster_3_params)
 {
 	struct fixture *f = data;
 	(void)params;
@@ -300,7 +300,7 @@ TEST(etcd, candidateConcede, setUp, tearDown, 0, cluster_3_params)
 	return MUNIT_OK;
 }
 
-TEST(etcd, singleNodeCandidate, setUp, tearDown, 0, cluster_1_params)
+TEST(etcd_migrate, singleNodeCandidate, setUp, tearDown, 0, cluster_1_params)
 {
 	struct fixture *f = data;
 	(void)params;
@@ -311,7 +311,7 @@ TEST(etcd, singleNodeCandidate, setUp, tearDown, 0, cluster_1_params)
 	return MUNIT_OK;
 }
 
-TEST(etcd, singleNodePreCandidate, setUp, tearDown, 0, cluster_1_params)
+TEST(etcd_migrate, singleNodePreCandidate, setUp, tearDown, 0, cluster_1_params)
 {
 	struct fixture *f = data;
 	(void)params;
@@ -323,7 +323,7 @@ TEST(etcd, singleNodePreCandidate, setUp, tearDown, 0, cluster_1_params)
 	return MUNIT_OK;
 }
 
-TEST(etcd, proposalCluster3With3NodesUp, setUp, tearDown, 0, cluster_3_params)
+TEST(etcd_migrate, proposalCluster3With3NodesUp, setUp, tearDown, 0, cluster_3_params)
 {
 	struct fixture *f = data;
 	(void)params;
@@ -339,7 +339,7 @@ TEST(etcd, proposalCluster3With3NodesUp, setUp, tearDown, 0, cluster_3_params)
 	return MUNIT_OK;
 }
 
-TEST(etcd, proposalCluster3With2NodesUp, setUp, tearDown, 0, cluster_3_params)
+TEST(etcd_migrate, proposalCluster3With2NodesUp, setUp, tearDown, 0, cluster_3_params)
 {
 	struct fixture *f = data;
 	(void)params;
@@ -357,7 +357,7 @@ TEST(etcd, proposalCluster3With2NodesUp, setUp, tearDown, 0, cluster_3_params)
 	return MUNIT_OK;
 }
 
-TEST(etcd, proposalCluster3With1NodesUp, setUp, tearDown, 0, cluster_3_params)
+TEST(etcd_migrate, proposalCluster3With1NodesUp, setUp, tearDown, 0, cluster_3_params)
 {
 	struct fixture *f = data;
 	(void)params;
@@ -377,7 +377,7 @@ TEST(etcd, proposalCluster3With1NodesUp, setUp, tearDown, 0, cluster_3_params)
 	return MUNIT_OK;
 }
 
-TEST(etcd, proposalCluster4With2NodesUp, setUp, tearDown, 0, cluster_4_params)
+TEST(etcd_migrate, proposalCluster4With2NodesUp, setUp, tearDown, 0, cluster_4_params)
 {
 	struct fixture *f = data;
 	(void)params;
@@ -400,7 +400,7 @@ TEST(etcd, proposalCluster4With2NodesUp, setUp, tearDown, 0, cluster_4_params)
 	return MUNIT_OK;
 }
 
-TEST(etcd, proposalCluster5With2NodesUp, setUp, tearDown, 0, cluster_5_params)
+TEST(etcd_migrate, proposalCluster5With2NodesUp, setUp, tearDown, 0, cluster_5_params)
 {
 	struct fixture *f = data;
 	(void)params;

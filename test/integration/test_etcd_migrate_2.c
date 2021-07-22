@@ -55,7 +55,7 @@ static void tearDown(void *data)
 
 /* Assert that the fixture time matches the given value */
 #define ASSERT_TIME(TIME) munit_assert_int(CLUSTER_TIME, ==, TIME)
-SUITE(etcd)
+SUITE(etcd_migrate)
 
 static void test_free_req(struct raft_apply *req, int status, void *result)
 {
@@ -66,7 +66,7 @@ static void test_free_req(struct raft_apply *req, int status, void *result)
 
 //leader start replication, then check its progress: the State, Match Index,
 //Next Index.
-TEST(etcd, progressLeader, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, progressLeader, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -128,7 +128,7 @@ TEST(etcd, progressLeader, setUp, tearDown, 0, NULL)
 }
 
 //test that when part of RV will be dropped, what the candidate will do
-TEST(etcd, leaderElection_minority, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, leaderElectionMinority, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -152,7 +152,7 @@ TEST(etcd, leaderElection_minority, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(etcd, leaderElection_majority, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, leaderElectionMajority, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -180,7 +180,7 @@ TEST(etcd, leaderElection_majority, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(etcd, leaderElection_minority_prevote, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, leaderElectionMinorityPreVote, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -205,7 +205,7 @@ TEST(etcd, leaderElection_minority_prevote, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(etcd, leaderElection_majority_prevote, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, leaderElectionMajorityPreVote, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -251,7 +251,7 @@ static MunitParameterEnum cluster_3_with_1_standby_params[] = {
         {NULL, NULL}
 };
 //test that even a leaner has been timeout, it still be a follower
-TEST(etcd,
+TEST(etcd_migrate,
 	leanerElectionTimeout,
 	setUp,
 	tearDown,
@@ -282,7 +282,7 @@ TEST(etcd,
 	return MUNIT_OK;
 }
 
-TEST(etcd, leaderCycle, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, leaderCycle, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -303,7 +303,7 @@ TEST(etcd, leaderCycle, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(etcd, leaderCycle_prevote, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, leaderCyclePreVote, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -331,7 +331,7 @@ TEST(etcd, leaderCycle_prevote, setUp, tearDown, 0, NULL)
 //which index and term is higher than leader but uncommited
 static struct raft_entry g_et_0[3];
 static struct raft_entry g_et_1[3];
-TEST(etcd, leaderElctionOverWriteNewerLogs, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, leaderElctionOverWriteNewerLogs, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -408,7 +408,7 @@ TEST(etcd, leaderElctionOverWriteNewerLogs, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(etcd, leaderElctionOverWriteNewerLogsi_prevote, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, leaderElctionOverWriteNewerLogsPreVote, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -488,7 +488,7 @@ TEST(etcd, leaderElctionOverWriteNewerLogsi_prevote, setUp, tearDown, 0, NULL)
 }
 
 //test that follower and candidate can vote
-TEST(etcd, voteFromAnyState, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, voteFromAnyState, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -548,7 +548,7 @@ TEST(etcd, voteFromAnyState, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(etcd, voteFromAnyState_prevote, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, voteFromAnyStatePreVote, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -635,7 +635,7 @@ TEST(etcd, voteFromAnyState_prevote, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(etcd, logReplication, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, logReplication, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
@@ -705,7 +705,7 @@ static MunitParameterEnum cluster_1_params[] = {
 	{NULL, NULL},
 };
 //test that single node cluster also can commit logs
-TEST(etcd, singleNodeCommit, setUp, tearDown, 0, cluster_1_params)
+TEST(etcd_migrate, singleNodeCommit, setUp, tearDown, 0, cluster_1_params)
 {
 	struct fixture *f = data;
 	//add some entries
@@ -741,7 +741,7 @@ static MunitParameterEnum cluster_2_params[] = {
 	{NULL, NULL},
 };
 
-TEST(etcd, ignoreOldTermMessage, setUp, tearDown, 0, cluster_2_params)
+TEST(etcd_migrate, ignoreOldTermMessage, setUp, tearDown, 0, cluster_2_params)
 {
 	struct fixture *f = data;
 	unsigned i = 0,j = 1;
@@ -777,7 +777,7 @@ TEST(etcd, ignoreOldTermMessage, setUp, tearDown, 0, cluster_2_params)
 }
 
 //test that single node leader commit
-TEST(etcd, commitWithSingleNode, setUp, tearDown, 0, cluster_1_params)
+TEST(etcd_migrate, commitWithSingleNode, setUp, tearDown, 0, cluster_1_params)
 {
 	struct fixture *f = data;
 	
@@ -815,7 +815,7 @@ static MunitParameterEnum cluster_4_params[] = {
 extern void replicationQuorum(struct raft *r, const raft_index index);
 
 //test leader change commit index by check progress 
-TEST(etcd, commitWithOddNodeMatchTerm, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, commitWithOddNodeMatchTerm, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
 	unsigned i = 0,j = 1,k = 2;
@@ -853,7 +853,7 @@ TEST(etcd, commitWithOddNodeMatchTerm, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(etcd, commitWithOddNodeHigherTerm, setUp, tearDown, 0, NULL)
+TEST(etcd_migrate, commitWithOddNodeHigherTerm, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
 	unsigned i = 0,j = 1,k = 2;
@@ -895,7 +895,7 @@ TEST(etcd, commitWithOddNodeHigherTerm, setUp, tearDown, 0, NULL)
 	return MUNIT_OK;
 }
 
-TEST(etcd, commitWithEvenNodeMatchTerm, setUp, tearDown, 0, cluster_4_params)
+TEST(etcd_migrate, commitWithEvenNodeMatchTerm, setUp, tearDown, 0, cluster_4_params)
 {
 	struct fixture *f = data;
 	unsigned i = 0,j = 1,k = 2, l = 3;
@@ -948,7 +948,7 @@ TEST(etcd, commitWithEvenNodeMatchTerm, setUp, tearDown, 0, cluster_4_params)
 	return MUNIT_OK;
 }
 
-TEST(etcd, commitWithEvenNodeHigherTerm, setUp, tearDown, 0, cluster_4_params)
+TEST(etcd_migrate, commitWithEvenNodeHigherTerm, setUp, tearDown, 0, cluster_4_params)
 {
 	struct fixture *f = data;
 	unsigned i = 0,j = 1,k = 2, l = 3;

@@ -3,6 +3,7 @@
 *.log
 *.trs
 *.dirstamp
+*.gcno
 test/unit/core
 test/unit/uv
 test/fuzzy/core

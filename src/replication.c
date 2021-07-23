@@ -2348,7 +2348,7 @@ static bool shouldTakeSnapshot(struct raft *r)
 	};
 
 	/* If we didn't reach the threshold yet, do nothing. */
-	if (r->last_applied - r->log.snapshot.last_index < r->snapshot.threshold) {
+	if (r->last_applying - r->log.snapshot.last_index < r->snapshot.threshold) {
 		return false;
 	}
 
@@ -2381,8 +2381,8 @@ static int takeSnapshot(struct raft *r)
 	}
 
 	snapshot = &r->snapshot.pending;
-	snapshot->index = r->last_applied;
-	snapshot->term = logTermOf(&r->log, r->last_applied);
+	snapshot->index = r->last_applying;
+	snapshot->term = logTermOf(&r->log, r->last_applying);
 
 	rv = configurationCopy(&r->configuration, &snapshot->configuration);
 	if (rv != 0) {
@@ -2558,8 +2558,7 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 
 //out:
 
-	if (rv == 0 && r->last_applying == r->last_applied &&
-		shouldTakeSnapshot(r)) {
+	if (rv == 0 && shouldTakeSnapshot(r)) {
 		rv = takeSnapshot(r);
 	}
 

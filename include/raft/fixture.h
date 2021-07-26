@@ -262,7 +262,14 @@ RAFT_API bool raft_fixture_step_until_applied(struct raft_fixture *f,
                                               unsigned i,
                                               raft_index index,
                                               unsigned max_msecs);
-
+RAFT_API bool raft_fixture_step_until_appended(struct raft_fixture *f,
+				      unsigned i,
+				      raft_index index,
+				      unsigned max_msecs);
+RAFT_API bool raft_fixture_step_until_append_confirmed(struct raft_fixture *f,
+					      unsigned i,
+					      raft_index index,
+					      unsigned max_msecs);
 /**
  * Step the cluster until the state of the @i'th server matches the given one,
  * or @max_msecs have elapsed.
@@ -349,6 +356,15 @@ RAFT_API bool raft_fixture_step_rv_mock(struct raft_fixture *f,
 RAFT_API bool raft_fixture_step_ae_mock(struct raft_fixture *f,
 									 	unsigned i,
 									 	unsigned j,
+										struct raft_append_entries *ae);
+
+/**
+ * Return te append_entry's address for mock it more convenient 
+ */
+ RAFT_API struct raft_append_entries *raft_fixture_get_ae_req(
+										struct raft_fixture *f,
+										unsigned i,
+										unsigned j,
 										struct raft_append_entries *ae);
 
 /**
@@ -486,4 +502,9 @@ RAFT_API unsigned raft_fixture_n_recv(struct raft_fixture *f,
 
 RAFT_API void raft_fixture_set_election_timeout_min(struct raft_fixture *f,
 													unsigned i);
+/**
+ * Compare the logs between @i'th and @j'th server.
+ */
+
+RAFT_API bool raft_fixture_log_cmp(struct raft_fixture *f, unsigned i, unsigned j);
 #endif /* RAFT_FIXTURE_H */

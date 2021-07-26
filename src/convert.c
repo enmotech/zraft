@@ -8,7 +8,7 @@
 #include "progress.h"
 #include "queue.h"
 #include "request.h"
-
+#include "replication.h"
 /* Set to 1 to enable tracing. */
 #if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -189,8 +189,19 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
     assert(server->role == RAFT_VOTER);
 
     if (n_voters == 1) {
-        tracef("self elect and convert to leader");
-        return convertToLeader(r);
+            tracef("self elect and convert to leader");
+        rv =  convertToLeader(r);
+        if (rv != 0)
+            return rv;
+        /* Check if we can commit some new entries. */
+        replicationQuorum(r, r->last_stored);
+
+        rv = replicationApply(r);
+        if (rv != 0) {
+            /* TODO: just log the error? */
+            convertToUnavailable(r);
+        }
+        return rv;
     }
 
     /* Start a new election round */

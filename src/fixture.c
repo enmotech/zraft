@@ -883,6 +883,26 @@ struct copy_chunk_posi  ioRepBoundary(struct raft_io *io)
 	return ccp;
 }
 
+int ioMethodPgRepTick(struct raft_io *io,
+		      raft_id src_server_id,
+		      raft_id dest_server_id,
+		      raft_term term,
+		      struct pgrep_permit_info *pi)
+{
+	(void)io;
+	(void)src_server_id;
+	(void)dest_server_id;
+	(void)term;
+	(void)pi;
+
+	return -3;
+}
+
+void ioMethodPgRepCancel(struct raft_io *io)
+{
+	(void)io;
+}
+
 static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 {
     struct io *io;
@@ -929,6 +949,8 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 	raft_io->pgrep_raft_unpermit = ioMethodRaftUnpermit;
 	raft_io->pgrep_reset_ckposi = ioResetCkposi;
 	raft_io->pgrep_boundary = ioRepBoundary;
+	raft_io->pgrep_tick = ioMethodPgRepTick;
+	raft_io->pgrep_cancel = ioMethodPgRepCancel;
     return 0;
 }
 
@@ -1676,6 +1698,87 @@ bool raft_fixture_step_until_applied(struct raft_fixture *f,
     return raft_fixture_step_until(f, hasAppliedIndex, &apply, max_msecs);
 }
 
+static bool hasAppendedIndex(struct raft_fixture *f, void *arg)
+{
+	struct step_apply *apply = (struct step_apply *)arg;
+	struct raft *raft;
+	unsigned n = 0;
+	unsigned i;
+
+	if (apply->i < f->n) {
+	    raft = raft_fixture_get(f, apply->i);
+	    return raft->last_stored >= apply->index;
+	}
+
+	for (i = 0; i < f->n; i++) {
+	    raft = raft_fixture_get(f, i);
+	    if (raft->last_stored >= apply->index) {
+		n++;
+	    }
+	}
+	return n == f->n;
+}
+
+
+static bool hasConfirmedAppendIndex(struct raft_fixture *f, void *arg)
+{
+	struct step_apply *apply = (struct step_apply *)arg;
+	struct raft *raft;
+	unsigned leader_index;
+	unsigned n = 0;
+	unsigned i;
+
+	if (f->leader_id == 0) {
+		/* find the leader */
+		for (i = 0; i < f->n; ++i) {
+			raft = raft_fixture_get(f, i);
+			if (raft_state(raft) == RAFT_LEADER)
+				break;
+			else
+				assert(raft_state(raft) == RAFT_FOLLOWER);
+		}
+		assert(i < f->n);
+		leader_index = i;
+		/* check if this is the only leader */
+		for (i = leader_index + 1; i < f->n; ++i) {
+			raft = raft_fixture_get(f, i);
+			assert(raft_state(raft) == RAFT_FOLLOWER);
+		}
+	} else
+		leader_index = (unsigned)(f->leader_id) - 1;
+
+	raft = raft_fixture_get(f, leader_index);
+	assert(raft->state == RAFT_LEADER);
+	i = apply->i;
+	if (i < f->n)
+	    return raft->leader_state.progress[i].match_index >= apply->index;
+
+	for (i = 0; i < f->n; i++) {
+	    if (raft->leader_state.progress[i].match_index >= apply->index) {
+		n++;
+	    }
+	}
+	return n == f->n;
+}
+
+bool raft_fixture_step_until_appended(struct raft_fixture *f,
+				      unsigned i,
+				      raft_index index,
+				      unsigned max_msecs)
+{
+	struct step_apply apply = {i, index};
+	return raft_fixture_step_until(f, hasAppendedIndex, &apply, max_msecs);
+}
+
+bool raft_fixture_step_until_append_confirmed(struct raft_fixture *f,
+					      unsigned i,
+					      raft_index index,
+					      unsigned max_msecs)
+{
+	struct step_apply apply = {i, index};
+	return raft_fixture_step_until(f, hasConfirmedAppendIndex, &apply, max_msecs);
+}
+
 struct step_state
 {
     unsigned i;
@@ -1867,14 +1970,16 @@ static bool hasAEForSend(struct raft_fixture *f, void *arg)
 				continue;
 			if (message->server_id != expect->dst+1)
 				continue;
-			if (message->append_entries.n_entries == 0)
-				continue;
 	
 			struct raft_append_entries ae = message->append_entries;
-			assert(ae.term == expect->ae->term);
-			assert(ae.prev_log_index == expect->ae->prev_log_index);
-			assert(ae.prev_log_term == expect->ae->prev_log_term);
-			assert(ae.n_entries == expect->ae->n_entries);
+			if (ae.term != expect->ae->term)
+				continue;
+			if (ae.prev_log_index != expect->ae->prev_log_index)
+				continue;
+			if (ae.prev_log_term != expect->ae->prev_log_term)
+				continue;
+			if (ae.n_entries != expect->ae->n_entries)
+				continue;
 
 			return true;
 		}
@@ -1924,8 +2029,12 @@ static bool hasAEResponse(struct raft_fixture *f, void *arg)
 				continue;
 
 			struct raft_append_entries_result res = message->append_entries_result;
-			assert(res.last_log_index == expect->res->last_log_index);
-			assert(res.rejected == expect->res->rejected);
+			if (res.last_log_index != expect->res->last_log_index)
+				continue;
+			if (res.rejected != expect->res->rejected)
+				continue;
+			if (res.term != expect->res->term)
+				continue;
 
 			return true;
 		}
@@ -2039,6 +2148,57 @@ bool raft_fixture_step_ae_mock(struct raft_fixture *f,
 {
 	struct step_send_ae mock = {i, j, ae};
 	return mockAE(f, &mock); 
+}
+
+struct raft_append_entries *getAE(
+	struct raft_fixture *f,
+	void *arg)
+{
+	struct step_send_ae *expect = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)expect->src);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_APPEND_ENTRIES)
+				continue;
+			if (message->server_id != expect->dst+1)
+				continue;
+	
+			struct raft_append_entries ae = message->append_entries;
+			if (ae.term != expect->ae->term)
+				continue;
+			if (ae.prev_log_index != expect->ae->prev_log_index)
+				continue;
+			if (ae.prev_log_term != expect->ae->prev_log_term)
+				continue;
+			if (ae.n_entries != expect->ae->n_entries)
+				continue;
+
+			return &message->append_entries;
+		}
+	}
+	return NULL;
+}
+
+struct raft_append_entries *raft_fixture_get_ae_req(
+	struct raft_fixture *f,
+	unsigned i,
+	unsigned j,
+	struct raft_append_entries *ae)
+{
+	struct step_send_ae mock = {i, j, ae};
+	return getAE(f, &mock); 
 }
 
 static bool mockRV(struct raft_fixture *f,
@@ -2230,6 +2390,40 @@ unsigned raft_fixture_n_recv(struct raft_fixture *f, unsigned i, int type)
 {
     struct io *io = f->servers[i].io.impl;
     return io->n_recv[type];
+}
+
+static bool raft_fixture_entry_cmp(const struct raft_entry *dst,
+				   const struct raft_entry *src)
+{
+	assert(dst);
+	assert(src);
+
+	return dst->term == src->term
+		&& dst->type == src->type
+		&& dst->buf.len == src->buf.len
+		&& memcmp(dst->buf.base, src->buf.base, dst->buf.len) == 0;
+}
+
+bool raft_fixture_log_cmp(struct raft_fixture *f, unsigned i, unsigned j)
+{
+	struct raft_log *log_i = &f->servers[i].raft.log;
+	struct raft_log *log_j = &f->servers[j].raft.log;
+	size_t num = logNumEntries(log_i);
+	raft_index last_index = logLastIndex(log_i);
+	raft_index index;
+
+	if (num != logNumEntries(log_j))
+		return false;
+	if (last_index != logLastIndex(log_j))
+		return false;
+	assert(last_index >= num);
+
+	for (index = last_index - num + 1; index <= last_index; ++index) {
+		if (!raft_fixture_entry_cmp(logGet(log_i, index),
+					    logGet(log_j, index)))
+					    return false;
+	}
+	return true;
 }
 
 #undef tracef

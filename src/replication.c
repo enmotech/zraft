@@ -232,7 +232,7 @@ static int sendAppendEntries(struct raft *r,
 	message.server_id = server->id;
 	message.server_address = server->address;
 
-	req = raft_malloc(sizeof*req);
+	req = raft_malloc(sizeof(*req));
 	if (req == NULL) {
 		rv = RAFT_NOMEM;
 		goto err_after_entries_acquired;
@@ -1187,10 +1187,9 @@ static void sendAppendEntriesResultCb(struct raft_io_send *req, int status)
 	HeapFree(req);
 }
 
-void sendAppendEntriesResult(
+static void sendAppendEntriesResult(
 	struct raft *r,
-	const struct raft_append_entries_result *result,
-	const struct raft_append_entries *args)
+	const struct raft_append_entries_result *result)
 {
 	struct raft_message message;
 	struct raft_io_send *req;
@@ -1208,7 +1207,7 @@ void sendAppendEntriesResult(
 	req->data = r;
 
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s] permit[%d] time[%ld].",
-		   rkey(r), r->state, args->pkt, __func__, result->pi.permit, result->pi.time);
+		   rkey(r), r->state, result->pkt, __func__, result->pi.permit, result->pi.time);
 
 	const struct raft_server *me = configurationGet(&r->configuration, r->id);
 	int role = -1;
@@ -1365,7 +1364,7 @@ respond:
 		result.pi.replicating = PGREP_RND_ERR;
 	}
 
-	sendAppendEntriesResult(r, &result, args);
+	sendAppendEntriesResult(r, &result);
 
 out:
 	if (free_request) {
@@ -1987,7 +1986,7 @@ discard:
 respond:
 	if (r->state != RAFT_UNAVAILABLE) {
 		result.last_log_index = r->last_stored;
-		sendAppendEntriesResult(r, &result, NULL);
+		sendAppendEntriesResult(r, &result);
 	}
 
 	raft_free(request);
@@ -2094,7 +2093,8 @@ void replicationApplyLeaderCb(struct raft *r, struct pgrep_permit_info pi)
 		r->io->pgrep_raft_unpermit(r->io, &pi);
 		pi.permit = false;
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: release pgrep permit.", rkey(r), r->state, __func__);
-		if(RAFT_UNAVAILABLE != r->state)
+		if(r->state == RAFT_LEADER ||
+		   r->state == RAFT_FOLLOWER)
 			replicationApply(r);
 		return;
 	}
@@ -2125,7 +2125,7 @@ void replicationApplyFollowerCb(
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s]: sendAppendEntriesResult.",
 		   rkey(r), r->state, args->pkt, __func__);
 
-	sendAppendEntriesResult(r, &result, args);
+	sendAppendEntriesResult(r, &result);
 
 	logRelease(&r->log, request->index, request->args.entries,
 			   request->args.n_entries);
@@ -2193,6 +2193,17 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 	applySectionCallbackCheck(r, request->ab, request->pi, request->extra);
 
 	raft_free(request);
+	if (r->last_applying == r->last_applied) {
+		if (r->state == RAFT_LEADER ||
+		    r->state == RAFT_FOLLOWER) {
+			int rv = replicationApply(r);
+
+			if (rv != 0) {
+				ZSINFO(gzlog, "[raft][%d][%d] |%d-%lld| replicationApply() failed.",
+				       rkey(r), r->state, rkey(r), index);
+			}
+		}
+	}
 }
 #endif
 
@@ -2547,10 +2558,10 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
 				QUEUE_REMOVE(&(barrier->queue));
 				barrier->cb(barrier, 0);
 				barrier = getFirstOptBarrier(r);
-			} else {
-				assert(barrier->index > index);
-				break;
+				continue;
 			}
+			assert(barrier->index > index);
+			break;
 		}
 		ZSINFO(gzlog, "[raft][%d][%d][%s] update last_applying[%lld].",
 			   rkey(r), r->state, __func__, r->last_applying);
@@ -2613,7 +2624,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 	}
 
 	if (votes > configurationVoterCount(&r->configuration) / 2) {
-		r->commit_index = min(index, r->last_stored);
+		r->commit_index = index;
 		tracef("new commit index %llu", r->commit_index);
 	}
 

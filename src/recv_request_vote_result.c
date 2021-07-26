@@ -132,25 +132,25 @@ int recvRequestVoteResult(struct raft *r,
 				if (rv != 0) {
 					return rv;
 				}
-#ifndef RAFT_TEST
-				/* add a non-op log */
-				struct raft_buffer buf;
+				if (r->no_op) {
+					/* add a no-op log */
+					struct raft_buffer buf;
 
-				buf.len = 8;
-				buf.base = raft_malloc(buf.len);
-				if (buf.base == NULL)
-				    return RAFT_NOMEM;
-				raft_index index = logLastIndex(&r->log) + 1;
-				rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
-				if (rv != 0)
-					return  rv;
-				/* Send initial heartbeat. */
-				rv = replicationTrigger(r, index);
+					buf.len = 8;
+					buf.base = raft_malloc(buf.len);
+					if (buf.base == NULL)
+						return RAFT_NOMEM;
+					raft_index index = logLastIndex(&r->log) + 1;
+					rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
+					if (rv != 0)
+						return  rv;
+					/* Send initial heartbeat. */
+					rv = replicationTrigger(r, index);
 
-				return rv;
-#else
-				replicationHeartbeat(r);
-#endif
+					return rv;
+				} else {
+					replicationHeartbeat(r);
+				}
 			}
 		} else {
 			tracef("votes quorum not reached");

@@ -196,6 +196,21 @@
         munit_assert_true(done);                                               \
     }
 
+#define CLUSTER_STEP_UNTIL_APPENDED(I, INDEX, MAX_MSECS)                        \
+    {                                                                          \
+	bool done;                                                             \
+	done =                                                                 \
+	    raft_fixture_step_until_appended(&f->cluster, I, INDEX, MAX_MSECS); \
+	munit_assert_true(done);                                               \
+    }
+#define CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(I, INDEX, MAX_MSECS)                        \
+    {                                                                          \
+	bool done;                                                             \
+	done =                                                                 \
+	    raft_fixture_step_until_append_confirmed(&f->cluster, I, INDEX, MAX_MSECS); \
+	munit_assert_true(done);                                               \
+    }
+
 /* Step the cluster until the state of the server with the given index matches
  * the given value, or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_STATE_IS(I, STATE, MAX_MSECS)               \
@@ -394,6 +409,42 @@
 #define CLUSTER_RANDOMIZE                \
     cluster_randomize_init(&f->cluster); \
     raft_fixture_hook(&f->cluster, cluster_randomize)
+
+	/* Step until there's a append_entries rpc send form I to J */
+#define CLUSTER_STEP_UNTIL_AE(I, J, AE, MAX_MSECS)										 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_ae_for_send (&f->cluster, I, J, AE, MAX_MSECS);		 \
+        munit_assert_true(done);														 \
+    }
+
+/* Step until there's a append_entries response send form I to J */
+#define CLUSTER_STEP_UNTIL_AE_RES(I, J, AE_RES, MAX_MSECS)								 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_ae_response (&f->cluster, I, J, AE_RES, MAX_MSECS);  \
+        munit_assert_true(done);														 \
+    }
+
+/* Step until there's a request_vote send to I */
+#define CLUSTER_STEP_UNTIL_RV(I, RV, MAX_MSECS)										 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_rv_for_send(&f->cluster, I, RV, MAX_MSECS);		 \
+        munit_assert_true(done);														 \
+    }
+
+/* Step until there's a request_vote response send form I to J */
+#define CLUSTER_STEP_UNTIL_RV_RES(I, J, RV_RES, MAX_MSECS)								 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_rv_response(&f->cluster, I, J, RV_RES, MAX_MSECS);   \
+        munit_assert_true(done);														 \
+    }
 
 void cluster_randomize_init(struct raft_fixture *f);
 void cluster_randomize(struct raft_fixture *f,

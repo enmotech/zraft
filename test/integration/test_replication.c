@@ -475,7 +475,7 @@ TEST(replication, recvMissingEntries, setUp, tearDown, 0, NULL)
     munit_assert_int(CLUSTER_LEADER, ==, 0);
 
     /* The first server replicates missing entries to the second. */
-    CLUSTER_STEP_UNTIL_APPLIED(1, 2, 3000);
+    CLUSTER_STEP_UNTIL_APPENDED(1, 2, 3000);
 
     return MUNIT_OK;
 }
@@ -810,7 +810,7 @@ TEST(replication, resultRetry, setUp, tearDown, 0, NULL)
     /* The first server receives an AppendEntries result from the second server
      * indicating that its log does not have the entry at index 2, so it will
      * resend it. */
-    CLUSTER_STEP_UNTIL_APPLIED(1, 2, 2000);
+    CLUSTER_STEP_UNTIL_APPENDED(1, 2, 2000);
 
     return MUNIT_OK;
 }

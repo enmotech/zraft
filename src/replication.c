@@ -512,12 +512,16 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 		i != inx) {
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: role[%d] pre_role[%d] pgrep_id[%lld] goto heatbeat.",
 			   rkey(r), r->state, __func__, server->role,  server->pre_role, r->pgrep_id);
+		if (r->pgrep_id != RAFT_INVALID_ID)
+			progressSetPgreplicating(r, i, false);
 		goto __heart_beat;
 	}
 
 	if (r->configuration_uncommitted_index) {
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: cui[%lld] goto heatbeat.",
 			   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
+		if (r->pgrep_id != RAFT_INVALID_ID)
+			progressSetPgreplicating(r, i, false);
 		goto __heart_beat;
 	}
 
@@ -559,6 +563,8 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 		break;
 	case PGREP_TICK_FAL:
 		/* May exceed the maximum limit, just send heartbeat. */
+		if (r->pgrep_id != RAFT_INVALID_ID)
+			progressSetPgreplicating(r, i, false);
 		goto __heart_beat;
 		break;
 	default:

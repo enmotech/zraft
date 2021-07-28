@@ -269,6 +269,7 @@ struct raft_entry
 	raft_term term;         /* Term in which the entry was created. */
 	unsigned short type;    /* Type (FSM command, barrier, config change). */
 	struct raft_buffer buf; /* Entry data. */
+	void *data;		/* User data */
 	void *batch;            /* Batch that buf's memory points to, if any. */
 };
 

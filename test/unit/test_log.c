@@ -33,10 +33,10 @@ struct fixture
     {                                                              \
         struct raft_buffer buf_;                                   \
         int rv_;                                                   \
-        buf_.base = raft_malloc(8);                                \
+	buf_.base = raft_entry_malloc(8);                                \
         buf_.len = 8;                                              \
         strcpy(buf_.base, "hello");                                \
-        rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
+	rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL, NULL); \
         munit_assert_int(rv_, ==, 0);                              \
     }
 

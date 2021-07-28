@@ -435,7 +435,7 @@ void logClose(struct raft_log *l)
              * a batch). */
             if (entry->batch == NULL) {
                 if (entry->buf.base != NULL) {
-                    raft_free(entry->buf.base);
+                    raft_entry_free(entry->buf.base);
                 }
             } else {
                 if (entry->batch != batch) {
@@ -885,7 +885,7 @@ void logRelease(struct raft_log *l,
         if (unref) {
             if (entries[i].batch == NULL) {
                 if (entry->buf.base != NULL) {
-                    raft_free(entries[i].buf.base);
+                    raft_entry_free(entries[i].buf.base);
                 }
             } else {
                 if (entry->batch != batch) {
@@ -921,7 +921,7 @@ static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
 {
     if (entry->batch == NULL) {
         if (entry->buf.base != NULL) {
-            raft_free(entry->buf.base);
+            raft_entry_free(entry->buf.base);
         }
     } else {
         if (!isBatchReferenced(l, entry->batch)) {

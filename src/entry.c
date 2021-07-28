@@ -17,7 +17,7 @@ void entryBatchesDestroy(struct raft_entry *entries, const size_t n)
         assert(entries[i].batch != NULL);
         if (entries[i].batch != batch) {
             batch = entries[i].batch;
-            raft_batch_free(batch);
+            raft_entry_batch_free(&entries[i]);
         }
     }
     raft_free(entries);

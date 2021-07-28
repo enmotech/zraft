@@ -606,7 +606,7 @@ TEST(logAppend, oom, setUp, tearDown, 0, logAppendOom)
     buf.base = NULL;
     buf.len = 0;
     HeapFaultEnable(&f->heap);
-    rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, NULL);
+    rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, NULL, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
     return MUNIT_OK;
 }
@@ -1029,7 +1029,7 @@ TEST(logTruncate, acquiredOom, setUp, tearDown, 0, logTruncateAcquiredOom)
 
     HeapFaultEnable(&f->heap);
 
-    rv = logAppend(&f->log, 2, RAFT_COMMAND, &buf, NULL);
+    rv = logAppend(&f->log, 2, RAFT_COMMAND, &buf, NULL, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     RELEASE(2);

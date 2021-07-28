@@ -514,6 +514,7 @@ int logAppend(struct raft_log *l,
               const raft_term term,
               const unsigned short type,
               const struct raft_buffer *buf,
+	      void *data,
               void *batch)
 {
     int rv;
@@ -541,6 +542,7 @@ int logAppend(struct raft_log *l,
     entry->term = term;
     entry->type = type;
     entry->buf = *buf;
+    entry->data = data;
     entry->batch = batch;
 
     l->back += 1;
@@ -564,7 +566,7 @@ int logAppendCommands(struct raft_log *l,
 
     for (i = 0; i < n; i++) {
         const struct raft_buffer *buf = &bufs[i];
-        rv = logAppend(l, term, RAFT_COMMAND, buf, NULL);
+	rv = logAppend(l, term, RAFT_COMMAND, buf, NULL, NULL);
         if (rv != 0) {
             return rv;
         }
@@ -591,7 +593,7 @@ int logAppendConfiguration(struct raft_log *l,
     }
 
     /* Append the new entry to the log. */
-    rv = logAppend(l, term, RAFT_CHANGE, &buf, NULL);
+    rv = logAppend(l, term, RAFT_CHANGE, &buf, NULL, NULL);
     if (rv != 0) {
         goto err_after_encode;
     }
@@ -599,7 +601,7 @@ int logAppendConfiguration(struct raft_log *l,
     return 0;
 
 err_after_encode:
-    raft_free(buf.base);
+    raft_entry_free(buf.base);
 
 err:
     assert(rv != 0);

@@ -137,16 +137,18 @@ int recvRequestVoteResult(struct raft *r,
 					struct raft_buffer buf;
 
 					buf.len = 8;
-					buf.base = raft_malloc(buf.len);
+					buf.base = raft_entry_malloc(buf.len);
 					if (buf.base == NULL)
 						return RAFT_NOMEM;
 					raft_index index = logLastIndex(&r->log) + 1;
-					rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
-					if (rv != 0)
+					rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL, NULL);
+					if (rv != 0) {
+						raft_entry_free(buf.base);
 						return  rv;
+					}
 					/* Send initial heartbeat. */
 					rv = replicationTrigger(r, index);
-
+					assert(rv == 0);
 					return rv;
 				} else {
 					replicationHeartbeat(r);

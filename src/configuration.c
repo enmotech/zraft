@@ -274,7 +274,7 @@ int configurationEncode(const struct raft_configuration *c,
     assert(c->n > 0);
 
     buf->len = configurationEncodedSize(c);
-    buf->base = raft_malloc(buf->len);
+    buf->base = raft_entry_malloc(buf->len);
     if (buf->base == NULL) {
         return RAFT_NOMEM;
     }

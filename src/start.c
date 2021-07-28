@@ -85,7 +85,7 @@ static int restoreEntries(struct raft *r,
 	r->last_stored = start_index - 1;
 	for (i = 0; i < n; i++) {
 		struct raft_entry *entry = &entries[i];
-		rv = logAppend(&r->log, entry->term, entry->type, &entry->buf,
+		rv = logAppend(&r->log, entry->term, entry->type, &entry->buf, entry->data,
 			       entry->batch);
 		if (rv != 0) {
 			goto err;

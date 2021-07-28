@@ -42,13 +42,11 @@ static void defaultAlignedFree(void *data, size_t alignment, void *ptr)
 
 static void *defaultEntryMalloc(void *data, size_t size)
 {
-	(void)data;
-	return malloc(size);
+	return defaultMalloc(data, size);
 }
 
 static void defaultEntryFree(void *data, void *ptr)
 {
-	(void)data;
 	defaultFree(data, ptr);
 }
 
@@ -139,9 +137,10 @@ void *raft_entry_malloc(size_t size)
 {
 	return currentHeap->entry_malloc(currentHeap->data, size);
 }
+
 void raft_entry_free(void *ptr)
 {
-
+	currentHeap->entry_free(currentHeap->data, ptr);
 }
 
 void raft_entry_batch_free(struct raft_entry *entry)

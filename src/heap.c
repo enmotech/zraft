@@ -40,6 +40,18 @@ static void defaultAlignedFree(void *data, size_t alignment, void *ptr)
     defaultFree(data, ptr);
 }
 
+static void *defaultEntryMalloc(void *data, size_t size)
+{
+	(void)data;
+	return malloc(size);
+}
+
+static void defaultEntryFree(void *data, void *ptr)
+{
+	(void)data;
+	defaultFree(data, ptr);
+}
+
 static void defaultEntryBatchFree(void *data, struct raft_entry *entry)
 {
 	defaultFree(data, entry->batch);
@@ -53,6 +65,8 @@ static struct raft_heap defaultHeap = {
     defaultRealloc,      /* realloc */
     defaultAlignedAlloc, /* aligned_alloc */
     defaultAlignedFree,  /* aligned_free */
+    defaultEntryMalloc,  /* entry_malloc*/
+    defaultEntryFree,    /* entry_free*/
     defaultEntryBatchFree /* entry_batch_free */
 };
 
@@ -119,6 +133,15 @@ void raft_heap_set(struct raft_heap *heap)
 void raft_heap_set_default(void)
 {
     currentHeap = &defaultHeap;
+}
+
+void *raft_entry_malloc(size_t size)
+{
+	return currentHeap->entry_malloc(currentHeap->data, size);
+}
+void raft_entry_free(void *ptr)
+{
+
 }
 
 void raft_entry_batch_free(struct raft_entry *entry)

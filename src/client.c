@@ -352,7 +352,18 @@ int raft_remove(struct raft *r,
     const struct raft_server *server;
     struct raft_configuration configuration;
     int rv;
-
+    /* Stop pgrep. */
+    if(r->pgrep_id == id) {
+	r->io->pgrep_cancel(r->io);
+	struct pgrep_permit_info pi = {0};
+	int status = r->io->pgrep_tick(r->io,
+				       r->id,
+				       r->pgrep_id,
+				       r->current_term,
+				       &pi);
+	assert(status == PGREP_TICK_ABD);
+	r->pgrep_id = RAFT_INVALID_ID;
+    }
     rv = membershipCanChangeConfiguration(r);
     if (rv != 0) {
         return rv;

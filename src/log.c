@@ -760,7 +760,7 @@ int logAcquire(struct raft_log *l,
 
 /* Pgrep:
  *
- *  TODO: Bad smell, this fucntion is most dupicated from  logAcquire. 
+ *  TODO: Bad smell, this fucntion is most dupicated from  logAcquire.
  */
 int logAcquireSection(
 	struct raft_log *l,
@@ -815,7 +815,7 @@ int logAcquireSection(
 
 	unsigned cnt = 0;
 	unsigned short type;
-	int left_bufsize = 0x700000; /* Buffer size limit of network io. */
+	int left_bufsize = 0x401000; /* Buffer size limit of network io. */
 
     for (j = 0; j < *n; j++) {
         size_t k = (i + j) % l->size;

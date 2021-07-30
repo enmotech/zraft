@@ -512,12 +512,16 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 		i != inx) {
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: role[%d] pre_role[%d] pgrep_id[%lld] goto heatbeat.",
 			   rkey(r), r->state, __func__, server->role,  server->pre_role, r->pgrep_id);
+		if (r->pgrep_id != RAFT_INVALID_ID)
+			progressSetPgreplicating(r, i, false);
 		goto __heart_beat;
 	}
 
 	if (r->configuration_uncommitted_index) {
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: cui[%lld] goto heatbeat.",
 			   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
+		if (r->pgrep_id != RAFT_INVALID_ID)
+			progressSetPgreplicating(r, i, false);
 		goto __heart_beat;
 	}
 
@@ -559,6 +563,8 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 		break;
 	case PGREP_TICK_FAL:
 		/* May exceed the maximum limit, just send heartbeat. */
+		if (r->pgrep_id != RAFT_INVALID_ID)
+			progressSetPgreplicating(r, i, false);
 		goto __heart_beat;
 		break;
 	default:
@@ -1868,6 +1874,8 @@ int replicationAppend(struct raft *r,
 		 * However, this would lead to memory spikes in certain edge cases.
 		 * https://github.com/canonical/dqlite/issues/276
 		 */
+
+		/*
 		struct raft_entry copy = { 0 };
 		rv = entryCopy(entry, &copy);
 		if (rv != 0) {
@@ -1875,6 +1883,8 @@ int replicationAppend(struct raft *r,
 		}
 
 		rv = logAppend(&r->log, copy.term, copy.type, &copy.buf, NULL);
+		 */
+		rv = logAppend(&r->log, entry->term, entry->type, &entry->buf, entry->data, entry->batch);
 		if (rv != 0) {
 			goto err_after_request_alloc;
 		}
@@ -1902,7 +1912,7 @@ int replicationAppend(struct raft *r,
 		goto err_after_acquire_entries;
 	}
 
-	entryBatchesDestroy(args->entries, args->n_entries);
+	raft_free(args->entries);
 	return 0;
 
 err_after_acquire_entries:

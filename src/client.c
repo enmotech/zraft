@@ -81,7 +81,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 
     /* TODO: use a completely empty buffer */
     buf.len = 8;
-    buf.base = raft_malloc(buf.len);
+    buf.base = raft_entry_malloc(buf.len);
 
     if (buf.base == NULL) {
         rv = RAFT_NOMEM;
@@ -94,7 +94,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     req->index = index;
     req->cb = cb;
 
-    rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
+    rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL, NULL);
     if (rv != 0) {
         goto err_after_buf_alloc;
     }
@@ -118,7 +118,7 @@ err_after_log_append:
     logDiscard(&r->log, index);
     QUEUE_REMOVE(&req->queue);
 err_after_buf_alloc:
-    raft_free(buf.base);
+    raft_entry_free(buf.base);
 err:
     return rv;
 }

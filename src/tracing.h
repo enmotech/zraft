@@ -5,6 +5,7 @@
 
 #include "../include/raft.h"
 #include "../../../infrastructure/zlog/logger.h"
+
 #ifdef RAFT_TEST
 #undef ZSINFO
 #undef ZSERROR

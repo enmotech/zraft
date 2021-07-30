@@ -435,13 +435,13 @@ void logClose(struct raft_log *l)
              * a batch). */
             if (entry->batch == NULL) {
                 if (entry->buf.base != NULL) {
-                    raft_free(entry->buf.base);
+                    raft_entry_free(entry->buf.base);
                 }
             } else {
                 if (entry->batch != batch) {
                     /* This batch was not released yet, so let's do it now. */
                     batch = entry->batch;
-                    raft_free(entry->batch);
+                    raft_entry_batch_free(entry);
                 }
             }
         }
@@ -514,6 +514,7 @@ int logAppend(struct raft_log *l,
               const raft_term term,
               const unsigned short type,
               const struct raft_buffer *buf,
+	      void *data,
               void *batch)
 {
     int rv;
@@ -541,6 +542,7 @@ int logAppend(struct raft_log *l,
     entry->term = term;
     entry->type = type;
     entry->buf = *buf;
+    entry->data = data;
     entry->batch = batch;
 
     l->back += 1;
@@ -564,7 +566,7 @@ int logAppendCommands(struct raft_log *l,
 
     for (i = 0; i < n; i++) {
         const struct raft_buffer *buf = &bufs[i];
-        rv = logAppend(l, term, RAFT_COMMAND, buf, NULL);
+	rv = logAppend(l, term, RAFT_COMMAND, buf, NULL, NULL);
         if (rv != 0) {
             return rv;
         }
@@ -591,7 +593,7 @@ int logAppendConfiguration(struct raft_log *l,
     }
 
     /* Append the new entry to the log. */
-    rv = logAppend(l, term, RAFT_CHANGE, &buf, NULL);
+    rv = logAppend(l, term, RAFT_CHANGE, &buf, NULL, NULL);
     if (rv != 0) {
         goto err_after_encode;
     }
@@ -599,7 +601,7 @@ int logAppendConfiguration(struct raft_log *l,
     return 0;
 
 err_after_encode:
-    raft_free(buf.base);
+    raft_entry_free(buf.base);
 
 err:
     assert(rv != 0);
@@ -758,7 +760,7 @@ int logAcquire(struct raft_log *l,
 
 /* Pgrep:
  *
- *  TODO: Bad smell, this fucntion is most dupicated from  logAcquire. 
+ *  TODO: Bad smell, this fucntion is most dupicated from  logAcquire.
  */
 int logAcquireSection(
 	struct raft_log *l,
@@ -813,7 +815,7 @@ int logAcquireSection(
 
 	unsigned cnt = 0;
 	unsigned short type;
-	int left_bufsize = 0x700000; /* Buffer size limit of network io. */
+	int left_bufsize = 0x401000; /* Buffer size limit of network io. */
 
     for (j = 0; j < *n; j++) {
         size_t k = (i + j) % l->size;
@@ -857,6 +859,7 @@ static bool isBatchReferenced(struct raft_log *l, const void *batch)
     return false;
 }
 
+
 void logRelease(struct raft_log *l,
                 const raft_index index,
                 struct raft_entry entries[],
@@ -882,13 +885,13 @@ void logRelease(struct raft_log *l,
         if (unref) {
             if (entries[i].batch == NULL) {
                 if (entry->buf.base != NULL) {
-                    raft_free(entries[i].buf.base);
+                    raft_entry_free(entries[i].buf.base);
                 }
             } else {
                 if (entry->batch != batch) {
                     if (!isBatchReferenced(l, entry->batch)) {
                         batch = entry->batch;
-                        raft_free(batch);
+                        raft_entry_batch_free(entry);
                     }
                 }
             }
@@ -918,11 +921,11 @@ static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
 {
     if (entry->batch == NULL) {
         if (entry->buf.base != NULL) {
-            raft_free(entry->buf.base);
+            raft_entry_free(entry->buf.base);
         }
     } else {
         if (!isBatchReferenced(l, entry->batch)) {
-            raft_free(entry->batch);
+            raft_entry_batch_free(entry);
         }
     }
 }

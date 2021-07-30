@@ -269,6 +269,7 @@ struct raft_entry
 	raft_term term;         /* Term in which the entry was created. */
 	unsigned short type;    /* Type (FSM command, barrier, config change). */
 	struct raft_buffer buf; /* Entry data. */
+	void *data;		/* User data */
 	void *batch;            /* Batch that buf's memory points to, if any. */
 };
 
@@ -1369,6 +1370,9 @@ struct raft_heap
 	void *(*realloc)(void *data, void *ptr, size_t size);
 	void *(*aligned_alloc)(void *data, size_t alignment, size_t size);
 	void (*aligned_free)(void *data, size_t alignment, void *ptr);
+	void *(*entry_malloc)(void *data, size_t size);
+	void (*entry_free)(void *data, void *ptr);
+	void (*entry_batch_free)(void *data, struct raft_entry *entry);
 };
 
 RAFT_API void *raft_malloc(size_t size);
@@ -1377,6 +1381,9 @@ RAFT_API void *raft_calloc(size_t nmemb, size_t size);
 RAFT_API void *raft_realloc(void *ptr, size_t size);
 RAFT_API void *raft_aligned_alloc(size_t alignment, size_t size);
 RAFT_API void raft_aligned_free(size_t alignment, void *ptr);
+RAFT_API void *raft_entry_malloc(size_t size);
+RAFT_API void raft_entry_free(void *ptr);
+RAFT_API void raft_entry_batch_free(struct raft_entry *entry);
 
 /**
  * Use a custom dynamic memory allocator.

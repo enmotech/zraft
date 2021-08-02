@@ -56,7 +56,7 @@ struct fixture
         int rv_;                                                   \
         buf_.base = raft_malloc(8);                                \
         buf_.len = 8;                                              \
-        rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
+        rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL, NULL); \
         munit_assert_int(rv_, ==, RV);                             \
         raft_free(buf_.base);                                      \
     }
@@ -77,7 +77,7 @@ struct fixture
             buf.base = (uint8_t *)batch + offset;                  \
             buf.len = 8;                                           \
             *(uint64_t *)buf.base = i * 1000;                      \
-            rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, batch); \
+            rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf,NULL, batch); \
             munit_assert_int(rv, ==, 0);                           \
             offset += 8;                                           \
         }                                                          \

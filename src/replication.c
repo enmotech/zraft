@@ -2243,6 +2243,7 @@ static int applyCommand(struct raft *r,
 	request->index = index;
 	request->ab = ab;
 	request->pi = pi;
+	request->req.index = index;
 	request->req.permit = false;
 	request->req.obj_id = bd.obj_id;
 	request->req.chunk_id = bd.chunk_id;

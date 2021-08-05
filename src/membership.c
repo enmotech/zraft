@@ -119,14 +119,17 @@ int membershipRollback(struct raft *r)
     assert(r->configuration_index != 0);
 
     entry = logGet(&r->log, r->configuration_index);
-
-    assert(entry != NULL);
-
     /* Replace the current configuration with the last committed one. */
     raft_configuration_close(&r->configuration);
-    raft_configuration_init(&r->configuration);
-
-    rv = configurationDecode(&entry->buf, &r->configuration);
+    if (entry == NULL) {/* the log has been released */
+        assert(r->snapshot.configuration.n != 0);
+        rv = configurationCopy(&r->snapshot.configuration,
+                               &r->configuration);
+    } else {
+        raft_configuration_init(&r->configuration);
+        rv = configurationDecode(&entry->buf,
+                                 &r->configuration);
+    }
     if (rv != 0) {
         return rv;
     }

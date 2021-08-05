@@ -42,7 +42,14 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
                errCodeToString(rv));
         return rv;
     }
-
+    configurationClose(&r->snapshot.configuration);
+    rv = configurationCopy(&snapshot->configuration,
+                           &r->snapshot.configuration);
+    if (rv != 0) {
+        tracef("restore snapshot %llu: %s", snapshot->index,
+               errCodeToString(rv));
+        return rv;
+    }
     configurationClose(&r->configuration);
     r->configuration = snapshot->configuration;
     r->configuration_index = snapshot->configuration_index;

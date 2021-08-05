@@ -64,6 +64,7 @@ int raft_init(struct raft *r,
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
     r->snapshot.trailing = DEFAULT_SNAPSHOT_TRAILING;
+    raft_configuration_init(&r->snapshot.configuration);
     r->snapshot.put.data = NULL;
     r->close_cb = NULL;
     memset(r->errmsg, 0, sizeof r->errmsg);
@@ -110,6 +111,7 @@ static void ioCloseCb(struct raft_io *io)
     raft_free(r->address);
     logClose(&r->log);
     raft_configuration_close(&r->configuration);
+    raft_configuration_close(&r->snapshot.configuration);
     if (r->close_cb != NULL) {
         r->close_cb(r);
     }

@@ -1539,8 +1539,15 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 		goto out;
 	}
 
-	logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
-
+    logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
+    /* backup the configuration in case a membershipRollback occurs */
+    configurationClose(&r->snapshot.configuration);
+    status = configurationCopy(&r->snapshot.pending.configuration,
+                               &r->snapshot.configuration);
+    if (status != 0) {
+        tracef("snapshot %lld at term %lld: %s", snapshot->index,
+               snapshot->term, raft_strerror(status));
+    }
 out:
 	snapshotClose(&r->snapshot.pending);
 	r->snapshot.pending.term = 0;
@@ -2362,17 +2369,19 @@ static bool shouldTakeSnapshot(struct raft *r)
 		return false;
 	}
 
-	/* If a snapshot is already in progress, we don't want to start another
-	 *  one. */
-	if (r->snapshot.pending.term != 0) {
-		return false;
-	};
+    /* If a snapshot is already in progress, we don't want to start another
+     *  one. */
+    if (r->snapshot.pending.term != 0) {
+        return false;
+    }
+    /* If a configuration change is uncommitted, do nothing. */
+    if (r->configuration_uncommitted_index != 0)
+        return false;
 
-	/* If we didn't reach the threshold yet, do nothing. */
-	if (r->last_applying - r->log.snapshot.last_index < r->snapshot.threshold) {
-		return false;
-	}
-
+    /* If we didn't reach the threshold yet, do nothing. */
+    if (r->last_applying - r->log.snapshot.last_index < r->snapshot.threshold) {
+        return false;
+    }
 	/* pgrep: Can not delete log entries after prev_applied_index  */
 	unsigned inx = configurationIndexOf(&r->configuration, r->pgrep_id);
 	if (r->state == RAFT_LEADER &&

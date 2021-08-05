@@ -103,6 +103,21 @@ static int getIntParam(const MunitParameter params[], const char *name)
     return value != NULL ? atoi(value) : 0;
 }
 
+static void *heapEntryMalloc(void *data, size_t size)
+{
+	return heapMalloc(data, size);
+}
+
+static void heapEntryFree(void *data, void *ptr)
+{
+	heapFree(data, ptr);
+}
+
+static void heapEntryBatchFree(void *data, struct raft_entry *entry)
+{
+	heapFree(data, entry->batch);
+}
+
 void HeapSetUp(const MunitParameter params[], struct raft_heap *h)
 {
     struct heap *heap = munit_malloc(sizeof *heap);
@@ -122,6 +137,9 @@ void HeapSetUp(const MunitParameter params[], struct raft_heap *h)
     h->realloc = heapRealloc;
     h->aligned_alloc = heapAlignedAlloc;
     h->aligned_free = heapAlignedFree;
+    h->entry_malloc = heapEntryMalloc;
+    h->entry_free   = heapEntryFree;
+    h->entry_batch_free = heapEntryBatchFree;
 
     raft_heap_set(h);
     FaultPause(&heap->fault);

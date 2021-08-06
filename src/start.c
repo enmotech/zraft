@@ -32,7 +32,7 @@ static int restoreMostRecentConfiguration(struct raft *r,
 	}
 	raft_configuration_close(&r->configuration);
 	r->configuration = configuration;
-	r->configuration_index = index;
+	r->configuration_uncommitted_index = index;
 
 	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump]", rkey(r), r->state, __func__);
 	for (unsigned int i = 0; i < r->configuration.n; i++) {
@@ -78,6 +78,7 @@ static int restoreEntries(struct raft *r,
 			  size_t n)
 {
 	struct raft_entry *conf = NULL;
+	raft_index pre_conf_index = r->configuration_index;
 	raft_index conf_index;
 	size_t i;
 	int rv;
@@ -92,6 +93,9 @@ static int restoreEntries(struct raft *r,
 		}
 		r->last_stored++;
 		if (entry->type == RAFT_CHANGE) {
+			if (conf != NULL)
+				pre_conf_index = conf_index;
+
 			conf = entry;
 			conf_index = r->last_stored;
 		}
@@ -100,6 +104,12 @@ static int restoreEntries(struct raft *r,
 		rv = restoreMostRecentConfiguration(r, conf, conf_index);
 		if (rv != 0) {
 			goto err;
+		}	
+		if (r->configuration_uncommitted_index == 1) {
+			r->configuration_index = 1;
+			r->configuration_uncommitted_index = 0;
+		} else {
+			r->configuration_index = pre_conf_index;
 		}
 	}
 

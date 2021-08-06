@@ -104,8 +104,13 @@ static int restoreEntries(struct raft *r,
 		rv = restoreMostRecentConfiguration(r, conf, conf_index);
 		if (rv != 0) {
 			goto err;
+		}	
+		if (r->configuration_uncommitted_index == 1) {
+			r->configuration_index = 1;
+			r->configuration_uncommitted_index = 0;
+		} else {
+			r->configuration_index = pre_conf_index;
 		}
-		r->configuration_index = pre_conf_index;
 	}
 
 	ZSINFO(gzlog, "[raft][%d][%d][%s], last_stored[%lld]",

@@ -49,6 +49,7 @@ struct ioRequest
 {
     REQUEST;
 };
+static int g_fixture_errno = 0;
 
 /* Pending request to append entries to the log. */
 struct append
@@ -358,7 +359,7 @@ static void ioFlushSend(struct io *io, struct send *send)
 
     /* tracef("io: flush: %s", describeMessage(&send->message)); */
     io->n_send[send->message.type]++;
-    status = 0;
+    status = g_fixture_errno;
 
 out:
     if (send->req->cb != NULL) {
@@ -2425,5 +2426,52 @@ bool raft_fixture_log_cmp(struct raft_fixture *f, unsigned i, unsigned j)
 	}
 	return true;
 }
+
+void raft_fixture_mock_errno(int errno)
+{
+	g_fixture_errno = errno;
+}
+
+int raft_fixture_construct_configuration_log_buf(unsigned n_server,
+												unsigned n_voter,
+												struct raft_entry *et)
+{
+	int ret = 0;
+	struct raft_configuration conf;
+	struct raft_buffer buf;
+
+	//construct configuration that contain  n servers and the
+	//first n_voter servers wille be set as voter
+	ret = raft_fixture_construct_configuration(n_server, n_voter, &conf);
+	assert(ret == 0);
+
+	//encode and copy buf
+	configurationEncode(&conf, &buf);
+	assert(ret == 0);
+	et->buf = buf;
+
+	raft_configuration_close(&conf);
+	return 0;
+}
+
+int raft_fixture_construct_configuration(unsigned n_server,
+										unsigned n_voter,
+										struct raft_configuration *conf)
+{
+	char addr[2] = {0};
+    raft_configuration_init(conf);
+    for (unsigned id = 1; id <= n_server; id++) {
+        int role = id <= n_voter ? RAFT_VOTER : RAFT_STANDBY;
+        int rv;
+		snprintf(addr, 2, "%u", id);
+        rv = raft_configuration_add(conf, id, addr, role);
+        if (rv != 0) {
+            return rv;
+        }
+    }
+
+	return 0;
+}
+
 
 #undef tracef

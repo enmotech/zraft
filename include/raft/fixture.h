@@ -507,4 +507,24 @@ RAFT_API void raft_fixture_set_election_timeout_min(struct raft_fixture *f,
  */
 
 RAFT_API bool raft_fixture_log_cmp(struct raft_fixture *f, unsigned i, unsigned j);
+
+/**
+ * Mock a global fixture errno	
+ */
+RAFT_API void raft_fixture_mock_errno(int errno);
+
+/**
+ * Construct buf of configuration log 
+ */
+RAFT_API int raft_fixture_construct_configuration_log_buf(unsigned n_server,
+														unsigned n_voter,
+														struct raft_entry *et);
+
+/**
+ *	Construct a n_server, n_voter configuration
+ */
+RAFT_API int raft_fixture_construct_configuration(unsigned n_server,
+												unsigned n_voter,
+												struct raft_configuration *conf);
+
 #endif /* RAFT_FIXTURE_H */

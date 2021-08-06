@@ -2317,41 +2317,41 @@ static void applyChange(struct raft *r, const raft_index index)
 			   "set configuration_uncommitted_index = 0.",
 			   rkey(r), r->state, __func__, index);
 	}
-
-	r->configuration_index = index;
-
-	if (r->state == RAFT_LEADER) {
-		req = r->leader_state.change;
-		r->leader_state.change = NULL;
-		/* If we are leader but not part of this new configuration, step
-		 * down.
-		 *
-		 * From Section 4.2.2:
-		 *
-		 *   In this approach, a leader that is removed from the configuration
-		 *   steps down once the Cnew entry is committed.
-		 */
-		server = configurationGet(&r->configuration, r->id);
-		if (server == NULL) {
-			//convertToFollower(r);
-			r->removed = true;
-		}
-		if (req != NULL && req->cb != NULL) {
-			ZSINFO(gzlog, "[raft][%d][%d][%s] change call backed.",
-				      rkey(r), r->state, __func__);
-			req->cb(req, 0);
+	if (r->configuration_index < index) {
+		r->configuration_index = index;
+		if (r->state == RAFT_LEADER) {
+			req = r->leader_state.change;
+			r->leader_state.change = NULL;
+			/* If we are leader but not part of this new configuration, step
+			 * down.
+			 *
+			 * From Section 4.2.2:
+			 *
+			 *   In this approach, a leader that is removed from the configuration
+			 *   steps down once the Cnew entry is committed.
+			 */
+			server = configurationGet(&r->configuration, r->id);
+			if (server == NULL) {
+				//convertToFollower(r);
+				r->removed = true;
+			}
+			if (req != NULL && req->cb != NULL) {
+				ZSINFO(gzlog, "[raft][%d][%d][%s] change call backed.",
+					      rkey(r), r->state, __func__);
+				req->cb(req, 0);
+			} else {
+				ZSINFO(gzlog, "[raft][%d][%d][%s] change call backed in new Leader.",
+					      rkey(r), r->state, __func__);
+				r->role_change_cb(r, NULL);
+			}
 		} else {
-			ZSINFO(gzlog, "[raft][%d][%d][%s] change call backed in new Leader.",
-				      rkey(r), r->state, __func__);
-			r->role_change_cb(r, NULL);
+			/* if we are removed from the configuration,
+			 * set flag so that the owner could relase the instance
+			 */
+			server = configurationGet(&r->configuration, r->id);
+			if (server == NULL)
+				r->removed = true;
 		}
-	} else {
-		/* if we are removed from the configuration,
-		 * set flag so that the owner could relase the instance
-		 */
-		server = configurationGet(&r->configuration, r->id);
-		if (server == NULL)
-			r->removed = true;
 	}
 }
 

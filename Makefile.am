@@ -106,7 +106,7 @@ test_integration_core_SOURCES = \
   test/integration/test_etcd_migrate_2.c 
 
 test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
-test_integration_core_LDFLAGS = -no-install
+test_integration_core_LDFLAGS = -no-install ./.libs/libraft.a
 test_integration_core_LDADD = libtest.la libraft.la
 
 test_fuzzy_core_SOURCES = \
@@ -223,7 +223,7 @@ benchmark_os_disk_write_LDFLAGS = -luring
 endif # BENCHMARK_ENABLED
 
 if DEBUG_ENABLED
-  AM_CFLAGS += -Werror -O0 -fno-omit-frame-pointer
+  AM_CFLAGS += -O0 -fno-omit-frame-pointer
 else
   AM_CFLAGS += -DNDEBUG
 endif

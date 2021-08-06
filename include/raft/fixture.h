@@ -357,6 +357,13 @@ RAFT_API bool raft_fixture_step_ae_mock(struct raft_fixture *f,
 									 	unsigned i,
 									 	unsigned j,
 										struct raft_append_entries *ae);
+/**
+ * Step for mock a heartbeat append_entry to I
+ */
+RAFT_API bool raft_fixture_step_heartbeat_mock(struct raft_fixture *f,
+	unsigned i,
+	unsigned j,
+	struct raft_append_entries *ae);
 
 /**
  * Return te append_entry's address for mock it more convenient 
@@ -507,4 +514,14 @@ RAFT_API void raft_fixture_set_election_timeout_min(struct raft_fixture *f,
  */
 
 RAFT_API bool raft_fixture_log_cmp(struct raft_fixture *f, unsigned i, unsigned j);
+
+/**
+ * Step the cluster until the @i'th server has committed the entry at the given
+ * index, or @max_msecs have elapsed. If @i equals the number of servers, then
+ * step until all servers have committed the given entry.
+ */
+bool raft_fixture_step_until_committed(struct raft_fixture *f,
+				       unsigned i,
+				       raft_index index,
+				       unsigned max_msecs);
 #endif /* RAFT_FIXTURE_H */

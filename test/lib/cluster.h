@@ -211,6 +211,14 @@
 	munit_assert_true(done);                                               \
     }
 
+#define CLUSTER_STEP_UNTIL_COMMITTED(I, INDEX, MAX_MSECS)                        \
+{                                                                          \
+	bool done;                                                             \
+	done =                                                                 \
+	raft_fixture_step_until_committed(&f->cluster, I, INDEX, MAX_MSECS); \
+	munit_assert_true(done);                                               \
+}
+
 /* Step the cluster until the state of the server with the given index matches
  * the given value, or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_STATE_IS(I, STATE, MAX_MSECS)               \
@@ -444,6 +452,20 @@
         done =																			 \
             raft_fixture_step_until_rv_response(&f->cluster, I, J, RV_RES, MAX_MSECS);   \
         munit_assert_true(done);														 \
+    }
+
+/* Find AE message and change it with mock*/
+#define CLUSTER_STEP_AE_MOCK(F, I, J, AE) \
+    {                                     \
+    	bool done = raft_fixture_step_ae_mock(F, I, J, AE);                                    \
+    	munit_assert_true(done);\
+    }
+
+/* Find heartbeat AE message and change it with mock*/
+#define CLUSTER_STEP_HEARTBEAT_MOCK(F, I, J, AE) \
+    {                                     \
+	bool done = raft_fixture_step_heartbeat_mock(F, I, J, AE);                                    \
+	munit_assert_true(done);\
     }
 
 void cluster_randomize_init(struct raft_fixture *f);

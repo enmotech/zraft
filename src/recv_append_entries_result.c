@@ -122,6 +122,7 @@ __pgrep_proc:
 
 				/* Update the prev_applied_index and check
 				   to start a new relication. */
+				assert(prev_applied_index > 0);
 				progressUpdateAppliedIndex(r, i, prev_applied_index);
 
 				if (r->last_applied > prev_applied_index ||

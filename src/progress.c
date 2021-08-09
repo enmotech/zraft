@@ -30,7 +30,7 @@ static void initProgress(struct raft_progress *p, raft_index last_index)
     p->recent_recv = false;
     p->state = PROGRESS__PROBE;
 	p->replicating = false;
-	p->prev_applied_index = 0;
+	p->prev_applied_index = 1;
 }
 
 int progressBuildArray(struct raft *r)

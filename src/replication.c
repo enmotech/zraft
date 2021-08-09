@@ -545,7 +545,7 @@ int sendPgrepTickMessage(struct raft *r, unsigned i, struct pgrep_permit_info pi
 	case PGREP_TICK_DLT:
 		progressOptimisticNextIndex(r, i, progressGetAppliedIndex(r, i) + 1);
 		progressSetPgreplicating(r, i, false);
-		progressUpdateAppliedIndex(r, i, 0);
+		progressUpdateAppliedIndex(r, i, 1);
 		ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep over status[%d] pgrep_id[%lld] replicating[%d].",
 			   rkey(r), r->state, __func__, status, r->pgrep_id, p->replicating);
 		if (status == PGREP_TICK_FIN) {
@@ -1613,11 +1613,11 @@ int sync_pgrep_index(struct raft *r,
 	int rv;
 	raft_index last_index = r->log.snapshot.last_index;
 	raft_term last_term = r->log.snapshot.last_term;
-	raft_index configuration_index = r->configuration_index;
+	//raft_index configuration_index = r->configuration_index;
 
 	r->log.snapshot.last_index = args->prev_log_index;
 	r->log.snapshot.last_term = args->prev_log_term;
-	r->configuration_index = 0;
+	//r->configuration_index = 1;
 
 	rv = pgrep_take_snapshot(r);
 	if (rv)
@@ -1636,7 +1636,7 @@ roll_back:
 
 	r->log.snapshot.last_index = last_index;
 	r->log.snapshot.last_term = last_term;
-	r->configuration_index = configuration_index;
+	//r->configuration_index = configuration_index;
 
 	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s] failed[%d].", rkey(r), r->state, args->pkt, __func__, rv);
 

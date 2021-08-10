@@ -5,13 +5,6 @@
 #include "log.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
@@ -232,7 +225,7 @@ bool progressMaybeDecrement(struct raft *r,
     p->next_index = min(rejected, last_index + 1);
     p->next_index = max(p->next_index, 1);
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+	tracef("[raft][%d][%d][%s] next_index[%lld].",
 		   rkey(r), r->state, __func__, p->next_index);
 
     return true;
@@ -244,7 +237,7 @@ void progressOptimisticNextIndex(struct raft *r,
 {
     struct raft_progress *p = &r->leader_state.progress[i];
     p->next_index = next_index;
-	ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+	tracef("[raft][%d][%d][%s] next_index[%lld].",
 		   rkey(r), r->state, __func__, p->next_index);
 }
 
@@ -258,7 +251,7 @@ bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
     }
     if (p->next_index < last_index + 1) {
         p->next_index = last_index + 1;
-		ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+		tracef("[raft][%d][%d][%s] next_index[%lld].",
 			   rkey(r), r->state, __func__, p->next_index);
     }
     return updated;
@@ -280,7 +273,7 @@ void progressToProbe(struct raft *r, const unsigned i)
     }
     p->state = PROGRESS__PROBE;
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+	tracef("[raft][%d][%d][%s] next_index[%lld].",
 		   rkey(r), r->state, __func__, p->next_index);
 }
 

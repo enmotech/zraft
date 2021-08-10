@@ -13,13 +13,6 @@
 #include "snapshot.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Defaults */
 #define HEARTBEAT_TIMEOUT 100
 #define INSTALL_SNAPSHOT_TIMEOUT (2 * HEARTBEAT_TIMEOUT)
@@ -50,6 +43,28 @@ struct ioRequest
     REQUEST;
 };
 static int g_fixture_errno = 0;
+
+#define FIXTURE_TRACE_FILE "fixture_trace.log"
+static FILE *g_fixture_fp;
+static int open_trace_file(void)
+{
+	if (g_fixture_fp)
+		return 0;
+	
+	g_fixture_fp = fopen(FIXTURE_TRACE_FILE, "w+");
+	assert(g_fixture_fp);
+
+	return 0;
+}
+
+static void close_trace_file(void)
+{
+	if (!g_fixture_fp)
+		return;
+	
+	fclose(g_fixture_fp);
+}
+
 
 /* Pending request to append entries to the log. */
 struct append
@@ -904,6 +919,11 @@ void ioMethodPgRepCancel(struct raft_io *io)
 	(void)io;
 }
 
+static uint32_t ioMethodRaftKey(struct raft_io *io)
+{
+	(void)(io);
+	return 0;
+}
 static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 {
     struct io *io;
@@ -952,6 +972,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
 	raft_io->pgrep_boundary = ioRepBoundary;
 	raft_io->pgrep_tick = ioMethodPgRepTick;
 	raft_io->pgrep_cancel = ioMethodPgRepCancel;
+	raft_io->raft_key = ioMethodRaftKey;
     return 0;
 }
 
@@ -980,9 +1001,15 @@ static void emit(struct raft_tracer *t,
                  int line,
                  const char *message)
 {
-    unsigned id = *(unsigned *)t->impl;
-    fprintf(stderr, "%d: %30s:%*d - %s\n", id, file, 3, line, message);
+	(void)(t);
+	assert(file);
+	assert(message);
+	if (g_fixture_fp)
+		fprintf(g_fixture_fp, "%s:%d, %s\n", file, line, message);
 }
+
+static struct raft_tracer tracer = {.impl = NULL, .emit = emit};
+RAFT_API struct raft_tracer *UserTracer = &tracer;
 
 static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
 {
@@ -1002,9 +1029,6 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
     raft_set_install_snapshot_timeout(&s->raft, INSTALL_SNAPSHOT_TIMEOUT);
-    s->tracer.impl = (void *)&s->id;
-    s->tracer.emit = emit;
-    s->raft.tracer = &s->tracer;
     return 0;
 }
 
@@ -1037,6 +1061,11 @@ int raft_fixture_init(struct raft_fixture *f, unsigned n, struct raft_fsm *fsms)
     f->time = 0;
     f->n = n;
 
+	/* Open log trace file */
+	rc = open_trace_file();
+	if (rc != 0)
+		return rc;
+
     /* Initialize all servers */
     for (i = 0; i < n; i++) {
         rc = serverInit(f, i, &fsms[i]);
@@ -1068,6 +1097,8 @@ void raft_fixture_close(struct raft_fixture *f)
         serverClose(&f->servers[i]);
     }
     logClose(&f->log);
+
+	close_trace_file();
 }
 
 int raft_fixture_configuration(struct raft_fixture *f,

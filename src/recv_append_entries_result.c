@@ -6,14 +6,6 @@
 #include "replication.h"
 #include "progress.h"
 
-
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 int recvAppendEntriesResult(struct raft *r,
                             const raft_id id,
                             const char *address,
@@ -35,7 +27,7 @@ int recvAppendEntriesResult(struct raft *r,
 
 	(void)(address);
 	
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s]: peer[%lld] replicating[%u] "
+	tracef("[raft][%d][%d][pkt:%u][%s]: peer[%lld] replicating[%u] "
 		   "permit[%d] pi.time[%ld] rejected[%lld] last_log_index[%lld]",
 		   rkey(r), r->state, result->pkt, __func__, id, result->pi.replicating,
 		   result->pi.permit, result->pi.time, result->rejected, result->last_log_index);
@@ -100,7 +92,7 @@ __pgrep_proc:
 		bool unpermit = false;
 
 		if (!pgrep_proc) {
-			ZSINFO(gzlog, "[raft][%d][%d][%s] meet some error pgrep_cancel.",
+			tracef("[raft][%d][%d][%s] meet some error pgrep_cancel.",
 				   rkey(r), r->state, __func__);
 			unpermit = true;
 			r->io->pgrep_cancel(r->io);
@@ -112,7 +104,7 @@ __pgrep_proc:
 
 			} else if (result->pi.replicating == PGREP_RND_ERR) {
 				/* Catch-up meet some error. */
-				ZSINFO(gzlog, "[raft][%d][%d][%s] catch-up meet some error pgrep_cancel.",
+				tracef("[raft][%d][%d][%s] catch-up meet some error pgrep_cancel.",
 					   rkey(r), r->state, __func__);
 				unpermit = true;
 				r->io->pgrep_cancel(r->io);
@@ -153,7 +145,7 @@ __pgrep_proc:
 
 		if (unpermit) {
 			r->io->pgrep_raft_unpermit(r->io, &result->pi);
-			ZSINFO(gzlog, "[raft][%d][%d][%s]: pgrep permit released.",
+			tracef("[raft][%d][%d][%s]: pgrep permit released.",
 				   rkey(r), r->state, __func__);
 		}
 	}

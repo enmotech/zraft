@@ -281,7 +281,7 @@ static void refsIncr(struct raft_log *l,
 
     slot->count++;
 
-	ZSINFO(gzlog, "refsIncr: index[%lld] ref[%u]", index, slot->count);
+	tracef("refsIncr: index[%lld] ref[%u]", index, slot->count);
 }
 
 static bool refsIf(struct raft_log *l,
@@ -309,7 +309,7 @@ static bool refsIf(struct raft_log *l,
         slot = slot->next;
     }
 
-	ZSINFO(gzlog, "refsIf: index[%lld] ref[%u]", index, slot->count);
+	tracef("refsIf: index[%lld] ref[%u]", index, slot->count);
 
     if (slot->count > 1) {
         /* The entry is still referenced. */
@@ -352,7 +352,7 @@ static bool refsDecr(struct raft_log *l,
 
     slot->count--;
 
-	ZSINFO(gzlog, "refsDecr: index[%lld] ref[%u]", index, slot->count);
+	tracef("refsDecr: index[%lld] ref[%u]", index, slot->count);
 
     if (slot->count > 0) {
         /* The entry is still referenced. */
@@ -752,7 +752,7 @@ int logAcquire(struct raft_log *l,
         refsIncr(l, entry->term, index + j);
     }
 
-	ZSINFO(gzlog, "logAcquire: index[%lld] n[%d]", index, *n);
+	tracef("logAcquire: index[%lld] n[%d]", index, *n);
 
     return 0;
 }
@@ -835,7 +835,7 @@ int logAcquireSection(
 	realn = cnt;
 	*n = realn;
 
-	ZSINFO(gzlog, "logAcquireSection: index[%lld] n[%d]", index, *n);
+	tracef("logAcquireSection: index[%lld] n[%d]", index, *n);
 
     return 0;
 }
@@ -871,7 +871,7 @@ void logRelease(struct raft_log *l,
     assert(l != NULL);
     assert((entries == NULL && n == 0) || (entries != NULL && n > 0));
 
-	ZSINFO(gzlog, "logRelease: index[%lld] n[%d]", index, n);
+	tracef("logRelease: index[%lld] n[%d]", index, n);
 
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
@@ -974,7 +974,7 @@ void logTruncate(struct raft_log *l, const raft_index index)
         return;
     }
 
-	ZSINFO(gzlog, "logTruncate: index[%lld]", index);
+	tracef("logTruncate: index[%lld]", index);
 
     removeSuffix(l, index, true);
 }
@@ -985,7 +985,7 @@ int isRefs(struct raft_log *l, const raft_index index)
         return 0;
     }
 
-	ZSINFO(gzlog, "isRefs: index[%lld]", index);
+	tracef("isRefs: index[%lld]", index);
 
 	size_t i;
     size_t n;
@@ -1013,7 +1013,7 @@ int isRefs(struct raft_log *l, const raft_index index)
 		unref = refsIf(l, entry->term, start + n - i - 1);
 
 		if (!unref) {
-			ZSINFO(gzlog, "isRefs: index[%lld] is referenced.", start + n - i - 1);
+			tracef("isRefs: index[%lld] is referenced.", start + n - i - 1);
 			return RAFT_LOG_BUSY;
 		}
     }

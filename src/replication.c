@@ -1635,7 +1635,7 @@ roll_back:
 
 	r->log.snapshot.last_index = last_index;
 	r->log.snapshot.last_term = last_term;
-	r->configuration_index = configuration_index;
+	//r->configuration_index = configuration_index;
 
 	tracef("[raft][%d][%d][pkt:%u][%s] failed[%d].", rkey(r), r->state, args->pkt, __func__, rv);
 

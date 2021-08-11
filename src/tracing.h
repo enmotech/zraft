@@ -4,21 +4,6 @@
 #define TRACING_H_
 
 #include "../include/raft.h"
-#include "../../../infrastructure/zlog/logger.h"
-
-#ifdef RAFT_TEST
-#undef ZSINFO
-#undef ZSERROR
-#undef ZSWARNING
-#undef ZSNOTICE
-#define ZSINFO(g, p, ...)
-#define ZSERROR(g, p, ...)
-#define ZSWARNING(g, p, ...)
-#define ZSINFO(g, p, ...)
-#define ZSNOTICE(g, p, ...)
-#else
-extern struct zlogger *gzlog;
-#endif
 
 /* Default no-op tracer. */
 extern struct raft_tracer NoopTracer;
@@ -30,5 +15,14 @@ extern struct raft_tracer NoopTracer;
         snprintf(_msg, sizeof _msg, __VA_ARGS__);       \
         TRACER->emit(TRACER, __FILE__, __LINE__, _msg); \
     } while (0)
+
+/* user-defined tracer */
+extern struct raft_tracer *UserTracer;
+
+#if !NDEBUG
+#define tracef(...) Tracef(UserTracer, __VA_ARGS__);
+#else
+#define tracef(...) 
+#endif
 
 #endif /* TRACING_H_ */

@@ -10,13 +10,6 @@
 #include "tick.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Restore the most recent configuration. */
 static int restoreMostRecentConfiguration(struct raft *r,
 					  struct raft_entry *entry,
@@ -32,12 +25,13 @@ static int restoreMostRecentConfiguration(struct raft *r,
 	}
 	raft_configuration_close(&r->configuration);
 	r->configuration = configuration;
-	r->configuration_index = index;
+	r->configuration_uncommitted_index = index;
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump]", rkey(r), r->state, __func__);
+	tracef("[raft][%d][%d][%s][conf_dump]", rkey(r), r->state, __func__);
 	for (unsigned int i = 0; i < r->configuration.n; i++) {
 		const struct raft_server *server = &r->configuration.servers[i];
-		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+		(void)(server);
+		tracef("[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
 			   rkey(r), r->state, __func__, i,
 			   server->id, server->role, server->pre_role);
 	}
@@ -78,6 +72,7 @@ static int restoreEntries(struct raft *r,
 			  size_t n)
 {
 	struct raft_entry *conf = NULL;
+	raft_index pre_conf_index = r->configuration_index;
 	raft_index conf_index;
 	size_t i;
 	int rv;
@@ -92,6 +87,9 @@ static int restoreEntries(struct raft *r,
 		}
 		r->last_stored++;
 		if (entry->type == RAFT_CHANGE) {
+			if (conf != NULL)
+				pre_conf_index = conf_index;
+
 			conf = entry;
 			conf_index = r->last_stored;
 		}
@@ -100,10 +98,16 @@ static int restoreEntries(struct raft *r,
 		rv = restoreMostRecentConfiguration(r, conf, conf_index);
 		if (rv != 0) {
 			goto err;
+		}	
+		if (r->configuration_uncommitted_index == 1) {
+			r->configuration_index = 1;
+			r->configuration_uncommitted_index = 0;
+		} else {
+			r->configuration_index = pre_conf_index;
 		}
 	}
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s], last_stored[%lld]",
+	tracef("[raft][%d][%d][%s], last_stored[%lld]",
 		   rkey(r), r->state, __func__, r->last_stored);
 
 	raft_free(entries);
@@ -161,7 +165,7 @@ static void raftLoadCb(struct raft_io_load *req,
 	struct raft_start *start = request->start;
 
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s] status[%d] load[%p]", rkey(r), r->state, __func__, status, (void*)load);
+	tracef("[raft][%d][%d][%s] status[%d] load[%p]", rkey(r), r->state, __func__, status, (void*)load);
 
 	if(status == 0) {
 		if(load) {
@@ -174,12 +178,12 @@ static void raftLoadCb(struct raft_io_load *req,
 
 			assert(start_index >= 1);
 
-			ZSINFO(gzlog, "[raft][%d][%d][%s] n_entries[%ld] snapshot[%p]",
+			tracef("[raft][%d][%d][%s] n_entries[%ld] snapshot[%p]",
 				   rkey(r), r->state, __func__, n_entries, (void*)snapshot);
 
 			/* If we have a snapshot, let's restore it. */
 			if (snapshot != NULL) {
-				ZSINFO(gzlog, "[raft][%d][%d][%s] restore snapshot with last index %llu and last term %llu",
+				tracef("[raft][%d][%d][%s] restore snapshot with last index %llu and last term %llu",
 					   rkey(r), r->state, __func__, snapshot->index, snapshot->term);
 				rv = snapshotRestore(r, snapshot);
 				if (rv != 0) {
@@ -205,7 +209,7 @@ static void raftLoadCb(struct raft_io_load *req,
 
 			/* Append the entries to the log, possibly restoring the last
 	     * configuration. */
-			ZSINFO(gzlog, "[raft][%d][%d][%s] restore %lu entries starting at %llu",
+			tracef("[raft][%d][%d][%s] restore %lu entries starting at %llu",
 				   rkey(r), r->state, __func__, n_entries, start_index);
 			rv = restoreEntries(r, snapshot_index, snapshot_term, start_index, entries,
 					    n_entries);

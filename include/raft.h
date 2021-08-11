@@ -1014,6 +1014,7 @@ struct raft
 		unsigned trailing;               /* N. of trailing entries to retain */
 		struct raft_snapshot pending;    /* In progress snapshot */
 		struct raft_io_snapshot_put put; /* Store snapshot request */
+                struct raft_configuration configuration;
 	} snapshot;
 
 	/*

@@ -1,6 +1,5 @@
 #! /usr/bin/env bash
 
-
 log_file='./test-suite.log'
 test_suites=('paper_test' 'etcd_migrate')
 
@@ -47,7 +46,6 @@ function check_test_pass(){
 	fi
 }
 
-
 function work(){
 	make_check
 
@@ -65,7 +63,6 @@ function work(){
 	else
 		exit 1
 	fi
-
 }
 
 work

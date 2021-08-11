@@ -71,6 +71,7 @@ static int tickCandidate(struct raft *r)
     if (electionTimerExpired(r)) {
         tracef("start new election");
 	r->candidate_state.in_pre_vote = r->pre_vote;
+	r->candidate_state.disrupt_leader = false;
         return electionStart(r);
     }
 

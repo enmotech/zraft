@@ -690,6 +690,18 @@ int replicationProgressInner(struct raft *r, unsigned i, struct pgrep_permit_inf
 		return 0;
 	}
 
+	if (r->transfer != NULL &&
+	    r->transfer->id == server->id) {
+		if (progressIsUpToDate(r, i)) {
+			int rv = membershipLeadershipTransferStart(r);
+
+			if (rv != 0) {
+				membershipLeadershipTransferClose(r);
+			}
+			return rv;
+		}
+	}
+
 	/* pgrep: check if need pgrep ticking. */
 	if (enterPgrepicating(r, i, pi))
 		goto pgrep;

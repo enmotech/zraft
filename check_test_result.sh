@@ -1,32 +1,37 @@
 #! /usr/bin/env bash
 
-echo "RESULT:"
 
 log_file='./test-suite.log'
 test_suites=('paper_test' 'etcd_migrate')
 
 #make and run tests
 function make_check(){
+	#configure
+	if [ ! -e "./configure" ];then
+		autoreconf -i
+	fi
+
+	#update code
+	git restore ./
+	git checkout master
+	git pull
+
 	#clean
-	if [ -f "./Makefile" ];then
+	if [ -e "./Makefile" ];then
 		make clean
 		rm -f Makefile
 	fi
 
-	#configure
-	if [ !-f "./configure" ];then
-		autoreconf -i
-	fi
 	 ./configure --disable-libtool-lock --disable-uv --enable-debug=yes --enable-sanitize=yes --enable-code-coverage
 
 	#make check
-	make check
+	make check 2>/dev/null
 }
 
 #check tests result
 function check_test_pass(){
 	test_suite_name=$1
-	if [ -f "./test-suite.log" ];then
+	if [ -e "./test-suite.log" ];then
 		test_cnt=`grep $test_suite_name $log_file | wc -l` 
 		pass_cnt=`grep $test_suite_name $log_file | grep 'OK' | wc -l`
 
@@ -45,6 +50,8 @@ function check_test_pass(){
 
 function work(){
 	make_check
+
+	echo "RESULT:"
 
 	fail_cnt=0
 	for test_suite in ${test_suites[@]}; do

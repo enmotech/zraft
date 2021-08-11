@@ -10,13 +10,6 @@
 #include "request.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 int raft_apply(struct raft *r,
                struct raft_apply *req,
                const struct raft_buffer bufs[],
@@ -55,7 +48,7 @@ int raft_apply(struct raft *r,
         goto err_after_log_append;
     }
 
-	ZSINFO(gzlog, "[raft][%d][%d] %u |usr-req-key-1|%d-%lld|.",
+	tracef("[raft][%d][%d] %u |usr-req-key-1|%d-%lld|.",
 		   rkey(r), r->state, n, rkey(r), index);
 
 	return 0;
@@ -106,12 +99,12 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
         goto err_after_log_append;
     }
 
-	ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-1|%d-%lld|.",
+	tracef("[raft][%d][%d] |usr-req-key-1|%d-%lld|.",
 		   rkey(r), r->state, rkey(r), index);
 
     return 0;
 
-	ZSINFO(gzlog, "[raft][%d][%d] |usr-req-key-1|%d-%lld| failed[%d].",
+	tracef("[raft][%d][%d] |usr-req-key-1|%d-%lld| failed[%d].",
 		   rkey(r), r->state, rkey(r), index, rv);
 
 err_after_log_append:
@@ -193,11 +186,12 @@ static int clientChangeConfiguration(
     }
 
     r->configuration_uncommitted_index = index;
-	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
+	tracef("[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
 		   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
 	for (unsigned int i = 0; i < r->configuration.n; i++) {
 		const struct raft_server *servert = &r->configuration.servers[i];
-		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+		(void)(servert);
+		tracef("[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
 			   rkey(r), r->state, __func__, i,
 			   servert->id, servert->role, servert->pre_role);
 	}
@@ -226,7 +220,7 @@ int raft_add(struct raft *r,
         return rv;
     }
 
-    tracef("add server: id %d, address %s", id, address);
+    tracef("add server: id %llu, address %s", id, address);
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */
@@ -375,7 +369,7 @@ int raft_remove(struct raft *r,
         goto err;
     }
 
-    tracef("remove server: id %d", id);
+    tracef("remove server: id %llu", id);
 
     /* Make a copy of the current configuration, and remove the given server
      * from it. */

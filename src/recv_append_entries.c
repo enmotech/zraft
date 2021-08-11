@@ -10,13 +10,6 @@
 #include "configuration.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 static void recvSendAppendEntriesResultCb(struct raft_io_send *req, int status)
 {
 	(void)status;
@@ -42,7 +35,7 @@ int recvAppendEntries(struct raft *r,
 	assert(args != NULL);
 	assert(address != NULL);
 
-	ZSINFO(gzlog, "[raft][%d][%d][pkt:%u][%s]: replicating[%d] permit[%d] "
+	tracef("[raft][%d][%d][pkt:%u][%s]: replicating[%d] permit[%d] "
 		   "args->term[%lld] prev_log_index[%lld] entries[%d]",
 	       rkey(r), r->state, args->pkt, __func__, args->pi.replicating,
 	       args->pi.permit, args->term, args->prev_log_index, args->n_entries);
@@ -53,7 +46,7 @@ int recvAppendEntries(struct raft *r,
 
 	rv = recvEnsureMatchingTerms(r, args->term, &match);
 	if (rv != 0) {
-		ZSERROR(gzlog, "[raft][%d][%d]recvEnsureMatchingTerms failed!",
+		tracef("[raft][%d][%d]recvEnsureMatchingTerms failed!",
 			rkey(r), r->state);
 		return rv;
 	}
@@ -64,7 +57,7 @@ int recvAppendEntries(struct raft *r,
      *   currentTerm.
      */
 	if (match < 0) {
-		ZSWARNING(gzlog, "[raft][%d][%d]recvEnsureMatchingTerms local term is higher -> reject!",
+		tracef("[raft][%d][%d]recvEnsureMatchingTerms local term is higher -> reject!",
 			  rkey(r), r->state);
 		goto reply;
 	}
@@ -105,7 +98,7 @@ int recvAppendEntries(struct raft *r,
 		/* The current term and the peer one must match, otherwise we would have
 	 * either rejected the request or stepped down to followers. */
 		assert(match == 0);
-		ZSWARNING(gzlog, "[raft][%d][%d]discovered leader -> step down!",
+		tracef("[raft][%d][%d]discovered leader -> step down!",
 			  rkey(r), r->state);
 		convertToFollower(r);
 	}
@@ -116,7 +109,7 @@ int recvAppendEntries(struct raft *r,
      * date. */
 	rv = recvUpdateLeader(r, id, address);
 	if (rv == RAFT_NOMEM) {
-		ZSERROR(gzlog, "[raft][%d][%d]recvUpdateLeader failed!",
+		tracef("[raft][%d][%d]recvUpdateLeader failed!",
 			rkey(r), r->state);
 		return rv;
 	}
@@ -130,7 +123,7 @@ int recvAppendEntries(struct raft *r,
 			server->role = RAFT_STANDBY;
 			r->role_change_cb(r, server);
 			r->pgrep_reported = true;
-			ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+			tracef("[raft][%d][%d][%s][role_notify] role[%d].",
 			       rkey(r), r->state, __func__, server->role);
 		}
 	} else {
@@ -149,7 +142,7 @@ int recvAppendEntries(struct raft *r,
      * something smarter, e.g. buffering the entries in the I/O backend, which
      * should be in charge of serializing everything. */
 	if (r->snapshot.put.data != NULL && args->n_entries > 0) {
-		ZSWARNING(gzlog, "[raft][%d][%d]ignoring AppendEntries RPC during snapshot install!",
+		tracef("[raft][%d][%d]ignoring AppendEntries RPC during snapshot install!",
 			  rkey(r), r->state);
 		entryBatchesDestroy(args->entries, args->n_entries);
 		return 0;
@@ -157,7 +150,7 @@ int recvAppendEntries(struct raft *r,
 
 	rv = replicationAppend(r, args, &result->rejected, &async, &pi);
 	if (rv != 0) {
-		ZSERROR(gzlog, "[raft][%d][%d]replicationAppend failed rv[%d]!",
+		tracef("[raft][%d][%d]replicationAppend failed rv[%d]!",
 			rkey(r), r->state, rv);
 		if (rv != RAFT_APPLY_BUSY &&
 		    rv != RAFT_LOG_BUSY)

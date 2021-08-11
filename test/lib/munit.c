@@ -1310,9 +1310,9 @@ munit_test_runner_run_test_with_params(MunitTestRunner* runner, const MunitTest*
     0, 0
 #endif
   };
-  unsigned int output_l;
-  bool first;
-  const MunitParameter* param;
+  //unsigned int output_l;
+ // bool first;
+ // const MunitParameter* param;
   FILE* stderr_buf;
 #if !defined(MUNIT_NO_FORK)
   int pipefd[2];
@@ -1325,24 +1325,24 @@ munit_test_runner_run_test_with_params(MunitTestRunner* runner, const MunitTest*
   pid_t changed_pid;
 #endif
 
-  if (params != NULL) {
-    output_l = 2;
-    fputs("  ", MUNIT_OUTPUT_FILE);
-    first = true;
-    for (param = params ; param != NULL && param->name != NULL ; param++) {
-      if (!first) {
-        fputs(", ", MUNIT_OUTPUT_FILE);
-        output_l += 2;
-      } else {
-        first = false;
-      }
-
-      output_l += fprintf(MUNIT_OUTPUT_FILE, "%s=%s", param->name, param->value);
-    }
-    while (output_l++ < MUNIT_TEST_NAME_LEN) {
-      fputc(' ', MUNIT_OUTPUT_FILE);
-    }
-  }
+// if (params != NULL) {
+//   output_l = 2;
+//   fputs("---", MUNIT_OUTPUT_FILE);
+//   first = true;
+//   for (param = params ; param != NULL && param->name != NULL ; param++) {
+//     if (!first) {
+//       fputs(", ", MUNIT_OUTPUT_FILE);
+//       output_l += 2;
+//     } else {
+//       first = false;
+//     }
+//
+//     output_l += fprintf(MUNIT_OUTPUT_FILE, "%s=%s", param->name, param->value);
+//   }
+//   while (output_l++ < MUNIT_TEST_NAME_LEN) {
+//     fputc(' ', MUNIT_OUTPUT_FILE);
+//   }
+// }
 
   fflush(MUNIT_OUTPUT_FILE);
 
@@ -1605,7 +1605,7 @@ munit_test_runner_run_test(MunitTestRunner* runner,
     /* No parameters.  Simple, nice. */
     munit_test_runner_run_test_with_params(runner, test, NULL);
   } else {
-    fputc('\n', MUNIT_OUTPUT_FILE);
+    //fputc('\n', MUNIT_OUTPUT_FILE);
 
     for (pe = test->parameters ; pe != NULL && pe->name != NULL ; pe++) {
       /* Did we received a value for this parameter from the CLI? */

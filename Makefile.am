@@ -81,6 +81,8 @@ check_PROGRAMS += \
 libtest_la_SOURCES += \
   test/lib/cluster.c
 
+test_unit_core_LDADD += libraft.la
+
 test_integration_core_SOURCES = \
   src/configuration.c \
   src/log.c \

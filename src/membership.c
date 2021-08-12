@@ -177,7 +177,7 @@ int membershipLeadershipTransferStart(struct raft *r)
     const struct raft_server *server;
     struct raft_message message;
     int rv;
-    assert(r->transfer->send.data == NULL);
+    //assert(r->transfer->send.data == NULL);
     server = configurationGet(&r->configuration, r->transfer->id);
     assert(server != NULL);
     message.type = RAFT_IO_TIMEOUT_NOW;

@@ -157,8 +157,64 @@ TEST(etcd_migrate, increaseNext, setUp, tearDown, 0, cluster_2_params)
 	return MUNIT_OK;
 }
 
+//test that before leader recv the first heartbeat response,
+//the progress state will be probe and none entry will be sent.
+//After receive first heartbeat response, 
+//state will change to pipeline and send entries out
 TEST(etcd_migrate, sendAppendForProgressProbe, setUp, tearDown, 0, cluster_2_params)
 {
+    struct fixture *f = data;
+	unsigned i=0,j=1;
+
+	CLUSTER_START;
+	CLUSTER_ELECT(i);
+	ASSERT_FOLLOWER(j);
+
+	struct raft_progress *pr_j = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
+	munit_assert_not_null(pr_j);
+	munit_assert_llong(pr_j->next_index, ==, 2);
+	munit_assert_llong(pr_j->match_index, ==, 0);
+
+	//saturate from J to I for drop the heartbeat response
+	CLUSTER_SATURATE(j, i);
+
+	//wait for response drop and check progress state still be probe
+	CLUSTER_STEP_UNTIL_ELAPSED(15);
+	munit_assert_llong(pr_j->state, ==, PROGRESS__PROBE);
+	munit_assert_llong(pr_j->next_index, ==, 2);
+	munit_assert_llong(pr_j->match_index, ==, 0);
+
+	//add ten entries, and none of them will be sent cause still be probe
+	struct raft_apply *req = munit_malloc(sizeof *req);	
+	CLUSTER_APPLY_ADD_N(i, req, 123, 10, test_free_req);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(30);
+		
+	munit_assert_llong(pr_j->state, ==, PROGRESS__PROBE);
+	munit_assert_llong(pr_j->next_index, ==, 2);
+	munit_assert_llong(pr_j->match_index, ==, 0);
+
+	//restore network and step until next ae sent
+	CLUSTER_DESATURATE(j, i);
+	struct raft_append_entries ae = {
+		.term = 2,
+		.prev_log_index = 1,
+		.prev_log_term = 1,
+		.n_entries = 10
+	};
+	CLUSTER_STEP_UNTIL_AE(i, j, &ae, 200);
+	munit_assert_llong(pr_j->state, ==, PROGRESS__PROBE);
+	munit_assert_llong(pr_j->next_index, ==, 11);
+	munit_assert_llong(pr_j->match_index, ==, 0);
+
+	//wait for ae response
+	CLUSTER_STEP_UNTIL_ELAPSED(30);
+
+	//change to pipeline
+	munit_assert_llong(pr_j->state, ==, PROGRESS__PIPELINE);
+	munit_assert_llong(pr_j->next_index, ==, 12);
+	munit_assert_llong(pr_j->match_index, ==, 11);
+
 	return MUNIT_OK;
 }
 

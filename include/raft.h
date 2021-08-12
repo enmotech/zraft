@@ -822,6 +822,7 @@ enum { RAFT_UNAVAILABLE, RAFT_FOLLOWER, RAFT_CANDIDATE, RAFT_LEADER };
  */
 struct raft_progress {
 	unsigned short state;           /* Probe, pipeline or snapshot. */
+	unsigned short probe_count;		/* Plus one when probe receive no response*/
 	raft_index next_index;          /* Next entry to send. */
 	raft_index match_index;         /* Highest index reported as replicated. */
 	raft_index snapshot_index;      /* Last index of most recent snapshot sent. */

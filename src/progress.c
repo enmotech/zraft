@@ -22,6 +22,7 @@ static void initProgress(struct raft_progress *p, raft_index last_index)
     p->last_send = 0;
     p->recent_recv = false;
     p->state = PROGRESS__PROBE;
+    p->probe_count = 0;
 	p->replicating = false;
 	p->prev_applied_index = 1;
 }
@@ -223,7 +224,7 @@ bool progressMaybeDecrement(struct raft *r,
     }
 
     p->next_index = min(rejected, last_index + 1);
-    p->next_index = max(p->next_index, 1);
+    //p->next_index = max(p->next_index, 1);
 
 	tracef("[raft][%d][%d][%s] next_index[%lld].",
 		   rkey(r), r->state, __func__, p->next_index);
@@ -327,6 +328,31 @@ int progressSetPgreplicating(struct raft *r, unsigned i, bool value)
     }
 
     return -1;
+}
+
+void progressUpdateProbeCount(struct raft *r, unsigned i)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	if (p->state == PROGRESS__PROBE)
+		p->probe_count++;
+}
+
+void progressResetProbeCount(struct raft *r, unsigned i)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	if (p->state == PROGRESS__PROBE)
+		p->probe_count = 0;
+}
+
+bool progressMaybeUpdateNextIndex(struct raft *r, unsigned i)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	bool update = p->probe_count >= 1;
+
+	if (update)
+		p->next_index = max(p->next_index, logLastIndex(&r->log));
+
+	return update;
 }
 
 #undef tracef

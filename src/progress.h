@@ -115,4 +115,20 @@ bool progressPgreplicating(struct raft *r, unsigned i);
 /* Set pgrep is relicating. */
 int progressSetPgreplicating(struct raft *r, unsigned i, bool value);
 
+/* When progress is probe state, we only send last one entry for  */
+int progressSetPgreplicating(struct raft *r, unsigned i, bool value);
+
+/* Each probe tick send out, count will plus one */
+void progressUpdateProbeCount(struct raft *r, unsigned i);
+
+/* Receive probe response, count will reset to zero */
+void progressResetProbeCount(struct raft *r, unsigned i);
+
+/*
+ * Once receive no response when probe, 
+ * then update next index to the lastest log index of leader
+ * for avoid send more and more entries when retry probe
+ */
+bool progressMaybeUpdateNextIndex(struct raft *r, unsigned i);
+
 #endif /* PROGRESS_H_ */

@@ -271,6 +271,20 @@
         munit_assert_int(rv_, ==, 0);               \
     }
 
+/* Request to apply n FSM commands to add the given value to x. */
+#define CLUSTER_APPLY_ADD_N(I, REQ, VALUE, N, CB)   \
+    {                                               \
+        struct raft_buffer buf_[N];                 \
+        struct raft *raft_;                         \
+        int rv_;                                    \
+		for (unsigned idx = 0; idx < N; idx++)            \
+			FsmEncodeAddX(VALUE, &buf_[idx]);		    \
+													\
+        raft_ = raft_fixture_get(&f->cluster, I);   \
+        rv_ = raft_apply(raft_, REQ, buf_, N, CB); \
+        munit_assert_int(rv_, ==, 0);               \
+    }
+
 /* Kill the I'th server. */
 #define CLUSTER_KILL(I) raft_fixture_kill(&f->cluster, I);
 

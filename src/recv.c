@@ -16,14 +16,6 @@
 #include "tracing.h"
 #include "replication.h"
 
-
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
 struct setMetar
 {
@@ -247,7 +239,8 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 	/* If there's a leadership transfer in progress, check if it has
      * completed. */
 	if (r->transfer != NULL) {
-		if (r->follower_state.current_leader.id == r->transfer->id) {
+		if (r->state == RAFT_FOLLOWER &&
+		    r->follower_state.current_leader.id == r->transfer->id) {
 			membershipLeadershipTransferClose(r);
 		}
 	}

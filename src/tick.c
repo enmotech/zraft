@@ -8,13 +8,6 @@
 #include "replication.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 /* Apply time-dependent rules for followers (Figure 3.1). */
 static int tickFollower(struct raft *r)
 {
@@ -47,7 +40,7 @@ static int tickFollower(struct raft *r)
      */
     if (electionTimerExpired(r) && server->role == RAFT_VOTER) {
         tracef("convert to candidate and start new election");
-        ZSNOTICE(gzlog, "[raft][%d][%d] convert to candidate, election timeout",
+        tracef("[raft][%d][%d] convert to candidate, election timeout",
 		 rkey(r), r->state);
         rv = convertToCandidate(r, false /* disrupt leader */);
         if (rv != 0) {
@@ -78,6 +71,7 @@ static int tickCandidate(struct raft *r)
     if (electionTimerExpired(r)) {
         tracef("start new election");
 	r->candidate_state.in_pre_vote = r->pre_vote;
+	r->candidate_state.disrupt_leader = false;
         return electionStart(r);
     }
 
@@ -125,7 +119,7 @@ static int tickLeader(struct raft *r)
      */
     if (now - r->election_timer_start >= r->election_timeout) {
         if (!checkContactQuorum(r)) {
-			ZSINFO(gzlog, "[raft][%d][%d][%s] unable to contact majority of cluster -> step down.",
+			tracef("[raft][%d][%d][%s] unable to contact majority of cluster -> step down.",
 				   rkey(r), r->state, __func__);
             convertToFollower(r);
             return 0;
@@ -152,11 +146,11 @@ static int tick(struct raft *r)
     assert(r->state == RAFT_UNAVAILABLE || r->state == RAFT_FOLLOWER ||
            r->state == RAFT_CANDIDATE || r->state == RAFT_LEADER);
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s].", rkey(r), r->state, __func__);
+	tracef("[raft][%d][%d][%s].", rkey(r), r->state, __func__);
 
     /* If we are not available, let's do nothing. */
     if (r->state == RAFT_UNAVAILABLE) {
-		ZSINFO(gzlog, "[raft][%d][%d][%s] RAFT_UNAVAILABLE.", rkey(r), r->state, __func__);
+		tracef("[raft][%d][%d][%s] RAFT_UNAVAILABLE.", rkey(r), r->state, __func__);
         return 0;
     }
 

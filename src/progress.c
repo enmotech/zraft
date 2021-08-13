@@ -5,13 +5,6 @@
 #include "log.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
-#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
-#else
-#define tracef(...)
-#endif
-
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
@@ -29,8 +22,9 @@ static void initProgress(struct raft_progress *p, raft_index last_index)
     p->last_send = 0;
     p->recent_recv = false;
     p->state = PROGRESS__PROBE;
+    p->probe_count = 0;
 	p->replicating = false;
-	p->prev_applied_index = 0;
+	p->prev_applied_index = 1;
 }
 
 int progressBuildArray(struct raft *r)
@@ -230,9 +224,9 @@ bool progressMaybeDecrement(struct raft *r,
     }
 
     p->next_index = min(rejected, last_index + 1);
-    p->next_index = max(p->next_index, 1);
+    //p->next_index = max(p->next_index, 1);
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+	tracef("[raft][%d][%d][%s] next_index[%lld].",
 		   rkey(r), r->state, __func__, p->next_index);
 
     return true;
@@ -244,7 +238,7 @@ void progressOptimisticNextIndex(struct raft *r,
 {
     struct raft_progress *p = &r->leader_state.progress[i];
     p->next_index = next_index;
-	ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+	tracef("[raft][%d][%d][%s] next_index[%lld].",
 		   rkey(r), r->state, __func__, p->next_index);
 }
 
@@ -258,7 +252,7 @@ bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
     }
     if (p->next_index < last_index + 1) {
         p->next_index = last_index + 1;
-		ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+		tracef("[raft][%d][%d][%s] next_index[%lld].",
 			   rkey(r), r->state, __func__, p->next_index);
     }
     return updated;
@@ -280,7 +274,7 @@ void progressToProbe(struct raft *r, const unsigned i)
     }
     p->state = PROGRESS__PROBE;
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s] next_index[%lld].",
+	tracef("[raft][%d][%d][%s] next_index[%lld].",
 		   rkey(r), r->state, __func__, p->next_index);
 }
 
@@ -334,6 +328,31 @@ int progressSetPgreplicating(struct raft *r, unsigned i, bool value)
     }
 
     return -1;
+}
+
+void progressUpdateProbeCount(struct raft *r, unsigned i)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	if (p->state == PROGRESS__PROBE)
+		p->probe_count++;
+}
+
+void progressResetProbeCount(struct raft *r, unsigned i)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	if (p->state == PROGRESS__PROBE)
+		p->probe_count = 0;
+}
+
+bool progressMaybeUpdateNextIndex(struct raft *r, unsigned i)
+{
+	struct raft_progress *p = &r->leader_state.progress[i];
+	bool update = p->probe_count >= 1;
+
+	if (update)
+		p->next_index = max(p->next_index, logLastIndex(&r->log));
+
+	return update;
 }
 
 #undef tracef

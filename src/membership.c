@@ -82,18 +82,19 @@ int membershipUncommittedChange(struct raft *r,
     /* Notify the upper module the role changed. */
     server = configurationGet(&r->configuration, r->id);
     if (server && r->role_change_cb) {
-        ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+        tracef("[raft][%d][%d][%s][role_notify] role[%d].",
                rkey(r), r->state, __func__, server->role);
 		r->role_change_cb(r, server);
 		server = configurationGet(&r->configuration, r->id);
     }
 
-	ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
+	tracef("[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
 		   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
 
 	for (unsigned int i = 0; i < r->configuration.n; i++) {
 		const struct raft_server *servert = &r->configuration.servers[i];
-		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+		(void)(servert);
+		tracef("[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
 			   rkey(r), r->state, __func__, i,
 			   servert->id, servert->role, servert->pre_role);
 	}
@@ -139,18 +140,19 @@ int membershipRollback(struct raft *r)
     /* Notify the upper module the role changed. */
     server = configurationGet(&r->configuration, r->id);
     if (server && r->role_change_cb) {
-        ZSINFO(gzlog, "[raft][%d][%d][%s][role_notify] role[%d].",
+        tracef("[raft][%d][%d][%s][role_notify] role[%d].",
                rkey(r), r->state, __func__, server->role);
 		r->role_change_cb(r, server);
 		server = configurationGet(&r->configuration, r->id);
     }
 
-    ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
+    tracef("[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
            rkey(r), r->state, __func__, r->configuration_uncommitted_index);
 
 	for (unsigned int i = 0; i < r->configuration.n; i++) {
 		const struct raft_server *servert = &r->configuration.servers[i];
-		ZSINFO(gzlog, "[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
+		(void)(servert);
+		tracef("[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
 			   rkey(r), r->state, __func__, i,
 			   servert->id, servert->role, servert->pre_role);
 	}
@@ -175,7 +177,7 @@ int membershipLeadershipTransferStart(struct raft *r)
     const struct raft_server *server;
     struct raft_message message;
     int rv;
-    assert(r->transfer->send.data == NULL);
+    //assert(r->transfer->send.data == NULL);
     server = configurationGet(&r->configuration, r->transfer->id);
     assert(server != NULL);
     message.type = RAFT_IO_TIMEOUT_NOW;

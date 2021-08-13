@@ -713,6 +713,7 @@ int replicationProgressInner(struct raft *r, unsigned i, struct pgrep_permit_inf
 	 * check probe count and update next index. 
 	 */
 	if (progressMaybeUpdateNextIndex(r, i)) {
+		next_index = progressNextIndex(r, i);
 		tracef("update next index of progress for server %u since"
 		"the probe message still receive no response.", i);
 	}

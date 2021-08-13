@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "assert.h"
 #include "configuration.h"
@@ -1978,6 +1979,7 @@ struct step_send_ae {
 	unsigned src;
 	unsigned dst;
 	struct raft_append_entries *ae;
+	bool   heartbeat;
 };
 
 static bool hasAEForSend(struct raft_fixture *f, void *arg)
@@ -2026,7 +2028,7 @@ bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
 										struct raft_append_entries *ae,
 										unsigned max_msecs)
 {
-	struct step_send_ae target = {i, j, ae};
+	struct step_send_ae target = {i, j, ae, false};
 	return raft_fixture_step_until(f, hasAEForSend, &target, max_msecs);;
 }
 
@@ -2159,9 +2161,11 @@ static bool mockAE(struct raft_fixture *f, void *arg)
 				continue;
 			if (message->server_id != mock->dst+1)
 				continue;
-			if (message->append_entries.n_entries == 0)
+			if (mock->heartbeat && message->append_entries.n_entries != 0)
 				continue;
-	
+			if (!mock->heartbeat && message->append_entries.n_entries == 0)
+				continue;
+
 		message->append_entries.term = mock->ae->term;
 		message->append_entries.prev_log_index = mock->ae->prev_log_index;
 		message->append_entries.prev_log_term = mock->ae->prev_log_term;
@@ -2178,9 +2182,19 @@ bool raft_fixture_step_ae_mock(struct raft_fixture *f,
 									 	unsigned j,
 										struct raft_append_entries *ae)
 {
-	struct step_send_ae mock = {i, j, ae};
+	struct step_send_ae mock = {i, j, ae, false};
 	return mockAE(f, &mock); 
 }
+
+bool raft_fixture_step_heartbeat_mock(struct raft_fixture *f,
+	unsigned i,
+	unsigned j,
+	struct raft_append_entries *ae)
+{
+	struct step_send_ae mock = {i, j, ae, true};
+	return mockAE(f, &mock);
+}
+
 
 struct raft_append_entries *getAE(
 	struct raft_fixture *f,
@@ -2229,7 +2243,7 @@ struct raft_append_entries *raft_fixture_get_ae_req(
 	unsigned j,
 	struct raft_append_entries *ae)
 {
-	struct step_send_ae mock = {i, j, ae};
+	struct step_send_ae mock = {i, j, ae, false};
 	return getAE(f, &mock); 
 }
 
@@ -2456,6 +2470,41 @@ bool raft_fixture_log_cmp(struct raft_fixture *f, unsigned i, unsigned j)
 					    return false;
 	}
 	return true;
+}
+struct step_commit
+{
+	unsigned i;
+	raft_index index;
+};
+
+static bool hasCommittedIndex(struct raft_fixture *f, void *arg)
+{
+	struct step_commit *commit = (struct step_commit*)arg;
+	struct raft *raft;
+	unsigned n = 0;
+	unsigned i;
+
+	if (commit->i < f->n) {
+		raft = raft_fixture_get(f, commit->i);
+		return raft->commit_index >= commit->index;
+	}
+
+	for (i = 0; i < f->n; i++) {
+		raft = raft_fixture_get(f, i);
+		if (raft->commit_index >= commit->index) {
+			n++;
+		}
+	}
+	return n == f->n;
+}
+
+bool raft_fixture_step_until_committed(struct raft_fixture *f,
+	unsigned i,
+	raft_index index,
+	unsigned max_msecs)
+{
+	struct step_commit commit = {i, index};
+	return raft_fixture_step_until(f, hasCommittedIndex, &commit, max_msecs);
 }
 
 void raft_fixture_mock_errno(int errno)

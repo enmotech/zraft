@@ -226,7 +226,7 @@ benchmark_os_disk_write_LDFLAGS = -luring
 endif # BENCHMARK_ENABLED
 
 if DEBUG_ENABLED
-  AM_CFLAGS += -O0 -fno-omit-frame-pointer
+  AM_CFLAGS += -Werror -O0 -fno-omit-frame-pointer
 else
   AM_CFLAGS += -DNDEBUG
 endif

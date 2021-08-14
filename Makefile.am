@@ -84,8 +84,6 @@ libtest_la_SOURCES += \
 test_unit_core_LDADD += libraft.la
 
 test_integration_core_SOURCES = \
-  src/configuration.c \
-  src/log.c \
   test/integration/main_core.c \
   test/integration/test_apply.c \
   test/integration/test_assign.c \

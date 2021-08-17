@@ -784,6 +784,7 @@ typedef void (*raft_fsm_apply_cb)(struct raft_fsm_apply *req,
 				  void *result,
 				  int status);
 struct raft_fsm_apply {
+	uint64_t index;
 	void *data;
 	bool permit;		/* Indicate if fsm skip apply after ck_posi. */
 	uint64_t obj_id;	/* The pgrep's current position. */

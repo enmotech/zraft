@@ -180,15 +180,6 @@ reply:
 		}
 	}
 
-	/* Free the entries batch, if any. */
-	if (args->n_entries > 0 && args->entries[0].batch != NULL) {
-		raft_entry_batch_free(&args->entries[0]);
-	}
-
-	if (args->entries != NULL) {
-		raft_free(args->entries);
-	}
-
 	message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
 	message.server_id = id;
 	message.server_address = address;
@@ -203,6 +194,8 @@ reply:
 		raft_free(req);
 		return rv;
 	}
+
+	entryBatchesDestroy(args->entries, args->n_entries);
 
 	return 0;
 }

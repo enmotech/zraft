@@ -1,6 +1,8 @@
 #include "../../src/configuration.h"
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
+#include "../../src/convert.h"
+#include "../../src/election.h"
 
 /******************************************************************************
  *
@@ -45,6 +47,11 @@ static MunitParameterEnum cluster_2_with_1_standby_params[] = {
 static char *cluster_1[] = {"1", NULL};
 static MunitParameterEnum cluster_1_params[] = {
 	{CLUSTER_N_PARAM, cluster_1},
+	{NULL, NULL},
+};
+
+static MunitParameterEnum cluster_2_params[] = {
+	{CLUSTER_N_PARAM, cluster_2},
 	{NULL, NULL},
 };
 
@@ -423,3 +430,678 @@ TEST(etcd_migrate, proposalCluster5With2NodesUp, setUp, tearDown, 0, cluster_5_p
 
 	return MUNIT_OK;
 }
+
+TEST(etcd_migrate, handleMsgAppPreviousNonExist, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+	struct raft_apply apply = {0};
+	struct raft_append_entries_result ae_result = {
+		.last_log_index = 1,
+		.rejected = 2,
+		.term = 4
+	};
+
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SET_TERM(0, 3);
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
+	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+
+	CLUSTER_RAFT(0)->leader_state.progress[1].next_index = 3;
+
+	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, handleMsgAppPreviousMismatch, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+	struct raft_apply apply = {0};
+	struct raft_entry entry = {.term = 3, .type = RAFT_COMMAND};
+	struct raft_append_entries_result ae_result = {
+		.last_log_index = 2,
+		.rejected = 2,
+		.term = 4
+	};
+
+	FsmEncodeSetX(0, &entry.buf);
+	CLUSTER_ADD_ENTRY(1, &entry);
+
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SET_TERM(0, 3);
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
+	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+
+	CLUSTER_RAFT(0)->leader_state.progress[1].next_index = 3;
+
+	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, handleMsgAppLogTermConflicts, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+	struct raft_apply apply = {0};
+	struct raft_entry entry = {.term = 3, .type = RAFT_COMMAND};
+	struct raft_append_entries_result ae_result = {
+		.last_log_index = 2,
+		.rejected = 0,
+		.term = 4
+	};
+
+	FsmEncodeSetX(0, &entry.buf);
+	CLUSTER_ADD_ENTRY(1, &entry);
+
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SET_TERM(0, 3);
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
+	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+
+	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, handleMsgAppUpdateCommitIndex, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+	struct raft_apply apply = {0};
+
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SET_TERM(0, 3);
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
+	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+
+	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 1);
+
+	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	CLUSTER_STEP_UNTIL_ELAPSED(1000);
+
+	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 2);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, handleHeartbeatIncreaseCommitIndex, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct raft_apply apply = {0};
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+
+	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 1);
+
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
+	CLUSTER_STEP_UNTIL_COMMITTED(0, 2, 2000);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(200);
+	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 2);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, handleHeartbeatIgnoreDecreaseCommitIndex, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct raft_apply apply = {0};
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+
+	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 1);
+
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
+	CLUSTER_STEP_UNTIL_COMMITTED(0, 2, 2000);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(200);
+	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 2);
+
+	// mock decreased commit index
+	struct raft_append_entries ae = {
+		.term =  2,
+		.n_entries = 0,
+		.prev_log_index = 2,
+		.prev_log_term = 2,
+		.leader_commit = 1
+	};
+	CLUSTER_STEP_HEARTBEAT_MOCK(&f->cluster, 0, 1, &ae);
+
+	struct raft_append_entries_result ae_result = {
+		.last_log_index = 2,
+		.rejected = 0,
+		.term = 2
+	};
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000);
+
+	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 2);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, recvMsgVoteWithLowerLogTerm, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct raft_entry entry = {.type = RAFT_COMMAND, .term = 3};
+	struct fixture *f = data;
+
+	FsmEncodeSetX(0, &entry.buf);
+	CLUSTER_ADD_ENTRY(1, &entry);
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
+
+	struct raft_request_vote rv = {
+		.term = 2,
+		.last_log_term = 1,
+		.last_log_index = 1,
+		.candidate_id = 0
+	};
+	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100);
+
+	struct raft_request_vote_result res = {
+		.term = 2,
+		.vote_granted = false
+	};
+	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, recvMsgVoteWithLowerLogIndex, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct raft_entry entry = {.type = RAFT_COMMAND, .term = 1};
+	struct fixture *f = data;
+
+	FsmEncodeSetX(0, &entry.buf);
+	CLUSTER_ADD_ENTRY(1, &entry);
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
+
+	struct raft_request_vote rv = {
+		.term = 2,
+		.last_log_term = 1,
+		.last_log_index = 1,
+		.candidate_id = 0
+	};
+	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100);
+
+	struct raft_request_vote_result res = {
+		.term = 2,
+		.vote_granted = false
+	};
+	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, recvMsgVoteWithHigherLogTerm, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct raft_entry entry = {.type = RAFT_COMMAND, .term = 1};
+	struct raft_entry entry_leader = {.type = RAFT_COMMAND, .term = 2};
+	struct fixture *f = data;
+
+	FsmEncodeSetX(0, &entry.buf);
+	CLUSTER_ADD_ENTRY(1, &entry);
+
+	FsmEncodeSetX(0, &entry_leader.buf);
+	CLUSTER_ADD_ENTRY(0, &entry_leader);
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
+
+	struct raft_request_vote rv = {
+		.term = 2,
+		.last_log_term = 2,
+		.last_log_index = 2,
+		.candidate_id = 0
+	};
+	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100);
+
+	struct raft_request_vote_result res = {
+		.term = 2,
+		.vote_granted = true
+	};
+	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, recvMsgVoteWithHigherLogIndex, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct raft_entry entry_leader = {.type = RAFT_COMMAND, .term = 1};
+	struct fixture *f = data;
+
+	FsmEncodeSetX(0, &entry_leader.buf);
+	CLUSTER_ADD_ENTRY(0, &entry_leader);
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
+
+	struct raft_request_vote rv = {
+		.term = 2,
+		.last_log_term = 1,
+		.last_log_index = 2,
+		.candidate_id = 0
+	};
+	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100);
+
+	struct raft_request_vote_result res = {
+		.term = 2,
+		.vote_granted = true
+	};
+	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, stateTransitionUnavailableToFollower, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_UNAVAILABLE);
+	convertToFollower(CLUSTER_RAFT(0));
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, stateTransitionFollowerToCandidate, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
+	convertToCandidate(CLUSTER_RAFT(0), false);
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_CANDIDATE);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, stateTransitionCandidateToFollower, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 1010);
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_CANDIDATE);
+	convertToFollower(CLUSTER_RAFT(0));
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, stateTransitionCandidateToLeader, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 1010);
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_CANDIDATE);
+	convertToLeader(CLUSTER_RAFT(0));
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, stateTransitionLeaderToFollower, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
+	convertToFollower(CLUSTER_RAFT(0));
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, stateTransitionFollowerToUnavailable, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
+	convertToUnavailable(CLUSTER_RAFT(0));
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_UNAVAILABLE);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, stateTransitionCandidateToUnavailable, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 1010);
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_CANDIDATE);
+	convertToUnavailable(CLUSTER_RAFT(0));
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_UNAVAILABLE);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, stateTransitionLeaderToUnavailable, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
+	convertToUnavailable(CLUSTER_RAFT(0));
+
+	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_UNAVAILABLE);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, allServerStepdownFollowerToFollower, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	CLUSTER_SATURATE_BOTHWAYS(1, 2);
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 2000);
+	convertToFollower(CLUSTER_RAFT(0));
+
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000);
+
+	convertToFollower(CLUSTER_RAFT(2));
+	CLUSTER_DESATURATE_BOTHWAYS(1, 2);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(200);
+
+	munit_assert_int64(CLUSTER_RAFT(2)->current_term, == , 3);
+	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, allServerStepdownCandidateToFollower, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	CLUSTER_SATURATE_BOTHWAYS(1, 2);
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 2000);
+	convertToFollower(CLUSTER_RAFT(0));
+
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000);
+
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_CANDIDATE, 1100);
+	CLUSTER_DESATURATE_BOTHWAYS(1, 2);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(200);
+
+	munit_assert_int64(CLUSTER_RAFT(2)->current_term, == , 3);
+	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, allServerStepdownLeaderToFollower, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 2000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 1500);
+
+	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+	CLUSTER_STEP_UNTIL_ELAPSED(200);
+
+	munit_assert_int64(CLUSTER_RAFT(0)->current_term, == , 3);
+	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, leaderStepdownWhenQuorumActive, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+
+	struct raft_append_entries_result res = {.term = 2, .rejected = 0, .last_log_index = 1};
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &res, 1000);
+	CLUSTER_STEP_UNTIL_AE_RES(2, 0, &res, 1000);
+
+	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, leaderStepdownWhenQuorumLost, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(1100);
+
+	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, leaderSupersedingWithCheckQuorum, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 2000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 1500);
+	munit_assert_uint16(CLUSTER_RAFT(1)->state, ==, RAFT_LEADER);
+
+	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);
+
+	CLUSTER_SATURATE_BOTHWAYS(1, 0);
+	CLUSTER_SATURATE_BOTHWAYS(1, 2);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
+
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
+	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_CANDIDATE);
+	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);
+
+	convertToCandidate(CLUSTER_RAFT(2), false);
+	electionResetTimer(CLUSTER_RAFT(2));
+
+	CLUSTER_STEP_UNTIL_ELAPSED(1100);
+	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
+	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, freeStuckCandidateWithCheckQuorum, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+
+	CLUSTER_START;
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1500);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1500);
+
+	munit_assert_uint16(CLUSTER_RAFT(1)->state, ==, RAFT_FOLLOWER);
+
+	CLUSTER_SATURATE_BOTHWAYS(0, 1);
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000);
+	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
+	CLUSTER_STEP_UNTIL_ELAPSED(200);
+	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
+	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);
+	munit_assert_int64(CLUSTER_RAFT(0)->current_term, ==, CLUSTER_RAFT(1)->current_term);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, disruptiveFollower, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+	raft_term term;
+
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1100);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
+	raft_set_pre_vote(CLUSTER_RAFT(0), false);
+	raft_set_pre_vote(CLUSTER_RAFT(1), false);
+	raft_set_pre_vote(CLUSTER_RAFT(2), false);
+	CLUSTER_START;
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1500);
+
+	term = CLUSTER_RAFT(0)->current_term;
+	munit_assert_uint16(CLUSTER_RAFT(1)->state, ==, RAFT_FOLLOWER);
+
+	CLUSTER_SET_NETWORK_LATENCY(0, 1200);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 2000);
+	CLUSTER_STEP_UNTIL_ELAPSED(200);
+
+	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
+	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);
+	munit_assert_int64(CLUSTER_RAFT(0)->current_term, ==, term + 1);
+	munit_assert_int64(CLUSTER_RAFT(0)->current_term, ==, CLUSTER_RAFT(1)->current_term);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, disruptiveFollowerPreVote, setUp, tearDown, 0, cluster_3_params)
+{
+	(void)params;
+	struct fixture *f = data;
+	raft_term term;
+
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1500);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
+	raft_set_pre_vote(CLUSTER_RAFT(0), true);
+	raft_set_pre_vote(CLUSTER_RAFT(1), true);
+	raft_set_pre_vote(CLUSTER_RAFT(2), true);
+	CLUSTER_START;
+
+	CLUSTER_SATURATE_BOTHWAYS(1, 0);
+	CLUSTER_SATURATE_BOTHWAYS(1, 2);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+	CLUSTER_DESATURATE_BOTHWAYS(1, 0);
+	CLUSTER_DESATURATE_BOTHWAYS(1, 2);
+
+	munit_assert_uint16(CLUSTER_RAFT(1)->state, ==, RAFT_CANDIDATE);
+	term = CLUSTER_RAFT(1)->current_term;
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_FOLLOWER, 2000);
+
+	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
+	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);
+	munit_assert_int64(CLUSTER_RAFT(1)->current_term, ==, term + 1);
+	munit_assert_int64(CLUSTER_RAFT(1)->current_term, ==, CLUSTER_RAFT(0)->current_term);
+
+	return MUNIT_OK;
+}
+
+
+

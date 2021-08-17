@@ -95,6 +95,9 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 				   req->server_id, raft_strerror(status));
 			/* Go back to probe mode. */
 			progressToProbe(r, i);
+		} else {
+			/* When probe send success, probe count plus one */
+			progressUpdateProbeCount(r, i);
 		}
 	}
 
@@ -706,6 +709,14 @@ int replicationProgressInner(struct raft *r, unsigned i, struct pgrep_permit_inf
 	if (enterPgrepicating(r, i, pi))
 		goto pgrep;
 
+	/* Before replicate entries: 
+	 * check probe count and update next index. 
+	 */
+	if (progressMaybeUpdateNextIndex(r, i)) {
+		next_index = progressNextIndex(r, i);
+		tracef("update next index of progress for server %u since"
+		"the probe message still receive no response.", i);
+	}
 
 	/* From Section 3.5:
 	 *
@@ -1100,6 +1111,12 @@ int replicationUpdate(struct raft *r,
 	assert(i < r->configuration.n);
 
 	progressMarkRecentRecv(r, i);
+
+	/* If receive probe response.
+	 * Whenever reject or not, the network is already steady,
+	 * so reset probe count to zero 
+	 */
+	progressResetProbeCount(r, i);
 
 	/* If the RPC failed because of a log mismatch, retry.
 	 *

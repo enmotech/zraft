@@ -20,7 +20,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 	struct fixture *f = munit_malloc(sizeof *f);
 	unsigned i;
 	SETUP_CLUSTER(2);
-	CLUSTER_BOOTSTRAP;
+	CLUSTER_BOOTSTRAP
 	for (i = 0; i < CLUSTER_N; i++) {
 		struct raft *raft = CLUSTER_RAFT(i);
 		raft->data = f;
@@ -31,7 +31,7 @@ static void *setUp(const MunitParameter params[], MUNIT_UNUSED void *user_data)
 static void tearDown(void *data)
 {
 	struct fixture *f = data;
-	TEAR_DOWN_CLUSTER;
+	TEAR_DOWN_CLUSTER
 	free(f);
 }
 
@@ -256,23 +256,23 @@ TEST(etcd_migrate,
 	struct fixture *f = data;
 	(void)params;
 
-	CLUSTER_START;
-	CLUSTER_STEP_UNTIL_HAS_LEADER(2000);
+	CLUSTER_START
+	CLUSTER_STEP_UNTIL_HAS_LEADER(2000)
 	ASSERT_LEADER(0);
 	ASSERT_FOLLOWER(1);
 
 	/* Convert server 1 to voter */
 	ASSIGN(0, 2, RAFT_VOTER);
-	CLUSTER_STEP_UNTIL_APPLIED(1, 2, 2000);
+	CLUSTER_STEP_UNTIL_APPLIED(1, 2, 2000)
 
 	/* Set smaller random election timeout for server 1*/
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 2000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 2000)
 	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
-	CLUSTER_STEP_UNTIL_HAS_LEADER(2000);
+	CLUSTER_STEP_UNTIL_HAS_LEADER(2000)
 
 	ASSERT_FOLLOWER(0);
 	ASSERT_LEADER(1);
@@ -285,24 +285,24 @@ TEST(etcd_migrate, candidateConcede, setUp, tearDown, 0, cluster_3_params)
 	struct fixture *f = data;
 	(void)params;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 2000);
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 2000);
-	ASSERT_TERM(1, 2);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 2000)
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 2000)
+	ASSERT_TERM(1, 2)
 
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000);
-	ASSERT_TERM(1, 2);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000)
+	ASSERT_TERM(1, 2)
 
 	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
 	CLUSTER_DESATURATE_BOTHWAYS(0, 2);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 1000);
-	ASSERT_TERM(0, 2);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 1000)
+	ASSERT_TERM(0, 2)
 
 	return MUNIT_OK;
 }
@@ -312,7 +312,7 @@ TEST(etcd_migrate, singleNodeCandidate, setUp, tearDown, 0, cluster_1_params)
 	struct fixture *f = data;
 	(void)params;
 
-	CLUSTER_START;
+	CLUSTER_START
 	ASSERT_LEADER(0);
 
 	return MUNIT_OK;
@@ -324,7 +324,7 @@ TEST(etcd_migrate, singleNodePreCandidate, setUp, tearDown, 0, cluster_1_params)
 	(void)params;
 
 	raft_set_pre_vote(CLUSTER_RAFT(0), true);
-	CLUSTER_START;
+	CLUSTER_START
 	ASSERT_LEADER(0);
 
 	return MUNIT_OK;
@@ -335,9 +335,9 @@ TEST(etcd_migrate, proposalCluster3With3NodesUp, setUp, tearDown, 0, cluster_3_p
 	struct fixture *f = data;
 	(void)params;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
 	APPLY(0);
 	munit_assert(raft_fixture_log_cmp(&f->cluster, 0, 1));
@@ -353,9 +353,9 @@ TEST(etcd_migrate, proposalCluster3With2NodesUp, setUp, tearDown, 0, cluster_3_p
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
 	CLUSTER_SATURATE_BOTHWAYS(1, 2);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
 	APPLY(0);
 	munit_assert(raft_fixture_log_cmp(&f->cluster, 0, 1));
@@ -372,10 +372,10 @@ TEST(etcd_migrate, proposalCluster3With1NodesUp, setUp, tearDown, 0, cluster_3_p
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SATURATE_BOTHWAYS(1, 2);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
 
-	CLUSTER_STEP;
+	CLUSTER_STEP
 
 	APPLY_ERROR(0, RAFT_NOTLEADER, CLUSTER_ERRMSG(0));
 	munit_assert(raft_fixture_log_cmp(&f->cluster, 0, 1));
@@ -394,10 +394,10 @@ TEST(etcd_migrate, proposalCluster4With2NodesUp, setUp, tearDown, 0, cluster_4_p
 	CLUSTER_SATURATE_BOTHWAYS(1, 2);
 	CLUSTER_SATURATE_BOTHWAYS(1, 3);
 	CLUSTER_SATURATE_BOTHWAYS(2, 3);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
 
-	CLUSTER_STEP;
+	CLUSTER_STEP
 
 	APPLY_ERROR(0, RAFT_NOTLEADER, CLUSTER_ERRMSG(0));
 	munit_assert(raft_fixture_log_cmp(&f->cluster, 0, 1));
@@ -418,9 +418,9 @@ TEST(etcd_migrate, proposalCluster5With2NodesUp, setUp, tearDown, 0, cluster_5_p
 	CLUSTER_SATURATE_BOTHWAYS(1, 4);
 	CLUSTER_SATURATE_BOTHWAYS(2, 3);
 	CLUSTER_SATURATE_BOTHWAYS(2, 4);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
 	APPLY(0);
 	munit_assert(raft_fixture_log_cmp(&f->cluster, 0, 1));
@@ -444,18 +444,18 @@ TEST(etcd_migrate, handleMsgAppPreviousNonExist, setUp, tearDown, 0, cluster_3_p
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SET_TERM(0, 3);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
-	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
-	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL)
+	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000)
 
 	CLUSTER_RAFT(0)->leader_state.progress[1].next_index = 3;
 
 	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
-	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000);
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000)
 
 	return MUNIT_OK;
 }
@@ -477,18 +477,18 @@ TEST(etcd_migrate, handleMsgAppPreviousMismatch, setUp, tearDown, 0, cluster_3_p
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SET_TERM(0, 3);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
-	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
-	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL)
+	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000)
 
 	CLUSTER_RAFT(0)->leader_state.progress[1].next_index = 3;
 
 	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
-	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000);
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000)
 
 	return MUNIT_OK;
 }
@@ -510,16 +510,16 @@ TEST(etcd_migrate, handleMsgAppLogTermConflicts, setUp, tearDown, 0, cluster_3_p
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SET_TERM(0, 3);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
-	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
-	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL)
+	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000)
 
 	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
-	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000);
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000)
 
 	return MUNIT_OK;
 }
@@ -532,12 +532,12 @@ TEST(etcd_migrate, handleMsgAppUpdateCommitIndex, setUp, tearDown, 0, cluster_3_
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SET_TERM(0, 3);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
-	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
-	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000);
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL)
+	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 1000)
 
 	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 1);
 
@@ -556,14 +556,14 @@ TEST(etcd_migrate, handleHeartbeatIncreaseCommitIndex, setUp, tearDown, 0, clust
 	struct raft_apply apply = {0};
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100)
 
 	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 1);
 
-	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
-	CLUSTER_STEP_UNTIL_COMMITTED(0, 2, 2000);
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL)
+	CLUSTER_STEP_UNTIL_COMMITTED(0, 2, 2000)
 
 	CLUSTER_STEP_UNTIL_ELAPSED(200);
 	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 2);
@@ -577,14 +577,14 @@ TEST(etcd_migrate, handleHeartbeatIgnoreDecreaseCommitIndex, setUp, tearDown, 0,
 	struct raft_apply apply = {0};
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100)
 
 	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 1);
 
-	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL);
-	CLUSTER_STEP_UNTIL_COMMITTED(0, 2, 2000);
+	CLUSTER_APPLY_ADD_X(0, &apply, 1, NULL)
+	CLUSTER_STEP_UNTIL_COMMITTED(0, 2, 2000)
 
 	CLUSTER_STEP_UNTIL_ELAPSED(200);
 	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 2);
@@ -597,14 +597,14 @@ TEST(etcd_migrate, handleHeartbeatIgnoreDecreaseCommitIndex, setUp, tearDown, 0,
 		.prev_log_term = 2,
 		.leader_commit = 1
 	};
-	CLUSTER_STEP_HEARTBEAT_MOCK(&f->cluster, 0, 1, &ae);
+	CLUSTER_STEP_HEARTBEAT_MOCK(&f->cluster, 0, 1, &ae)
 
 	struct raft_append_entries_result ae_result = {
 		.last_log_index = 2,
 		.rejected = 0,
 		.term = 2
 	};
-	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000);
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 1000)
 
 	munit_assert_int64(CLUSTER_RAFT(1)->commit_index, ==, 2);
 
@@ -620,7 +620,7 @@ TEST(etcd_migrate, recvMsgVoteWithLowerLogTerm, setUp, tearDown, 0, cluster_2_pa
 	FsmEncodeSetX(0, &entry.buf);
 	CLUSTER_ADD_ENTRY(1, &entry);
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
 
@@ -630,13 +630,13 @@ TEST(etcd_migrate, recvMsgVoteWithLowerLogTerm, setUp, tearDown, 0, cluster_2_pa
 		.last_log_index = 1,
 		.candidate_id = 0
 	};
-	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100);
+	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100)
 
 	struct raft_request_vote_result res = {
 		.term = 2,
 		.vote_granted = false
 	};
-	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100);
+	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100)
 
 	return MUNIT_OK;
 }
@@ -650,7 +650,7 @@ TEST(etcd_migrate, recvMsgVoteWithLowerLogIndex, setUp, tearDown, 0, cluster_2_p
 	FsmEncodeSetX(0, &entry.buf);
 	CLUSTER_ADD_ENTRY(1, &entry);
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
 
@@ -660,13 +660,13 @@ TEST(etcd_migrate, recvMsgVoteWithLowerLogIndex, setUp, tearDown, 0, cluster_2_p
 		.last_log_index = 1,
 		.candidate_id = 0
 	};
-	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100);
+	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100)
 
 	struct raft_request_vote_result res = {
 		.term = 2,
 		.vote_granted = false
 	};
-	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100);
+	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100)
 
 	return MUNIT_OK;
 }
@@ -684,7 +684,7 @@ TEST(etcd_migrate, recvMsgVoteWithHigherLogTerm, setUp, tearDown, 0, cluster_2_p
 	FsmEncodeSetX(0, &entry_leader.buf);
 	CLUSTER_ADD_ENTRY(0, &entry_leader);
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
 
@@ -694,13 +694,13 @@ TEST(etcd_migrate, recvMsgVoteWithHigherLogTerm, setUp, tearDown, 0, cluster_2_p
 		.last_log_index = 2,
 		.candidate_id = 0
 	};
-	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100);
+	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100)
 
 	struct raft_request_vote_result res = {
 		.term = 2,
 		.vote_granted = true
 	};
-	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100);
+	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100)
 
 	return MUNIT_OK;
 }
@@ -714,7 +714,7 @@ TEST(etcd_migrate, recvMsgVoteWithHigherLogIndex, setUp, tearDown, 0, cluster_2_
 	FsmEncodeSetX(0, &entry_leader.buf);
 	CLUSTER_ADD_ENTRY(0, &entry_leader);
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
 
@@ -724,13 +724,13 @@ TEST(etcd_migrate, recvMsgVoteWithHigherLogIndex, setUp, tearDown, 0, cluster_2_
 		.last_log_index = 2,
 		.candidate_id = 0
 	};
-	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100);
+	CLUSTER_STEP_UNTIL_RV(1, &rv, 1100)
 
 	struct raft_request_vote_result res = {
 		.term = 2,
 		.vote_granted = true
 	};
-	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100);
+	CLUSTER_STEP_UNTIL_RV_RES(1, 0, &res, 100)
 
 	return MUNIT_OK;
 }
@@ -753,7 +753,7 @@ TEST(etcd_migrate, stateTransitionFollowerToCandidate, setUp, tearDown, 0, clust
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
 	convertToCandidate(CLUSTER_RAFT(0), false);
 
@@ -767,9 +767,9 @@ TEST(etcd_migrate, stateTransitionCandidateToFollower, setUp, tearDown, 0, clust
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 1010);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 1010)
 
 	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_CANDIDATE);
 	convertToFollower(CLUSTER_RAFT(0));
@@ -784,9 +784,9 @@ TEST(etcd_migrate, stateTransitionCandidateToLeader, setUp, tearDown, 0, cluster
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 1010);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 1010)
 
 	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_CANDIDATE);
 	convertToLeader(CLUSTER_RAFT(0));
@@ -801,9 +801,9 @@ TEST(etcd_migrate, stateTransitionLeaderToFollower, setUp, tearDown, 0, cluster_
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100)
 
 	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
 	convertToFollower(CLUSTER_RAFT(0));
@@ -818,7 +818,7 @@ TEST(etcd_migrate, stateTransitionFollowerToUnavailable, setUp, tearDown, 0, clu
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
 	convertToUnavailable(CLUSTER_RAFT(0));
 
@@ -832,9 +832,9 @@ TEST(etcd_migrate, stateTransitionCandidateToUnavailable, setUp, tearDown, 0, cl
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 1010);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_CANDIDATE, 1010)
 
 	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_CANDIDATE);
 	convertToUnavailable(CLUSTER_RAFT(0));
@@ -849,9 +849,9 @@ TEST(etcd_migrate, stateTransitionLeaderToUnavailable, setUp, tearDown, 0, clust
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100)
 
 	munit_assert_ushort(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
 	convertToUnavailable(CLUSTER_RAFT(0));
@@ -868,15 +868,15 @@ TEST(etcd_migrate, allServerStepdownFollowerToFollower, setUp, tearDown, 0, clus
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
 	CLUSTER_SATURATE_BOTHWAYS(1, 2);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100)
 
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 2000);
 	convertToFollower(CLUSTER_RAFT(0));
 
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000)
 
 	convertToFollower(CLUSTER_RAFT(2));
 	CLUSTER_DESATURATE_BOTHWAYS(1, 2);
@@ -896,18 +896,18 @@ TEST(etcd_migrate, allServerStepdownCandidateToFollower, setUp, tearDown, 0, clu
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
 	CLUSTER_SATURATE_BOTHWAYS(1, 2);
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100)
 
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 2000);
 	convertToFollower(CLUSTER_RAFT(0));
 
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000)
 
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_CANDIDATE, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_CANDIDATE, 1100)
 	CLUSTER_DESATURATE_BOTHWAYS(1, 2);
 
 	CLUSTER_STEP_UNTIL_ELAPSED(200);
@@ -923,18 +923,18 @@ TEST(etcd_migrate, allServerStepdownLeaderToFollower, setUp, tearDown, 0, cluste
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 2000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100)
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 2000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 1100);
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 1500);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 1500)
 
 	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
 	CLUSTER_STEP_UNTIL_ELAPSED(200);
@@ -950,13 +950,13 @@ TEST(etcd_migrate, leaderStepdownWhenQuorumActive, setUp, tearDown, 0, cluster_3
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100)
 
 	struct raft_append_entries_result res = {.term = 2, .rejected = 0, .last_log_index = 1};
-	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &res, 1000);
-	CLUSTER_STEP_UNTIL_AE_RES(2, 0, &res, 1000);
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &res, 1000)
+	CLUSTER_STEP_UNTIL_AE_RES(2, 0, &res, 1000)
 
 	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
 
@@ -968,9 +968,9 @@ TEST(etcd_migrate, leaderStepdownWhenQuorumLost, setUp, tearDown, 0, cluster_3_p
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1100)
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
@@ -990,8 +990,8 @@ TEST(etcd_migrate, leaderSupersedingWithCheckQuorum, setUp, tearDown, 0, cluster
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 2000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
-	CLUSTER_START;
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 1500);
+	CLUSTER_START
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 1500)
 	munit_assert_uint16(CLUSTER_RAFT(1)->state, ==, RAFT_LEADER);
 
 	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);
@@ -1020,18 +1020,18 @@ TEST(etcd_migrate, freeStuckCandidateWithCheckQuorum, setUp, tearDown, 0, cluste
 	(void)params;
 	struct fixture *f = data;
 
-	CLUSTER_START;
+	CLUSTER_START
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1500);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1500);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1500)
 
 	munit_assert_uint16(CLUSTER_RAFT(1)->state, ==, RAFT_FOLLOWER);
 
 	CLUSTER_SATURATE_BOTHWAYS(0, 1);
 	CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000)
 	CLUSTER_DESATURATE_BOTHWAYS(0, 1);
 	CLUSTER_STEP_UNTIL_ELAPSED(200);
 	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
@@ -1053,14 +1053,14 @@ TEST(etcd_migrate, disruptiveFollower, setUp, tearDown, 0, cluster_3_params)
 	raft_set_pre_vote(CLUSTER_RAFT(0), false);
 	raft_set_pre_vote(CLUSTER_RAFT(1), false);
 	raft_set_pre_vote(CLUSTER_RAFT(2), false);
-	CLUSTER_START;
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1500);
+	CLUSTER_START
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 1500)
 
 	term = CLUSTER_RAFT(0)->current_term;
 	munit_assert_uint16(CLUSTER_RAFT(1)->state, ==, RAFT_FOLLOWER);
 
 	CLUSTER_SET_NETWORK_LATENCY(0, 1200);
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_CANDIDATE, 2000)
 	CLUSTER_STEP_UNTIL_ELAPSED(200);
 
 	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_FOLLOWER);
@@ -1083,17 +1083,17 @@ TEST(etcd_migrate, disruptiveFollowerPreVote, setUp, tearDown, 0, cluster_3_para
 	raft_set_pre_vote(CLUSTER_RAFT(0), true);
 	raft_set_pre_vote(CLUSTER_RAFT(1), true);
 	raft_set_pre_vote(CLUSTER_RAFT(2), true);
-	CLUSTER_START;
+	CLUSTER_START
 
 	CLUSTER_SATURATE_BOTHWAYS(1, 0);
 	CLUSTER_SATURATE_BOTHWAYS(1, 2);
-	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 	CLUSTER_DESATURATE_BOTHWAYS(1, 0);
 	CLUSTER_DESATURATE_BOTHWAYS(1, 2);
 
 	munit_assert_uint16(CLUSTER_RAFT(1)->state, ==, RAFT_CANDIDATE);
 	term = CLUSTER_RAFT(1)->current_term;
-	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_FOLLOWER, 2000);
+	CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_FOLLOWER, 2000)
 
 	munit_assert_uint16(CLUSTER_RAFT(0)->state, ==, RAFT_LEADER);
 	munit_assert_uint16(CLUSTER_RAFT(2)->state, ==, RAFT_FOLLOWER);

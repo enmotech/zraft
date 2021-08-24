@@ -542,5 +542,9 @@ RAFT_API int raft_fixture_construct_configuration_log_buf(unsigned n_server,
 RAFT_API int raft_fixture_construct_configuration(unsigned n_server,
 												unsigned n_voter,
 												struct raft_configuration *conf);
+/**
+ * check server @id can be promoted to leader
+ */
+RAFT_API bool raft_fixture_promotable(struct raft_configuration *conf, unsigned id);
 
 #endif /* RAFT_FIXTURE_H */

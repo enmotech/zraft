@@ -1056,6 +1056,8 @@ static void removePrefix(struct raft_log *l, const raft_index index)
 
         if (unref) {
             destroyEntry(l, entry);
+        } else {
+            break;
         }
     }
 

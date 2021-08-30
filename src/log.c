@@ -842,7 +842,7 @@ int logAcquireSection(
 
 /* Return true if the given batch is referenced by any entry currently in the
  * log. */
-static bool isBatchReferenced(struct raft_log *l, const void *batch)
+static bool isBatchReferenced(struct raft_log *l, const void *batch, bool removePrefix)
 {
     size_t i;
 
@@ -853,6 +853,8 @@ static bool isBatchReferenced(struct raft_log *l, const void *batch)
         struct raft_entry *entry = entryAt(l, i);
         if (entry->batch == batch) {
             return true;
+        } else if (removePrefix) {
+        	return false;
         }
     }
 
@@ -889,7 +891,7 @@ void logRelease(struct raft_log *l,
                 }
             } else {
                 if (entry->batch != batch) {
-                    if (!isBatchReferenced(l, entry->batch)) {
+                    if (!isBatchReferenced(l, entry->batch, false)) {
                         batch = entry->batch;
                         raft_entry_batch_free(entry);
                     }
@@ -917,14 +919,14 @@ static void clearIfEmpty(struct raft_log *l)
 }
 
 /* Destroy an entry, possibly releasing the memory of its buffer. */
-static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
+static void destroyEntry(struct raft_log *l, struct raft_entry *entry, bool removePrefix)
 {
     if (entry->batch == NULL) {
         if (entry->buf.base != NULL) {
             raft_entry_free(entry->buf.base);
         }
     } else {
-        if (!isBatchReferenced(l, entry->batch)) {
+        if (!isBatchReferenced(l, entry->batch, removePrefix)) {
             raft_entry_batch_free(entry);
         }
     }
@@ -961,7 +963,7 @@ static void removeSuffix(struct raft_log *l,
         unref = refsDecr(l, entry->term, start + n - i - 1);
 
         if (unref && destroy) {
-            destroyEntry(l, entry);
+            destroyEntry(l, entry, false);
         }
     }
 
@@ -1055,7 +1057,7 @@ static void removePrefix(struct raft_log *l, const raft_index index)
         unref = refsDecr(l, entry->term, l->offset);
 
         if (unref) {
-            destroyEntry(l, entry);
+            destroyEntry(l, entry, true);
         } else {
             break;
         }

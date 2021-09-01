@@ -117,14 +117,14 @@ static void ioCloseCb(struct raft_io *io)
     }
 }
 
-void raft_close(struct raft *r, void (*cb)(struct raft *r))
+void raft_close(struct raft *r, bool clean, void (*cb)(struct raft *r))
 {
     assert(r->close_cb == NULL);
     if (r->state != RAFT_UNAVAILABLE) {
         convertToUnavailable(r);
     }
     r->close_cb = cb;
-    r->io->close(r->io, ioCloseCb);
+    r->io->close(r->io, clean, ioCloseCb);
 }
 
 void raft_set_election_timeout(struct raft *r, const unsigned msecs)

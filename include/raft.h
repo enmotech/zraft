@@ -646,7 +646,7 @@ struct raft_io
 
 	char errmsg[RAFT_ERRMSG_BUF_SIZE];
 	int (*init)(struct raft_io *io, raft_id id, const char *address);
-	void (*close)(struct raft_io *io, raft_io_close_cb cb);
+        void (*close)(struct raft_io *io, bool clean, raft_io_close_cb cb);
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
 	int (*aload)(struct raft_io *io,
 		     struct raft_io_load *req,
@@ -1065,7 +1065,7 @@ RAFT_API int raft_init(struct raft *r,
 		       raft_id id,
 		       const char *address);
 
-RAFT_API void raft_close(struct raft *r, raft_close_cb cb);
+RAFT_API void raft_close(struct raft *r, bool clean, raft_close_cb cb);
 
 /**
  * Bootstrap this raft instance using the given configuration. The instance must

@@ -30,7 +30,6 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
 {
 	struct setMetar *request = req->data;
 	struct raft *r = request->raft;
-	char *address = (char *)(request->message.server_address);
 
 	if (r->state == RAFT_UNAVAILABLE)
 		goto err;
@@ -50,7 +49,6 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
 
 	recvCb(r->io, &request->message);
 err:
-	raft_free(address);
 	raft_free(request);
 }
 
@@ -63,7 +61,6 @@ int recvSetMeta(struct raft *r,
 	int rv;
 	struct setMetar *request;
 	char msg[128];
-	char *address = NULL;
 
 	assert(term > r->current_term ||
 			r->voted_for != voted_for);
@@ -80,7 +77,7 @@ int recvSetMeta(struct raft *r,
 	request = raft_malloc(sizeof *request);
 	if (request == NULL) {
 		rv = RAFT_NOMEM;
-		goto err2;
+		goto err1;
 	}
 
 	request->raft = r;
@@ -89,16 +86,7 @@ int recvSetMeta(struct raft *r,
 	request->req.data = request;
 
 	if(message) {
-		address = raft_malloc(strlen(message->server_address) + 1);
-		if (address == NULL) {
-			rv = RAFT_NOMEM;
-			goto err1;
-		}
-
 		request->message = *message;
-
-		strcpy(address, message->server_address);
-		request->message.server_address = address;
 	}
 
 	r->io->state = RAFT_IO_BUSY;
@@ -115,11 +103,8 @@ int recvSetMeta(struct raft *r,
 	return 0;
 
 err:
-	if(address)
-		raft_free(address);
-err1:
 	raft_free(request);
-err2:
+err1:
 	return rv;
 }
 #endif
@@ -182,7 +167,6 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 	switch (message->type) {
 	case RAFT_IO_APPEND_ENTRIES:
 		rv = recvAppendEntries(r, message->server_id,
-				       message->server_address,
 				       &message->append_entries);
 		if (rv != 0) {
 			entryBatchesDestroy(message->append_entries.entries,
@@ -191,22 +175,16 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 		break;
 	case RAFT_IO_APPEND_ENTRIES_RESULT:
 		rv = recvAppendEntriesResult(r, message->server_id,
-					     message->server_address,
 					     &message->append_entries_result);
 		break;
 	case RAFT_IO_REQUEST_VOTE:
-		rv = recvRequestVote(r, message->server_id, message->server_address,
-				     &message->request_vote);
+		rv = recvRequestVote(r, message->server_id, &message->request_vote);
 		break;
 	case RAFT_IO_REQUEST_VOTE_RESULT:
-		rv = recvRequestVoteResult(r, message->server_id,
-					   message->server_address,
-					   &message->request_vote_result);
+		rv = recvRequestVoteResult(r, message->server_id, &message->request_vote_result);
 		break;
 	case RAFT_IO_INSTALL_SNAPSHOT:
-		rv = recvInstallSnapshot(r, message->server_id,
-					 message->server_address,
-					 &message->install_snapshot);
+		rv = recvInstallSnapshot(r, message->server_id, &message->install_snapshot);
 		/* Already installing a snapshot, wait for it and ignore this one */
 		if (rv == RAFT_BUSY) {
 			raft_free(message->install_snapshot.data.base);
@@ -215,8 +193,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
 		}
 		break;
 	case RAFT_IO_TIMEOUT_NOW:
-		rv = recvTimeoutNow(r, message->server_id, message->server_address,
-				    &message->timeout_now);
+		rv = recvTimeoutNow(r, message->server_id, &message->timeout_now);
 		break;
 	case RAFT_IO_PGREP_COPY_CHUNKS:
 		r->io->pgrep_recv_copy_chunks(r->io, message->copy_chunks, r->current_term);
@@ -352,27 +329,12 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
 	return 0;
 }
 
-int recvUpdateLeader(struct raft *r, const raft_id id, const char *address)
+int recvUpdateLeader(struct raft *r, const raft_id id)
 {
 	assert(r->state == RAFT_FOLLOWER);
-
-	r->follower_state.current_leader.id = id;
-
-	/* If the address of the current leader is the same as the given one, we're
-     * done. */
-	if (r->follower_state.current_leader.address != NULL &&
-	    strcmp(address, r->follower_state.current_leader.address) == 0) {
+	if (r->follower_state.current_leader.id == id)
 		return RAFT_BADID;
-	}
-
-	if (r->follower_state.current_leader.address != NULL) {
-		HeapFree(r->follower_state.current_leader.address);
-	}
-	r->follower_state.current_leader.address = HeapMalloc(strlen(address) + 1);
-	if (r->follower_state.current_leader.address == NULL) {
-		return RAFT_NOMEM;
-	}
-	strcpy(r->follower_state.current_leader.address, address);
+	r->follower_state.current_leader.id = id;
 
 	return 0;
 }

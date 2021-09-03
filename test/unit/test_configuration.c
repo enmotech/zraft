@@ -44,8 +44,8 @@ static void tearDown(void *data)
 #define GET(ID) configurationGet(&f->configuration, ID)
 
 /* Add a server to the fixture's configuration. */
-#define ADD_RV(ID, ADDRESS, ROLE) \
-    configurationAdd(&f->configuration, ID, ADDRESS, ROLE)
+#define ADD_RV(ID, ROLE) \
+    configurationAdd(&f->configuration, ID, ROLE)
 #define ADD(...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, 0)
 #define ADD_ERROR(RV, ...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, RV)
 
@@ -207,12 +207,12 @@ TEST(configurationGet, match, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     const struct raft_server *server;
-    ADD(1, "192.168.1.1:666", RAFT_VOTER);
-    ADD(2, "192.168.1.2:666", RAFT_STANDBY);
+    ADD(1,RAFT_VOTER);
+    ADD(2, RAFT_STANDBY);
     server = GET(2);
     munit_assert_ptr_not_null(server);
     munit_assert_int(server->id, ==, 2);
-    munit_assert_string_equal(server->address, "192.168.1.2:666");
+   // munit_assert_string_equal(server->address, "192.168.1.2:666");
     return MUNIT_OK;
 }
 

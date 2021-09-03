@@ -227,7 +227,6 @@ static int sendAppendEntries(struct raft *r,
 
 	message.type = RAFT_IO_APPEND_ENTRIES;
 	message.server_id = server->id;
-	message.server_address = server->address;
 
 	req = raft_malloc(sizeof(*req));
 	if (req == NULL) {
@@ -336,7 +335,6 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
 
 	message.type = RAFT_IO_INSTALL_SNAPSHOT;
 	message.server_id = server->id;
-	message.server_address = server->address;
 
 	args->term = r->current_term;
 	args->last_index = snapshot->index;
@@ -1227,7 +1225,6 @@ static void sendAppendEntriesResult(
 
 	message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
 	message.server_id = r->follower_state.current_leader.id;
-	message.server_address = r->follower_state.current_leader.address;
 	message.append_entries_result = *result;
 
 	req = raft_malloc(sizeof*req);

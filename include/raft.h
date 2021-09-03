@@ -116,7 +116,6 @@ struct raft_buffer
 struct raft_server
 {
 	raft_id id;    /* Server ID, must be greater than zero. */
-	char *address; /* Server address. User defined. */
 	int role;      /* Server role. */
 	int pre_role;  /* Server role temporarily. */
 };
@@ -155,7 +154,6 @@ RAFT_API void raft_configuration_close(struct raft_configuration *c);
  */
 RAFT_API int raft_configuration_add(struct raft_configuration *c,
 				    raft_id id,
-				    const char *address,
 				    int role);
 
 /**
@@ -443,7 +441,6 @@ enum {
 struct raft_message {
 	unsigned short type;        /* RPC type code. */
 	raft_id server_id;          /* ID of sending or destination server. */
-	const char *server_address; /* Address of sending or destination server. */
 	union {                     /* Type-specific data */
 		struct raft_request_vote request_vote;
 		struct raft_request_vote_result request_vote_result;
@@ -645,7 +642,7 @@ struct raft_io
 	void *impl;
 
 	char errmsg[RAFT_ERRMSG_BUF_SIZE];
-	int (*init)(struct raft_io *io, raft_id id, const char *address);
+	int (*init)(struct raft_io *io, raft_id id);
         void (*close)(struct raft_io *io, bool clean, raft_io_close_cb cb);
 #if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
 	int (*aload)(struct raft_io *io,
@@ -866,7 +863,6 @@ struct raft
 	struct raft_io *io;         /* Disk and network I/O implementation. */
 	struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
 	raft_id id;                 /* Server ID of this raft instance. */
-	char *address;              /* Server address of this raft instance. */
 
 	volatile raft_id pgrep_id;			/* The server ID that is relicating to. */
 
@@ -970,7 +966,6 @@ struct raft
 			struct                                /* Current leader info. */
 			{
 				raft_id id;
-				char *address;
 			} current_leader;
 		} follower_state;
 		struct
@@ -1062,8 +1057,7 @@ struct raft
 RAFT_API int raft_init(struct raft *r,
 		       struct raft_io *io,
 		       struct raft_fsm *fsm,
-		       raft_id id,
-		       const char *address);
+		       raft_id id);
 
 RAFT_API void raft_close(struct raft *r, bool clean, raft_close_cb cb);
 
@@ -1196,7 +1190,7 @@ RAFT_API int raft_io_state(struct raft_io *io);
 /**
  * Return the ID and address of the current known leader, if any.
  */
-RAFT_API void raft_leader(struct raft *r, raft_id *id, const char **address);
+RAFT_API void raft_leader(struct raft *r, raft_id *id);
 
 /**
  * Return the index of the last entry that was appended to the local log.
@@ -1300,7 +1294,6 @@ struct raft_change
 RAFT_API int raft_add(struct raft *r,
 		      struct raft_change *req,
 		      raft_id id,
-		      const char *address,
 		      raft_change_cb cb);
 
 /**

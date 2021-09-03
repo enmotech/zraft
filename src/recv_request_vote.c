@@ -27,7 +27,6 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 {
 	struct setMetar *request = req->data;
 	struct raft *r = request->raft;
-	char *address = (char *)(request->message.server_address);
 	struct raft_io_send *reqs;
 	int rv = 0;
 
@@ -62,7 +61,6 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 		raft_free(reqs);
 	}
 err:
-	raft_free(address);
 	raft_free(request);
 }
 
@@ -74,7 +72,6 @@ int recvSetMeta(struct raft *r,
 
 int recvRequestVote(struct raft *r,
 		    const raft_id id,
-		    const char *address,
 		    const struct raft_request_vote *args)
 {
 	struct raft_io_send *req;
@@ -95,7 +92,6 @@ int recvRequestVote(struct raft *r,
 
 	message.type = RAFT_IO_REQUEST_VOTE_RESULT;
 	message.server_id = id;
-	message.server_address = address;
 
 	/* Reject the request if we have a leader.
      *

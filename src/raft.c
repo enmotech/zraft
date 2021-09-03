@@ -27,8 +27,7 @@
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
-              const raft_id id,
-              const char *address)
+	      const raft_id id)
 {
     int rv;
     assert(r != NULL);
@@ -38,13 +37,7 @@ int raft_init(struct raft *r,
     r->tracer = &NoopTracer;
     r->id = id;
 	r->pgrep_id = RAFT_INVALID_ID;
-    /* Make a copy of the address */
-    r->address = HeapMalloc(strlen(address) + 1);
-    if (r->address == NULL) {
-        rv = RAFT_NOMEM;
-        goto err;
-    }
-    strcpy(r->address, address);
+
     r->current_term = 0;
     r->voted_for = 0;
     logInit(&r->log);
@@ -76,15 +69,13 @@ int raft_init(struct raft *r,
 	r->last_append_term = 0;
     r->pgrep_reported = false;
 	r->role_change_cb = NULL;
-    rv = r->io->init(r->io, r->id, r->address);
+    rv = r->io->init(r->io, r->id);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        goto err_after_address_alloc;
+	goto err;
     }
     return 0;
 
-err_after_address_alloc:
-    HeapFree(r->address);
 err:
     assert(rv != 0);
     return rv;
@@ -108,7 +99,6 @@ int raft_io_state(struct raft_io *io)
 static void ioCloseCb(struct raft_io *io)
 {
     struct raft *r = io->data;
-    raft_free(r->address);
     logClose(&r->log);
     raft_configuration_close(&r->configuration);
     raft_configuration_close(&r->snapshot.configuration);
@@ -251,10 +241,9 @@ void raft_configuration_close(struct raft_configuration *c)
 
 int raft_configuration_add(struct raft_configuration *c,
                            const raft_id id,
-                           const char *address,
                            const int role)
 {
-    return configurationAdd(c, id, address, role);
+    return configurationAdd(c, id, role);
 }
 
 int raft_configuration_encode(const struct raft_configuration *c,

@@ -9,7 +9,6 @@
 
 int recvTimeoutNow(struct raft *r,
                    const raft_id id,
-                   const char *address,
                    const struct raft_timeout_now *args)
 {
     const struct raft_server *local_server;
@@ -21,8 +20,6 @@ int recvTimeoutNow(struct raft *r,
     assert(r != NULL);
     assert(id > 0);
     assert(args != NULL);
-
-    (void)address;
 
     /* Ignore the request if we are not voters. */
     local_server = configurationGet(&r->configuration, r->id);

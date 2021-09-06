@@ -50,13 +50,11 @@ static bool changeCbHasFired(struct raft_fixture *f, void *arg)
 /* Submit an add request. */
 #define ADD_SUBMIT(I, ID)                                                     \
     struct raft_change _req;                                                  \
-    char _address[16];                                                        \
     struct result _result = {0, false};                                       \
     int _rv;                                                                  \
     _req.data = &_result;                                                     \
-    sprintf(_address, "%d", ID);                                              \
     _rv =                                                                     \
-        raft_add(CLUSTER_RAFT(I), &_req, ID, _address, changeCbAssertResult); \
+        raft_add(CLUSTER_RAFT(I), &_req, ID, changeCbAssertResult); \
     munit_assert_int(_rv, ==, 0);
 
 #define ADD(I, ID)                                            \

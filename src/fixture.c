@@ -1016,12 +1016,12 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     struct raft_fixture_server *s = &f->servers[i];
     s->alive = true;
     s->id = i + 1;
-    sprintf(s->address, "%llu", s->id);
+    //sprintf(s->address, "%llu", s->id);
     rv = ioInit(&s->io, i, &f->time);
     if (rv != 0) {
         return rv;
     }
-    rv = raft_init(&s->raft, &s->io, fsm, s->id, s->address);
+    rv = raft_init(&s->raft, &s->io, fsm, s->id);
     if (rv != 0) {
         return rv;
     }

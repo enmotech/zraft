@@ -1667,15 +1667,14 @@ TEST(etcd_migrate, preVoteMigrationWithFreeStuckPreCandidate, setUp, tearDown, 0
         } while (0);
 
 
-TEST(etcd_migrate, fastLogRejection, setUp, tearDown, 0, cluster_2_params)
+TEST(etcd_migrate, fastLogRejection_1, setUp, tearDown, 0, cluster_2_params)
 {
 	(void)params;
-	struct raft *r;
 	struct fixture *f = data;
 	struct raft_append_entries_result ae_result = {
-		.last_log_index = 1,
-		.rejected = 2,
-		.term = 4
+		.last_log_index = 11,
+		.rejected = 7,
+		.term = 5
 	};
 
 	// leader
@@ -1706,16 +1705,125 @@ TEST(etcd_migrate, fastLogRejection, setUp, tearDown, 0, cluster_2_params)
 	CLUSTER_START
 	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
 
-	r = CLUSTER_RAFT(0);
-	munit_assert_uint64(r->current_term, ==, 5);
-	r = CLUSTER_RAFT(1);
-	munit_assert_uint64(r->current_term, ==, 5);
-
 	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 2000);
-
 
 	return MUNIT_OK;
 }
 
+TEST(etcd_migrate, fastLogRejection_2, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+	struct raft_append_entries_result ae_result = {
+		.last_log_index = 11,
+		.rejected = 8,
+		.term = 6
+	};
 
+	// leader
+	APPEND_ENTRY(0, 2)
+	APPEND_ENTRY(0, 2)
+	APPEND_ENTRY(0, 3)
+	APPEND_ENTRY(0, 4)
+	APPEND_ENTRY(0, 4)
+	APPEND_ENTRY(0, 4)
+	APPEND_ENTRY(0, 5)
 
+	// follower
+	APPEND_ENTRY(1, 2)
+	APPEND_ENTRY(1, 2)
+	APPEND_ENTRY(1, 3)
+	APPEND_ENTRY(1, 3)
+	APPEND_ENTRY(1, 3)
+	APPEND_ENTRY(1, 3)
+	APPEND_ENTRY(1, 3)
+	APPEND_ENTRY(1, 3)
+	APPEND_ENTRY(1, 3)
+	APPEND_ENTRY(1, 3)
+
+	CLUSTER_SET_TERM(0, 5);
+	CLUSTER_SET_TERM(1, 3);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1500);
+
+	CLUSTER_START
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 2000);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, fastLogRejection_3, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+	struct raft_append_entries_result ae_result = {
+		.last_log_index = 4,
+		.rejected = 5,
+		.term = 6
+	};
+
+	// leader
+	APPEND_ENTRY(0, 1)
+	APPEND_ENTRY(0, 1)
+	APPEND_ENTRY(0, 4)
+	APPEND_ENTRY(0, 5)
+
+	// follower
+	APPEND_ENTRY(1, 1)
+	APPEND_ENTRY(1, 1)
+	APPEND_ENTRY(1, 4)
+
+	CLUSTER_SET_TERM(0, 5);
+	CLUSTER_SET_TERM(1, 4);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1500);
+
+	CLUSTER_START
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 2000);
+
+	return MUNIT_OK;
+}
+
+TEST(etcd_migrate, fastLogRejection_4, setUp, tearDown, 0, cluster_2_params)
+{
+	(void)params;
+	struct fixture *f = data;
+	struct raft_append_entries_result ae_result = {
+		.last_log_index = 6,
+		.rejected = 9,
+		.term = 6
+	};
+
+	// leader
+	APPEND_ENTRY(0, 5)
+	APPEND_ENTRY(0, 5)
+	APPEND_ENTRY(0, 5)
+	APPEND_ENTRY(0, 5)
+	APPEND_ENTRY(0, 5)
+	APPEND_ENTRY(0, 5)
+	APPEND_ENTRY(0, 5)
+	APPEND_ENTRY(0, 5)
+
+	// follower
+	APPEND_ENTRY(1, 4)
+	APPEND_ENTRY(1, 4)
+	APPEND_ENTRY(1, 4)
+	APPEND_ENTRY(1, 4)
+	APPEND_ENTRY(1, 4)
+
+	CLUSTER_SET_TERM(0, 5);
+	CLUSTER_SET_TERM(1, 4);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 0, 1000);
+	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1500);
+
+	CLUSTER_START
+	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
+
+	CLUSTER_STEP_UNTIL_AE_RES(1, 0, &ae_result, 2000);
+
+	return MUNIT_OK;
+}

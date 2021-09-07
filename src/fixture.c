@@ -438,11 +438,12 @@ static void ioFlushAll(struct io *io)
     }
 }
 
-static void ioMethodClose(struct raft_io *raft_io, raft_io_close_cb cb)
+static void ioMethodClose(struct raft_io *raft_io, bool clean, raft_io_close_cb cb)
 {
-    if (cb != NULL) {
-        cb(raft_io);
-    }
+	(void)clean;
+	if (cb != NULL) {
+		cb(raft_io);
+	}
 }
 
 static int ioMethodLoad(struct raft_io *io,
@@ -1035,7 +1036,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
 
 static void serverClose(struct raft_fixture_server *s)
 {
-    raft_close(&s->raft, NULL);
+    raft_close(&s->raft, 0, NULL);
     ioClose(&s->io);
 }
 

@@ -51,14 +51,11 @@ err:
 
 int recvRequestVoteResult(struct raft *r,
 			   raft_id id,
-			   const char *address,
 			   const struct raft_request_vote_result *result)
 {
 	size_t votes_index;
 	int match;
 	int rv;
-
-	(void)address;
 
 	assert(r != NULL);
 	assert(id > 0);

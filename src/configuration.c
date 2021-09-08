@@ -14,12 +14,9 @@ void configurationInit(struct raft_configuration *c)
 
 void configurationClose(struct raft_configuration *c)
 {
-    size_t i;
     assert(c != NULL);
     assert(c->n == 0 || c->servers != NULL);
-    for (i = 0; i < c->n; i++) {
-        raft_free(c->servers[i].address);
-    }
+
     if (c->servers != NULL) {
         raft_free(c->servers);
     }
@@ -101,7 +98,7 @@ int configurationCopy(const struct raft_configuration *src,
     configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
-        rv = configurationAdd(dst, server->id, server->address, server->role);
+	rv = configurationAdd(dst, server->id, server->role);
         if (rv != 0) {
             return rv;
         }
@@ -111,7 +108,6 @@ int configurationCopy(const struct raft_configuration *src,
 
 int configurationAdd(struct raft_configuration *c,
                      raft_id id,
-                     const char *address,
                      int role)
 {
     struct raft_server *servers;
@@ -131,9 +127,6 @@ int configurationAdd(struct raft_configuration *c,
         server = &c->servers[i];
         if (server->id == id) {
             return RAFT_DUPLICATEID;
-        }
-        if (strcmp(server->address, address) == 0) {
-            return RAFT_DUPLICATEADDRESS;
         }
     }
 
@@ -155,11 +148,6 @@ int configurationAdd(struct raft_configuration *c,
     /* Fill the newly allocated slot (the last one) with the given details. */
     server = &servers[i];
     server->id = id;
-    server->address = raft_malloc(strlen(address) + 1);
-    if (server->address == NULL) {
-        return RAFT_NOMEM;
-    }
-    strcpy(server->address, address);
     server->role = role;
     server->pre_role = RAFT_UNKNOW;
 
@@ -184,7 +172,6 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
 
     /* If this is the last server in the configuration, reset everything. */
     if (c->n - 1 == 0) {
-        raft_free(c->servers[0].address);
         raft_free(c->servers);
         c->n = 0;
         c->servers = NULL;
@@ -208,9 +195,6 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
         servers[j - 1] = c->servers[j];
     }
 
-    /* Release the address of the server that was deleted. */
-    raft_free(c->servers[i].address);
-
     /* Release the old servers array */
     raft_free(c->servers);
 
@@ -233,10 +217,7 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
 
     /* Then some space for each server. */
     for (i = 0; i < c->n; i++) {
-        struct raft_server *server = &c->servers[i];
-        assert(server->address != NULL);
         n += sizeof(uint64_t);            /* Server ID */
-        n += strlen(server->address) + 1; /* Address */
         n++;                              /* Voting flag */
     };
 
@@ -256,9 +237,7 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 
     for (i = 0; i < c->n; i++) {
         struct raft_server *server = &c->servers[i];
-        assert(server->address != NULL);
         bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
-        bytePutString(&cursor, server->address);
         assert(server->role < 255);
         bytePut8(&cursor, (uint8_t)server->role);
     };
@@ -314,25 +293,15 @@ int configurationDecode(const struct raft_buffer *buf,
     /* Decode the individual servers. */
     for (i = 0; i < n; i++) {
         raft_id id;
-        const char *address;
         int role;
         int rv;
 
         /* Server ID. */
         id = byteGet64Unaligned(&cursor);
-
-        /* Server Address. */
-        address = byteGetString(
-            &cursor,
-            buf->len - (size_t)((uint8_t *)cursor - (uint8_t *)buf->base));
-        if (address == NULL) {
-            return RAFT_MALFORMED;
-        }
-
         /* Role code. */
         role = byteGet8(&cursor);
 
-        rv = configurationAdd(c, id, address, role);
+	rv = configurationAdd(c, id, role);
         if (rv != 0) {
             return rv;
         }

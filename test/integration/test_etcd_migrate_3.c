@@ -522,7 +522,7 @@ TEST(etcd_migrate, stepConfig, setUp, tearDown, 0, cluster_2_params)
 	munit_assert_llong(0, ==, r->configuration_uncommitted_index);
 
 	//add one server
-	int ret = raft_add(r, &g_raft_change_req[0], 4, "test_server", raft_change_cb_mock);
+	int ret = raft_add(r, &g_raft_change_req[0], 4, raft_change_cb_mock);
 	munit_assert_int(ret, ==, 0);
 
 	//check
@@ -546,7 +546,7 @@ TEST(etcd_migrate, stepIgnoreConfig, setUp, tearDown, 0, cluster_2_params)
 	munit_assert_llong(0, ==, r->configuration_uncommitted_index);
 
 	//add one server
-	int ret = raft_add(r, &g_raft_change_req[0], 4, "test_server_1", raft_change_cb_mock);
+	int ret = raft_add(r, &g_raft_change_req[0], 4, raft_change_cb_mock);
 	munit_assert_int(ret, ==, 0);
 
 	//check
@@ -554,14 +554,14 @@ TEST(etcd_migrate, stepIgnoreConfig, setUp, tearDown, 0, cluster_2_params)
 	munit_assert_llong(2, ==, r->configuration_uncommitted_index);
 
 	//try to add another server but return RAFT_CANTCHANGE
-	ret = raft_add(r, &g_raft_change_req[1], 5, "test_server_2", raft_change_cb_mock);
+	ret = raft_add(r, &g_raft_change_req[1], 5, raft_change_cb_mock);
 	munit_assert_int(ret, ==, RAFT_CANTCHANGE);
 
 	//wait for conf-change applied
 	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 100);
 
 	//then try add again and success
-	ret = raft_add(r, &g_raft_change_req[1], 5, "test_server_2", raft_change_cb_mock);
+	ret = raft_add(r, &g_raft_change_req[1], 5, raft_change_cb_mock);
 	munit_assert_int(ret, ==, 0);
 
 	return MUNIT_OK;

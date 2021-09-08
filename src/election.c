@@ -77,7 +77,6 @@ static int electionSend(struct raft *r, const struct raft_server *server)
 	message.request_vote.disrupt_leader = r->candidate_state.disrupt_leader;
 	message.request_vote.pre_vote = r->candidate_state.in_pre_vote;
 	message.server_id = server->id;
-	message.server_address = server->address;
 
 	send = HeapMalloc(sizeof *send);
 	if (send == NULL) {

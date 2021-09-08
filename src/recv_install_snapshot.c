@@ -15,7 +15,6 @@ static void installSnapshotSendCb(struct raft_io_send *req, int status)
 
 int recvInstallSnapshot(struct raft *r,
                         const raft_id id,
-                        const char *address,
                         struct raft_install_snapshot *args)
 {
     struct raft_io_send *req;
@@ -25,7 +24,6 @@ int recvInstallSnapshot(struct raft *r,
     int match;
     bool async;
 
-    assert(address != NULL);
 
     result->rejected = args->last_index;
     result->last_log_index = logLastIndex(&r->log);
@@ -49,7 +47,7 @@ int recvInstallSnapshot(struct raft *r,
         convertToFollower(r);
     }
 
-    rv = recvUpdateLeader(r, id, address);
+    rv = recvUpdateLeader(r, id);
     if (rv != 0) {
         return rv;
     }
@@ -78,7 +76,6 @@ reply:
 
     message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
     message.server_id = id;
-    message.server_address = address;
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {

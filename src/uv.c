@@ -166,9 +166,11 @@ static void uvTransportCloseCb(struct raft_uv_transport *transport)
 }
 
 /* Implementation of raft_io->stop. */
-static void uvClose(struct raft_io *io, raft_io_close_cb cb)
+static void uvClose(struct raft_io *io, bool clean, raft_io_close_cb cb)
 {
     struct uv *uv;
+
+    (void)clean;
     uv = io->impl;
     assert(!uv->closing);
     uv->close_cb = cb;

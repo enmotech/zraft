@@ -13,9 +13,8 @@ void configurationClose(struct raft_configuration *c);
 
 /* Add a server to the given configuration. */
 int configurationAdd(struct raft_configuration *c,
-                     raft_id id,
-                     const char *address,
-                     int role);
+		     raft_id id,
+		     int role);
 
 /* Return the number of servers with the RAFT_VOTER role. */
 unsigned configurationVoterCount(const struct raft_configuration *c);

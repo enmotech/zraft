@@ -209,7 +209,6 @@ err:
 int raft_add(struct raft *r,
              struct raft_change *req,
              raft_id id,
-             const char *address,
              raft_change_cb cb)
 {
     struct raft_configuration configuration;
@@ -220,7 +219,7 @@ int raft_add(struct raft *r,
         return rv;
     }
 
-    tracef("add server: id %llu, address %s", id, address);
+    tracef("add server: id %llu", id);
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */
@@ -229,7 +228,7 @@ int raft_add(struct raft *r,
         goto err;
     }
 
-	rv = raft_configuration_add(&configuration, id, address, RAFT_STANDBY);
+	rv = raft_configuration_add(&configuration, id, RAFT_STANDBY);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }

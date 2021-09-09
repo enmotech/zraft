@@ -149,7 +149,7 @@ static void serverTransferCb(struct raft_transfer *req)
     raft_id id;
     const char *address;
     raft_leader(&s->raft, &id, &address);
-    raft_close(&s->raft, serverRaftCloseCb);
+    raft_close(&s->raft, 0, serverRaftCloseCb);
 }
 
 /* Final callback in the shutdown sequence, invoked after the timer handle has
@@ -165,7 +165,7 @@ static void serverTimerCloseCb(struct uv_handle_s *handle)
                 return;
             }
         }
-        raft_close(&s->raft, serverRaftCloseCb);
+	raft_close(&s->raft, 0, serverRaftCloseCb);
     }
 }
 

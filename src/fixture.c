@@ -206,12 +206,10 @@ static bool ioFaultTick(struct io *io)
 }
 
 static int ioMethodInit(struct raft_io *raft_io,
-                        raft_id id,
-                        const char *address)
+			raft_id id)
 {
     struct io *io = raft_io->impl;
     io->id = id;
-    io->address = address;
     return 0;
 }
 
@@ -438,11 +436,12 @@ static void ioFlushAll(struct io *io)
     }
 }
 
-static void ioMethodClose(struct raft_io *raft_io, raft_io_close_cb cb)
+static void ioMethodClose(struct raft_io *raft_io, bool clean, raft_io_close_cb cb)
 {
-    if (cb != NULL) {
-        cb(raft_io);
-    }
+	(void)clean;
+	if (cb != NULL) {
+		cb(raft_io);
+	}
 }
 
 static int ioMethodLoad(struct raft_io *io,
@@ -785,7 +784,6 @@ static void ioDeliverTransmit(struct io *io, struct transmit *transmit)
 
     /* Update the message object with our details. */
     message->server_id = io->id;
-    message->server_address = io->address;
 
     ioReceive(peer->io, message);
     raft_free(transmit);
@@ -1018,12 +1016,12 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     struct raft_fixture_server *s = &f->servers[i];
     s->alive = true;
     s->id = i + 1;
-    sprintf(s->address, "%llu", s->id);
+    //sprintf(s->address, "%llu", s->id);
     rv = ioInit(&s->io, i, &f->time);
     if (rv != 0) {
         return rv;
     }
-    rv = raft_init(&s->raft, &s->io, fsm, s->id, s->address);
+    rv = raft_init(&s->raft, &s->io, fsm, s->id);
     if (rv != 0) {
         return rv;
     }
@@ -1035,7 +1033,7 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
 
 static void serverClose(struct raft_fixture_server *s)
 {
-    raft_close(&s->raft, NULL);
+    raft_close(&s->raft, 0, NULL);
     ioClose(&s->io);
 }
 
@@ -1116,7 +1114,7 @@ int raft_fixture_configuration(struct raft_fixture *f,
         int role = i < n_voting ? RAFT_VOTER : RAFT_STANDBY;
         int rv;
         s = &f->servers[i];
-        rv = raft_configuration_add(configuration, s->id, s->address, role);
+	rv = raft_configuration_add(configuration, s->id, role);
         if (rv != 0) {
             return rv;
         }
@@ -2538,13 +2536,13 @@ int raft_fixture_construct_configuration(unsigned n_server,
 										unsigned n_voter,
 										struct raft_configuration *conf)
 {
-	char addr[2] = {0};
+
     raft_configuration_init(conf);
     for (unsigned id = 1; id <= n_server; id++) {
         int role = id <= n_voter ? RAFT_VOTER : RAFT_STANDBY;
         int rv;
-		snprintf(addr, 2, "%u", id);
-        rv = raft_configuration_add(conf, id, addr, role);
+
+	rv = raft_configuration_add(conf, id, role);
         if (rv != 0) {
             return rv;
         }

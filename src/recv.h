@@ -39,6 +39,6 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match);
 
 /* If different from the current one, update information about the current
  * leader. Must be called only by followers. */
-int recvUpdateLeader(struct raft *r, raft_id id, const char *address);
+int recvUpdateLeader(struct raft *r, raft_id id);
 
 #endif /* RECV_H_ */

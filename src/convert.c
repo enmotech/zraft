@@ -38,10 +38,6 @@ static void convertSetState(struct raft *r, unsigned short new_state)
 static void convertClearFollower(struct raft *r)
 {
     r->follower_state.current_leader.id = 0;
-    if (r->follower_state.current_leader.address != NULL) {
-        raft_free(r->follower_state.current_leader.address);
-    }
-    r->follower_state.current_leader.address = NULL;
 }
 
 /* Clear candidate state. */
@@ -157,7 +153,6 @@ void convertToFollower(struct raft *r)
     electionResetTimer(r);
 
     r->follower_state.current_leader.id = 0;
-    r->follower_state.current_leader.address = NULL;
     /* notify the user */
     if(r->state_change_cb != NULL)
 	    r->state_change_cb(r, RAFT_FOLLOWER);

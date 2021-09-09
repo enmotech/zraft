@@ -182,7 +182,6 @@ int membershipLeadershipTransferStart(struct raft *r)
     assert(server != NULL);
     message.type = RAFT_IO_TIMEOUT_NOW;
     message.server_id = server->id;
-    message.server_address = server->address;
     message.timeout_now.term = r->current_term;
     message.timeout_now.last_log_index = logLastIndex(&r->log);
     message.timeout_now.last_log_term = logLastTerm(&r->log);

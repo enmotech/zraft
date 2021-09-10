@@ -55,6 +55,7 @@ static void no_op_cb(struct raft_barrier *req, int status)
 		r = req->data;
 		r->leader_state.readable = true;
 	}
+	raft_free(req);
 }
 
 int recvRequestVoteResult(struct raft *r,
@@ -135,9 +136,10 @@ int recvRequestVoteResult(struct raft *r,
 					/* add a no-op log */
 					struct raft_barrier *breq = raft_malloc(sizeof(*breq));
 
+					if (breq == NULL)
+						return RAFT_NOMEM;
 					breq->data = r;
-					rv = raft_barrier(r, breq, no_op_cb);
-					return rv;
+					return raft_barrier(r, breq, no_op_cb);
 				} else {
 					replicationHeartbeat(r);
 				}

@@ -18,7 +18,6 @@ static void recvSendAppendEntriesResultCb(struct raft_io_send *req, int status)
 
 int recvAppendEntries(struct raft *r,
 		      raft_id id,
-		      const char *address,
 		      const struct raft_append_entries *args)
 {
 	struct raft_io_send *req;
@@ -33,7 +32,6 @@ int recvAppendEntries(struct raft *r,
 	assert(r != NULL);
 	assert(id > 0);
 	assert(args != NULL);
-	assert(address != NULL);
 
 	tracef("[raft][%d][%d][pkt:%u][%s]: replicating[%d] permit[%d] "
 		   "args->term[%lld] prev_log_index[%lld] entries[%d]",
@@ -107,7 +105,7 @@ int recvAppendEntries(struct raft *r,
 
 	/* Update current leader because the term in this AppendEntries RPC is up to
      * date. */
-	rv = recvUpdateLeader(r, id, address);
+	rv = recvUpdateLeader(r, id);
 	if (rv == RAFT_NOMEM) {
 		tracef("[raft][%d][%d]recvUpdateLeader failed!",
 			rkey(r), r->state);
@@ -182,7 +180,6 @@ reply:
 
 	message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
 	message.server_id = id;
-	message.server_address = address;
 	req = HeapMalloc(sizeof *req);
 	if (req == NULL) {
 		return RAFT_NOMEM;

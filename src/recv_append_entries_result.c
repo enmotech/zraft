@@ -8,7 +8,6 @@
 
 int recvAppendEntriesResult(struct raft *r,
                             const raft_id id,
-                            const char *address,
                             const struct raft_append_entries_result *result)
 {
     int match;
@@ -20,12 +19,9 @@ int recvAppendEntriesResult(struct raft *r,
 
     assert(r != NULL);
     assert(id > 0);
-    //assert(address != NULL);
     assert(result != NULL);
 
 	unsigned i = configurationIndexOf(&r->configuration, id);
-
-	(void)(address);
 	
 	tracef("[raft][%d][%d][pkt:%u][%s]: peer[%lld] replicating[%u] "
 		   "permit[%d] pi.time[%ld] rejected[%lld] last_log_index[%lld]",

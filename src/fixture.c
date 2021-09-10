@@ -2060,6 +2060,8 @@ static bool hasAEResponse(struct raft_fixture *f, void *arg)
 			if (message->server_id != expect->dst+1)
 				continue;
 
+			if (!expect->res)
+				return true;
 			struct raft_append_entries_result res = message->append_entries_result;
 			if (res.last_log_index != expect->res->last_log_index)
 				continue;
@@ -2549,6 +2551,21 @@ int raft_fixture_construct_configuration(unsigned n_server,
     }
 
 	return 0;
+}
+
+bool raft_fixture_promotable(struct raft_configuration *conf, unsigned id)
+{
+	unsigned  i;
+	struct raft_server *server;
+
+	for (i = 0; i < conf->n; ++i) {
+		server = &conf->servers[i];
+		if (server->id != id)
+			continue;
+		return server->role == RAFT_VOTER;
+	}
+
+	return false;
 }
 
 

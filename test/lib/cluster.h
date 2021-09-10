@@ -482,6 +482,13 @@
 	munit_assert_true(done);\
     }
 
+/* Check @ID is can be promoted to leader*/
+#define CLUSTER_PROMOTABLE(CONF, ID, EXPECTED) \
+    {                                \
+    	bool promotable = raft_fixture_promotable(CONF, ID); \
+    	munit_assert_true(promotable == (EXPECTED)); \
+    }
+
 void cluster_randomize_init(struct raft_fixture *f);
 void cluster_randomize(struct raft_fixture *f,
                        struct raft_fixture_event *event);

@@ -48,6 +48,14 @@ err:
 	raft_free(request);
 }
 
+static void no_op_cb(struct raft_barrier *req, int status)
+{
+	struct raft *r;
+	if (status == 0) {
+		r = req->data;
+		r->leader_state.readable = true;
+	}
+}
 
 int recvRequestVoteResult(struct raft *r,
 			   raft_id id,
@@ -125,21 +133,10 @@ int recvRequestVoteResult(struct raft *r,
 				}
 				if (r->no_op) {
 					/* add a no-op log */
-					struct raft_buffer buf;
+					struct raft_barrier *breq = raft_malloc(sizeof(*breq));
 
-					buf.len = 8;
-					buf.base = raft_entry_malloc(buf.len);
-					if (buf.base == NULL)
-						return RAFT_NOMEM;
-					raft_index index = logLastIndex(&r->log) + 1;
-					rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL, NULL);
-					if (rv != 0) {
-						raft_entry_free(buf.base);
-						return  rv;
-					}
-					/* Send initial heartbeat. */
-					rv = replicationTrigger(r, index);
-					assert(rv == 0);
+					breq->data = r;
+					rv = raft_barrier(r, breq, no_op_cb);
 					return rv;
 				} else {
 					replicationHeartbeat(r);

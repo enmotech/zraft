@@ -145,6 +145,14 @@ err:
 	return rv;
 }
 
+bool raft_readable(struct raft *r)
+{
+	return r->state == RAFT_LEADER &&
+			r->transfer == NULL &&
+			r->io->state == RAFT_IO_AVAILABLE &&
+			r->leader_state.readable;
+}
+
 static int clientChangeConfiguration(
     struct raft *r,
     struct raft_change *req,

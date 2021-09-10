@@ -188,6 +188,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
         rv =  convertToLeader(r);
         if (rv != 0)
             return rv;
+	r->leader_state.readable = true;
         /* Check if we can commit some new entries. */
         replicationQuorum(r, r->last_stored);
 
@@ -240,6 +241,7 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_number = 0;
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
+    r->leader_state.readable = false;
 
     /* notify the user */
     if(r->state_change_cb != NULL)

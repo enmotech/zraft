@@ -249,9 +249,7 @@ raft_free(_buf.base);                                     \
 #define ADD_MEMBER(I, ID, RV)                                         \
 {                                                                     \
 	int rv_;                                                      \
-	char address_[16];                                            \
-	sprintf(address_, "%d", ID);                                  \
-	rv_ = raft_add(CLUSTER_RAFT(I), &f->req, ID, address_, NULL); \
+	rv_ = raft_add(CLUSTER_RAFT(I), &f->req, ID, NULL);           \
 	munit_assert_int(rv_, ==, RV);                                \
 }
 
@@ -1230,7 +1228,6 @@ TEST(etcd_migrate, addLearner, setUp, tearDown, 0, cluster_2_params)
 	munit_assert_uint(r->configuration.n, ==, 3);
 	server = &r->configuration.servers[2];
 	munit_assert_int(server->id, ==, 3);
-	munit_assert_string_equal(server->address, "3");
 	munit_assert_int(server->role, ==, RAFT_STANDBY);
 
 	/* Convert server 1 to voter */

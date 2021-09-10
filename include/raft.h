@@ -985,6 +985,7 @@ struct raft
 			raft_time round_start;          /* Start of current round. */
 			void *requests[2];              /* Outstanding client requests. */
                         void *optbarriers[2];
+			bool readable;
 		} leader_state;
 	};
 
@@ -1276,6 +1277,8 @@ RAFT_API int raft_barrier(struct raft *r,
 RAFT_API int raft_optbarrier(struct raft *r,
 			  struct raft_barrier *req,
 			  raft_barrier_cb cb);
+
+RAFT_API bool raft_readable(struct raft *r);
 
 /**
  * Asynchronous request to change the raft configuration.

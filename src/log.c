@@ -5,7 +5,6 @@
 #include "../include/raft.h"
 #include "assert.h"
 #include "configuration.h"
-#include "tracing.h"
 
 /* Calculate the reference count hash table key for the given log entry index in
  * an hash table of the given size.
@@ -41,7 +40,7 @@ static int refsTryInsert(struct raft_entry_ref *table,
 {
     struct raft_entry_ref *bucket;    /* Bucket associated with this index. */
     struct raft_entry_ref *next_slot; /* For traversing the bucket slots. */
-    struct raft_entry_ref *last_slot = NULL; /* To track the last traversed slot. */
+    struct raft_entry_ref *last_slot; /* To track the last traversed slot. */
     struct raft_entry_ref *slot;      /* Actual slot to use for this entry. */
     size_t key;
 
@@ -280,45 +279,7 @@ static void refsIncr(struct raft_log *l,
     assert(slot != NULL);
 
     slot->count++;
-
-	tracef("refsIncr: index[%lld] ref[%u]", index, slot->count);
 }
-
-static bool refsIf(struct raft_log *l,
-                     const raft_term term,
-                     const raft_index index)
-{
-    size_t key;                       /* Hash table key for the given index. */
-    struct raft_entry_ref *slot;      /* Slot for the given term/index */
-
-    assert(l != NULL);
-    assert(term > 0);
-    assert(index > 0);
-
-    key = refsKey(index, l->refs_size);
-
-    /* Lookup the slot associated with the given term/index, keeping track of
-     * its previous slot in the bucket list. */
-    slot = &l->refs[key];
-    while (1) {
-        assert(slot != NULL);
-        assert(slot->index == index);
-        if (slot->term == term) {
-            break;
-        }
-        slot = slot->next;
-    }
-
-	tracef("refsIf: index[%lld] ref[%u]", index, slot->count);
-
-    if (slot->count > 1) {
-        /* The entry is still referenced. */
-        return false;
-    }
-
-    return true;
-}
-
 
 /* Decrement the refcount of the entry with the given index. Return a boolean
  * indicating whether the entry has now zero references. */
@@ -351,8 +312,6 @@ static bool refsDecr(struct raft_log *l,
     }
 
     slot->count--;
-
-	tracef("refsDecr: index[%lld] ref[%u]", index, slot->count);
 
     if (slot->count > 0) {
         /* The entry is still referenced. */
@@ -566,7 +525,7 @@ int logAppendCommands(struct raft_log *l,
 
     for (i = 0; i < n; i++) {
         const struct raft_buffer *buf = &bufs[i];
-	rv = logAppend(l, term, RAFT_COMMAND, buf, NULL, NULL);
+        rv = logAppend(l, term, RAFT_COMMAND, buf, NULL, NULL);
         if (rv != 0) {
             return rv;
         }
@@ -662,7 +621,7 @@ raft_term logTermOf(struct raft_log *l, const raft_index index)
 
     if (index == l->snapshot.last_index) {
         assert(l->snapshot.last_term != 0);
-        /* Sanity check that if we still have the entry at last_index, its term
+        /* Coherence check that if we still have the entry at last_index, its term
          * matches the one in the snapshot. */
         i = locateEntry(l, index);
         if (i != l->size) {
@@ -752,97 +711,12 @@ int logAcquire(struct raft_log *l,
         refsIncr(l, entry->term, index + j);
     }
 
-	tracef("logAcquire: index[%lld] n[%d]", index, *n);
-
-    return 0;
-}
-
-
-/* Pgrep:
- *
- *  TODO: Bad smell, this fucntion is most dupicated from  logAcquire.
- */
-int logAcquireSection(
-	struct raft_log *l,
-	const raft_index index,
-	const raft_index to_index,
-	struct raft_entry *entries[],
-	unsigned *n)
-{
-	unsigned realn = (unsigned)(to_index - index + 1);
-    size_t i;
-    size_t j;
-
-    assert(l != NULL);
-    assert(index > 0);
-    assert(entries != NULL);
-    assert(n != NULL);
-
-	if (to_index < index) {
-		*n = 0;
-        *entries = NULL;
-        return 0;
-	}
-
-	realn = min(realn, 16);
-
-    /* Get the array index of the first entry to acquire. */
-    i = locateEntry(l, index);
-
-    if (i == l->size || !realn) {
-        *n = 0;
-        *entries = NULL;
-        return 0;
-    }
-
-    if (i < l->back) {
-        /* The last entry does not wrap with respect to i, so the number of
-         * entries is simply the length of the range [i...l->back). */
-        *n = (unsigned)(l->back - i);
-    } else {
-        /* The last entry wraps with respect to i, so the number of entries is
-         * the sum of the lengths of the ranges [i...l->size) and [0...l->back),
-         * which is l->size - i + l->back.*/
-        *n = (unsigned)(l->size - i + l->back);
-    }
-
-    assert(*n > 0);
-
-    *entries = raft_calloc(realn, sizeof **entries);
-    if (*entries == NULL) {
-        return RAFT_NOMEM;
-    }
-
-	unsigned cnt = 0;
-	unsigned short type;
-	int left_bufsize = 0x401000; /* Buffer size limit of network io. */
-
-    for (j = 0; j < *n; j++) {
-        size_t k = (i + j) % l->size;
-        struct raft_entry *entry = &(*entries)[j];
-        *entry = l->entries[k];
-		if (j && entry->type != type)
-			break;
-		left_bufsize -= (int)(sizeof(struct raft_entry) + entry->buf.len);
-		if (left_bufsize < 0)
-			break;
-		type = entry->type;
-		refsIncr(l, entry->term, index + j);
-		if (++cnt == realn)
-			break;
-    }
-
-	realn = cnt;
-	*n = realn;
-
-	tracef("logAcquireSection: index[%lld] n[%d]", index, *n);
-
     return 0;
 }
 
 /* Return true if the given batch is referenced by any entry currently in the
  * log. */
-static bool isBatchReferenced(struct raft_log *l, const void *batch, bool removePrefix)
+static bool isBatchReferenced(struct raft_log *l, const void *batch)
 {
     size_t i;
 
@@ -853,14 +727,11 @@ static bool isBatchReferenced(struct raft_log *l, const void *batch, bool remove
         struct raft_entry *entry = entryAt(l, i);
         if (entry->batch == batch) {
             return true;
-        } else if (removePrefix) {
-        	return false;
         }
     }
 
     return false;
 }
-
 
 void logRelease(struct raft_log *l,
                 const raft_index index,
@@ -872,8 +743,6 @@ void logRelease(struct raft_log *l,
 
     assert(l != NULL);
     assert((entries == NULL && n == 0) || (entries != NULL && n > 0));
-
-	tracef("logRelease: index[%lld] n[%d]", index, n);
 
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
@@ -891,7 +760,7 @@ void logRelease(struct raft_log *l,
                 }
             } else {
                 if (entry->batch != batch) {
-                    if (!isBatchReferenced(l, entry->batch, false)) {
+                    if (!isBatchReferenced(l, entry->batch)) {
                         batch = entry->batch;
                         raft_entry_batch_free(entry);
                     }
@@ -919,14 +788,14 @@ static void clearIfEmpty(struct raft_log *l)
 }
 
 /* Destroy an entry, possibly releasing the memory of its buffer. */
-static void destroyEntry(struct raft_log *l, struct raft_entry *entry, bool removePrefix)
+static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
 {
     if (entry->batch == NULL) {
         if (entry->buf.base != NULL) {
             raft_entry_free(entry->buf.base);
         }
     } else {
-        if (!isBatchReferenced(l, entry->batch, removePrefix)) {
+        if (!isBatchReferenced(l, entry->batch)) {
             raft_entry_batch_free(entry);
         }
     }
@@ -963,7 +832,7 @@ static void removeSuffix(struct raft_log *l,
         unref = refsDecr(l, entry->term, start + n - i - 1);
 
         if (unref && destroy) {
-            destroyEntry(l, entry, false);
+            destroyEntry(l, entry);
         }
     }
 
@@ -975,52 +844,7 @@ void logTruncate(struct raft_log *l, const raft_index index)
     if (logNumEntries(l) == 0) {
         return;
     }
-
-	tracef("logTruncate: index[%lld]", index);
-
     removeSuffix(l, index, true);
-}
-
-int isRefs(struct raft_log *l, const raft_index index)
-{
-    if (logNumEntries(l) == 0) {
-        return 0;
-    }
-
-	tracef("isRefs: index[%lld]", index);
-
-	size_t i;
-    size_t n;
-    raft_index start = index;
-
-    assert(l != NULL);
-    assert(index > l->offset);
-    assert(index <= logLastIndex(l));
-
-    n = (size_t)(logLastIndex(l) - start) + 1;
-
-	size_t back = l->back;
-
-    for (i = 0; i < n; i++) {
-        struct raft_entry *entry;
-        bool unref;
-
-        if (back == 0) {
-            back = l->size - 1;
-        } else {
-            back--;
-        }
-
-        entry = &l->entries[back];
-		unref = refsIf(l, entry->term, start + n - i - 1);
-
-		if (!unref) {
-			tracef("isRefs: index[%lld] is referenced.", start + n - i - 1);
-			return RAFT_LOG_BUSY;
-		}
-    }
-
-	return 0;
 }
 
 void logDiscard(struct raft_log *l, const raft_index index)
@@ -1057,15 +881,7 @@ static void removePrefix(struct raft_log *l, const raft_index index)
         unref = refsDecr(l, entry->term, l->offset);
 
         if (unref) {
-            destroyEntry(l, entry, true);
-        } else {
-            if (l->front == 0)
-            	l->front = l->size - 1;
-            else
-            	l->front--;
-
-            l->offset--;
-            break;
+            destroyEntry(l, entry);
         }
     }
 

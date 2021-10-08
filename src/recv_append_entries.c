@@ -7,60 +7,52 @@
 #include "log.h"
 #include "recv.h"
 #include "replication.h"
-#include "configuration.h"
 #include "tracing.h"
+
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
 
 static void recvSendAppendEntriesResultCb(struct raft_io_send *req, int status)
 {
-	(void)status;
-	HeapFree(req);
+    (void)status;
+    HeapFree(req);
 }
 
 int recvAppendEntries(struct raft *r,
-		      raft_id id,
-		      const struct raft_append_entries *args)
+                      raft_id id,
+                      const struct raft_append_entries *args)
 {
-	struct raft_io_send *req;
-	struct raft_message message;
-	struct raft_append_entries_result *result = &message.append_entries_result;
-	int match;
-	bool async;
-	int rv;
+    struct raft_io_send *req;
+    struct raft_message message;
+    struct raft_append_entries_result *result = &message.append_entries_result;
+    int match;
+    bool async;
+    int rv;
 
-	struct pgrep_permit_info pi = args->pi;
+    assert(r != NULL);
+    assert(id > 0);
+    assert(args != NULL);
 
-	assert(r != NULL);
-	assert(id > 0);
-	assert(args != NULL);
+    result->rejected = args->prev_log_index;
+    result->last_log_index = logLastIndex(&r->log);
 
-	tracef("[raft][%d][%d][pkt:%u][%s]: replicating[%d] permit[%d] "
-		   "args->term[%lld] prev_log_index[%lld] entries[%d]",
-	       rkey(r), r->state, args->pkt, __func__, args->pi.replicating,
-	       args->pi.permit, args->term, args->prev_log_index, args->n_entries);
-
-	result->rejected = args->prev_log_index;
-	result->last_log_index = logLastIndex(&r->log);
-
-
-	rv = recvEnsureMatchingTerms(r, args->term, &match);
-	if (rv != 0) {
-		tracef("[raft][%d][%d]recvEnsureMatchingTerms failed!",
-			rkey(r), r->state);
-		return rv;
-	}
-
-	/* From Figure 3.1:
+    recvCheckMatchingTerms(r, args->term, &match);
+    assert(match <= 0);
+    /* From Figure 3.1:
      *
      *   AppendEntries RPC: Receiver implementation: Reply false if term <
      *   currentTerm.
      */
-	if (match < 0) {
-		tracef("[raft][%d][%d]recvEnsureMatchingTerms local term is higher -> reject!",
-			  rkey(r), r->state);
-		goto reply;
-	}
+    if (match < 0) {
+        tracef("local term is higher -> reject ");
+        goto reply;
+    }
 
-	/* If we get here it means that the term in the request matches our current
+    /* If we get here it means that the term in the request matches our current
      * term or it was higher and we have possibly stepped down, because we
      * discovered the current leader:
      *
@@ -89,112 +81,70 @@ int recvAppendEntries(struct raft *r,
      * that case we step down). It can't have the same term because at most one
      * leader can be elected at any given term.
      */
-	assert(r->state == RAFT_FOLLOWER || r->state == RAFT_CANDIDATE);
-	assert(r->current_term == args->term);
+    assert(r->state == RAFT_FOLLOWER || r->state == RAFT_CANDIDATE);
+    assert(r->current_term == args->term);
 
-	if (r->state == RAFT_CANDIDATE) {
-		/* The current term and the peer one must match, otherwise we would have
-	 * either rejected the request or stepped down to followers. */
-		assert(match == 0);
-		tracef("[raft][%d][%d]discovered leader -> step down!",
-			  rkey(r), r->state);
-		convertToFollower(r);
-	}
+    if (r->state == RAFT_CANDIDATE) {
+        /* The current term and the peer one must match, otherwise we would have
+         * either rejected the request or stepped down to followers. */
+        assert(match == 0);
+        tracef("discovered leader -> step down ");
+        convertToFollower(r);
+    }
 
-	assert(r->state == RAFT_FOLLOWER);
+    assert(r->state == RAFT_FOLLOWER);
 
-	/* Update current leader because the term in this AppendEntries RPC is up to
+    /* Update current leader because the term in this AppendEntries RPC is up to
      * date. */
-	rv = recvUpdateLeader(r, id);
-	if (rv == RAFT_NOMEM) {
-		tracef("[raft][%d][%d]recvUpdateLeader failed!",
-			rkey(r), r->state);
-		return rv;
-	}
+    rv = recvUpdateLeader(r, id);
+    if (rv != 0) {
+        return rv;
+    }
 
-	/* Reset the election timer. */
-	r->election_timer_start = r->io->time(r->io);
+    /* Reset the election timer. */
+    r->election_timer_start = r->io->time(r->io);
 
-	if (args->pi.replicating) {
-		struct raft_server *server = (struct raft_server *)configurationGet(&r->configuration, r->id);
-		if (!r->pgrep_reported && server && r->role_change_cb) {
-			server->role = RAFT_STANDBY;
-			r->role_change_cb(r, server);
-			r->pgrep_reported = true;
-			tracef("[raft][%d][%d][%s][role_notify] role[%d].",
-			       rkey(r), r->state, __func__, server->role);
-		}
-	} else {
-		if (rv == 0 && r->state_change_cb)
-			r->state_change_cb(r, RAFT_FOLLOWER);
-		else
-			rv = 0;
-		r->pgrep_reported = false;
-	}
-
-	if (args->pi.replicating == PGREP_RND_HRT) {
-		goto reply;
-	}
-
-	/* If we are installing a snapshot, ignore these entries. TODO: we should do
+    /* If we are installing a snapshot, ignore these entries. TODO: we should do
      * something smarter, e.g. buffering the entries in the I/O backend, which
      * should be in charge of serializing everything. */
-	if (r->snapshot.put.data != NULL && args->n_entries > 0) {
-		tracef("[raft][%d][%d]ignoring AppendEntries RPC during snapshot install!",
-			  rkey(r), r->state);
-		entryBatchesDestroy(args->entries, args->n_entries);
-		return 0;
-	}
+    if (replicationInstallSnapshotBusy(r) && args->n_entries > 0) {
+        tracef("ignoring AppendEntries RPC during snapshot install");
+        entryBatchesDestroy(args->entries, args->n_entries);
+        return 0;
+    }
 
-	rv = replicationAppend(r, args, &result->rejected, &async, &pi);
-	if (rv != 0) {
-		tracef("[raft][%d][%d]replicationAppend failed rv[%d]!",
-			rkey(r), r->state, rv);
-		if (rv != RAFT_APPLY_BUSY &&
-		    rv != RAFT_LOG_BUSY)
-			return rv;
-	}
+    rv = replicationAppend(r, args, &result->rejected, &async);
+    if (rv != 0) {
+        return rv;
+    }
 
-	if (async) {
-		return 0;
-	}
+    if (async) {
+        return 0;
+    }
 
-	/* Echo back to the leader the point that we reached. */
-	result->last_log_index = r->last_stored;
+    /* Echo back to the leader the point that we reached. */
+    result->last_log_index = r->last_stored;
 
 reply:
-	result->term = r->current_term;
-	result->pi = pi;
-	result->pkt = args->pkt;
+    result->term = r->current_term;
+    message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
+    message.server_id = id;
 
-	/* Pgrep:
-     *
-	 *   If it's pgrep progress, should not reject the request.
-     */
-	if (args->pi.replicating) {
-		result->rejected = 0;
-		if (rv) {
-			result->pi.replicating = PGREP_RND_ERR;
-		}
-	}
+    req = HeapMalloc(sizeof *req);
+    if (req == NULL) {
+        return RAFT_NOMEM;
+    }
+    req->data = r;
 
-	message.type = RAFT_IO_APPEND_ENTRIES_RESULT;
-	message.server_id = id;
-	req = HeapMalloc(sizeof *req);
-	if (req == NULL) {
-		return RAFT_NOMEM;
-	}
-	req->data = r;
+    rv = r->io->send(r->io, req, &message, recvSendAppendEntriesResultCb);
+    if (rv != 0) {
+        raft_free(req);
+        return rv;
+    }
 
-	rv = r->io->send(r->io, req, &message, recvSendAppendEntriesResultCb);
-	if (rv != 0) {
-		raft_free(req);
-		return rv;
-	}
+    entryBatchesDestroy(args->entries, args->n_entries);
 
-	entryBatchesDestroy(args->entries, args->n_entries);
-
-	return 0;
+    return 0;
 }
 
 #undef tracef

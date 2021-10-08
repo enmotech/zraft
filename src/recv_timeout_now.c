@@ -7,6 +7,13 @@
 #include "recv.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 int recvTimeoutNow(struct raft *r,
                    const raft_id id,
                    const struct raft_timeout_now *args)
@@ -36,10 +43,8 @@ int recvTimeoutNow(struct raft *r,
 
     /* Possibly update our term. Ignore the request if it turns out we have a
      * higher term. */
-    rv = recvEnsureMatchingTerms(r, args->term, &match);
-    if (rv != 0) {
-        return rv;
-    }
+    recvCheckMatchingTerms(r, args->term, &match);
+    assert(match <= 0);
     if (match < 0) {
         return 0;
     }

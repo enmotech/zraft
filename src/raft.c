@@ -15,7 +15,7 @@
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
-#define DEFAULT_INSTALL_SNAPSHOT_TIMEOUT (2 * DEFAULT_HEARTBEAT_TIMEOUT)
+#define DEFAULT_INSTALL_SNAPSHOT_TIMEOUT 30000 /* 30 seconds */
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 #define DEFAULT_SNAPSHOT_TRAILING 2048
 
@@ -27,7 +27,7 @@
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
-	      const raft_id id)
+              const raft_id id)
 {
     int rv;
     assert(r != NULL);
@@ -36,8 +36,6 @@ int raft_init(struct raft *r,
     r->fsm = fsm;
     r->tracer = &NoopTracer;
     r->id = id;
-	r->pgrep_id = RAFT_INVALID_ID;
-
     r->current_term = 0;
     r->voted_for = 0;
     logInit(&r->log);
@@ -48,11 +46,10 @@ int raft_init(struct raft *r,
     r->heartbeat_timeout = DEFAULT_HEARTBEAT_TIMEOUT;
     r->install_snapshot_timeout = DEFAULT_INSTALL_SNAPSHOT_TIMEOUT;
     r->commit_index = 0;
-    r->last_applied = 0;
     r->last_applying = 0;
+    r->last_applied = 0;
     r->last_stored = 0;
     r->state = RAFT_UNAVAILABLE;
-    r->removed = false;
     r->transfer = NULL;
     r->snapshot.pending.term = 0;
     r->snapshot.threshold = DEFAULT_SNAPSHOT_THRESHOLD;
@@ -65,30 +62,17 @@ int raft_init(struct raft *r,
     r->no_op = false;
     r->max_catch_up_rounds = DEFAULT_MAX_CATCH_UP_ROUNDS;
     r->max_catch_up_round_duration = DEFAULT_MAX_CATCH_UP_ROUND_DURATION;
-	r->last_append_time = 0;
-	r->last_append_term = 0;
-    r->pgrep_reported = false;
-	r->role_change_cb = NULL;
     rv = r->io->init(r->io, r->id);
+    r->state_change_cb = NULL;
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-	goto err;
+        goto err_after_address_alloc;
     }
     return 0;
 
-err:
+err_after_address_alloc:
     assert(rv != 0);
     return rv;
-}
-
-void raft_set_state_change_cb(struct raft *r, raft_state_change_cb cb)
-{
-	r->state_change_cb = cb;
-}
-
-void raft_set_role_change_cb(struct raft *r, raft_role_change_cb cb)
-{
-	r->role_change_cb = cb;
 }
 
 int raft_io_state(struct raft_io *io)
@@ -159,7 +143,7 @@ void raft_set_pre_vote(struct raft *r, bool enabled)
 
 void raft_set_no_op(struct raft *r, bool enabled)
 {
-	r->no_op = enabled;
+    r->no_op = enabled;
 }
 
 const char *raft_errmsg(struct raft *r)
@@ -182,26 +166,30 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
 
     return 0;
 }
-#if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
 int raft_abootstrap(struct raft *r,
-		   struct raft_io_bootstrap *req,
-		   const struct raft_configuration *conf,
-		   raft_io_bootstrap_cb cb)
+           struct raft_io_bootstrap *req,
+           const struct raft_configuration *conf,
+           raft_io_bootstrap_cb cb)
 {
-	int rv;
+    int rv;
 
-	if (r->state != RAFT_UNAVAILABLE) {
-	    return RAFT_BUSY;
-	}
+    if (r->state != RAFT_UNAVAILABLE) {
+        return RAFT_BUSY;
+    }
 
-	rv = r->io->abootstrap(r->io, req, conf, cb);
-	if (rv != 0) {
-	    return rv;
-	}
+    rv = r->io->abootstrap(r->io, req, conf, cb);
+    if (rv != 0) {
+        return rv;
+    }
 
-	return 0;
+    return 0;
 }
-#endif
+
+void raft_set_state_change_cb(struct raft *r, raft_state_change_cb cb)
+{
+	r->state_change_cb =cb;
+}
+
 int raft_recover(struct raft *r, const struct raft_configuration *conf)
 {
     int rv;
@@ -228,12 +216,6 @@ void raft_configuration_init(struct raft_configuration *c)
     configurationInit(c);
 }
 
-int raft_configuration_get(const struct raft *r, struct raft_configuration *c)
-{
-	assert(c);
-	return configurationCopy(&(r->configuration), c);
-}
-
 void raft_configuration_close(struct raft_configuration *c)
 {
     configurationClose(c);
@@ -250,12 +232,6 @@ int raft_configuration_encode(const struct raft_configuration *c,
                               struct raft_buffer *buf)
 {
     return configurationEncode(c, buf);
-}
-
-int raft_configuration_decode(const struct raft_buffer *buf,
-			struct raft_configuration *c)
-{
-	return configurationDecode(buf, c);
 }
 
 unsigned long long raft_digest(const char *text, unsigned long long n)

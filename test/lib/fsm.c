@@ -14,10 +14,12 @@ struct fsm
 enum { SET_X = 1, SET_Y, ADD_X, ADD_Y };
 
 static int fsmApply(struct raft_fsm *fsm,
-		    struct raft_fsm_apply *req,
-		    const struct raft_buffer *buf,
-		    raft_fsm_apply_cb cb)
+                    struct raft_fsm_apply *req,
+		    raft_index index,
+                    const struct raft_buffer *buf,
+                    raft_fsm_apply_cb cb)
 {
+   (void)index;
     struct fsm *f = fsm->data;
     const void *cursor = buf->base;
     unsigned command;
@@ -48,7 +50,6 @@ static int fsmApply(struct raft_fsm *fsm,
     }
 
     cb(req, NULL, 0);
-
     return 0;
 }
 

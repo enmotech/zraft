@@ -481,7 +481,7 @@ static int uvLoadOpenSegment(struct uv *uv,
     uint64_t format;                /* Format version */
     size_t n_batches = 0;           /* Number of loaded batches */
     struct raft_entry *tmp_entries; /* Entries in current batch */
-    struct raft_buffer buf;         /* Segment file content */
+    struct raft_buffer buf = {0};   /* Segment file content */
     size_t offset;                  /* Content read cursor */
     unsigned tmp_n_entries;         /* Number of entries in current batch */
     int i;
@@ -521,6 +521,7 @@ static int uvLoadOpenSegment(struct uv *uv,
                 tracef("remove zeroed open segment %s", info->filename);
                 remove = true;
                 HeapFree(buf.base);
+                buf.base = NULL;
                 goto done;
             }
         }
@@ -572,6 +573,7 @@ static int uvLoadOpenSegment(struct uv *uv,
 
     if (n_batches == 0) {
         HeapFree(buf.base);
+        buf.base = NULL;
         remove = true;
     }
 
@@ -616,7 +618,9 @@ err_after_batch_load:
     raft_free(tmp_entries);
 
 err_after_read:
-    HeapFree(buf.base);
+    if (buf.base != NULL) {
+        HeapFree(buf.base);
+    }
 
 err:
     assert(rv != 0);

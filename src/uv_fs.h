@@ -8,6 +8,9 @@
 #include "../include/raft.h"
 #include "err.h"
 
+#define TMP_FILE_PREFIX "tmp-"
+#define TMP_FILE_FMT TMP_FILE_PREFIX "%s"
+
 /* Check that the given directory can be used. */
 int UvFsCheckDir(const char *dir, char *errmsg);
 

@@ -14,298 +14,102 @@
 #include "recv_timeout_now.h"
 #include "string.h"
 #include "tracing.h"
-#include "replication.h"
 
-#if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
-struct setMetar
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+struct set_meta_req
 {
-	struct raft *raft; /* Instance that has submitted the request */
-	raft_term	term;
-	raft_id		voted_for;
-	struct raft_message message;
-	struct raft_io_set_meta req;
+    struct raft	*raft; /* Instance that has submitted the request */
+    raft_term	term;
+    raft_id		voted_for;
+    struct raft_message message;
+    struct raft_io_set_meta req;
 };
+
+int recvUpdateMeta(struct raft *r,
+        struct raft_message *message,
+        raft_term	term,
+        raft_id voted_for,
+        raft_io_set_meta_cb cb)
+{
+    int rv;
+    struct set_meta_req *request;
+    char msg[128];
+
+    assert(term > r->current_term ||
+            r->voted_for != voted_for);
+
+    sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
+        term, r->current_term);
+
+    if (r->state != RAFT_FOLLOWER)
+        strcat(msg, " and step down");
+    tracef("%s", msg);
+
+    request = raft_malloc(sizeof *request);
+    if (request == NULL) {
+        rv = RAFT_NOMEM;
+        goto meta_err_nomen;
+    }
+    if(message) {
+       request->message = *message;
+    }
+    request->raft = r;
+    request->term = term;
+    request->voted_for = voted_for;
+    request->req.data = request;
+    r->io->state = RAFT_IO_BUSY;
+    rv = r->io->set_meta(r->io,
+                 &request->req,
+                 term,
+                 voted_for,
+                 cb);
+    if (rv != 0)
+        goto meta_io_err;
+
+    return 0;
+meta_io_err:
+    raft_free(request);
+meta_err_nomen:
+    return rv;
+}
 
 static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
 {
-	struct setMetar *request = req->data;
-	struct raft *r = request->raft;
+    struct set_meta_req *request = req->data;
+    struct raft *r = request->raft;
 
-	if (r->state == RAFT_UNAVAILABLE)
-		goto err;
-	r->io->state = RAFT_IO_AVAILABLE;
-	if(status != 0) {
-		convertToUnavailable(r);
-		goto err;
-	}
+    if (r->state == RAFT_UNAVAILABLE)
+        goto err;
 
-	r->current_term = request->term;
-	r->voted_for = request->voted_for;
+    r->io->state = RAFT_IO_AVAILABLE;
+    if(status != 0) {
+        convertToUnavailable(r);
+        goto err;
+    }
 
-	if (r->state != RAFT_FOLLOWER) {
-		/* Also convert to follower. */
-		convertToFollower(r);
-	}
+    r->current_term = request->term;
+    r->voted_for = request->voted_for;
 
-	recvCb(r->io, &request->message);
+    if (r->state != RAFT_FOLLOWER) {
+        /* Also convert to follower. */
+        convertToFollower(r);
+    }
+
+    recvCb(r->io, &request->message);
 err:
-	raft_free(request);
+    raft_free(request);
 }
 
-int recvSetMeta(struct raft *r,
-		struct raft_message *message,
-		raft_term	term,
-		raft_id voted_for,
-		raft_io_set_meta_cb cb)
+static int recvEnsureMatchingTerm(struct raft *r,
+                  struct raft_message *message,
+                  bool *async)
 {
-	int rv;
-	struct setMetar *request;
-	char msg[128];
-
-	assert(term > r->current_term ||
-			r->voted_for != voted_for);
-
-	sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
-		term, r->current_term);
-
-	if (r->state != RAFT_FOLLOWER) {
-		strcat(msg, " and step down");
-	}
-
-	tracef("%s", msg);
-
-	request = raft_malloc(sizeof *request);
-	if (request == NULL) {
-		rv = RAFT_NOMEM;
-		goto err1;
-	}
-
-	request->raft = r;
-	request->term = term;
-	request->voted_for = voted_for;
-	request->req.data = request;
-
-	if(message) {
-		request->message = *message;
-	}
-
-	r->io->state = RAFT_IO_BUSY;
-	rv = r->io->set_meta(r->io,
-			     &request->req,
-			     term,
-			     voted_for,
-			     cb);
-	if (rv != 0)
-		goto err;
-
-
-
-	return 0;
-
-err:
-	raft_free(request);
-err1:
-	return rv;
-}
-#endif
-
-/* Dispatch a single RPC message to the appropriate handler. */
-static int recvMessage(struct raft *r, struct raft_message *message)
-{
-	int rv = 0;
-
-	int match;
-	raft_term term;
-
-	if (message->type < RAFT_IO_APPEND_ENTRIES ||
-	    message->type > RAFT_IO_PGREP_COPY_CHUNKS_RESULT) {
-		tracef("received unknown message type type: %d", message->type);
-		return 0;
-	}
-
-#if defined(RAFT_ASYNC_ALL) && RAFT_ASYNC_ALL
-	raft_id voted_for;
-
-	/* check and asynchronously bump term */
-	switch (message->type) {
-	case RAFT_IO_APPEND_ENTRIES:
-		term = message->append_entries.term;
-		voted_for = message->server_id;
-		recvCheckMatchingTerms(r, term, &match);
-		break;
-	case RAFT_IO_APPEND_ENTRIES_RESULT:
-		term = message->append_entries_result.term;
-		voted_for = 0;
-		recvCheckMatchingTerms(r, term, &match);
-		break;
-	case RAFT_IO_INSTALL_SNAPSHOT:
-		term = message->install_snapshot.term;
-		voted_for = message->server_id;
-		recvCheckMatchingTerms(r, term, &match);
-		break;
-	case RAFT_IO_TIMEOUT_NOW:
-		term = message->timeout_now.term;
-		voted_for = message->server_id;
-		recvCheckMatchingTerms(r, term, &match);
-		break;
-	default:
-		match = 0;
-		break;
-	}
-
-	if(match > 0) {
-		return recvSetMeta(r,
-				 message,
-				 term,
-				 voted_for,
-				 recvBumpTermIOCb);
-	}
-#endif
-	/* tracef("%s from server %ld", message_descs[message->type - 1],
-       message->server_id); */
-
-	switch (message->type) {
-	case RAFT_IO_APPEND_ENTRIES:
-		rv = recvAppendEntries(r, message->server_id,
-				       &message->append_entries);
-		if (rv != 0) {
-			entryBatchesDestroy(message->append_entries.entries,
-					    message->append_entries.n_entries);
-		}
-		break;
-	case RAFT_IO_APPEND_ENTRIES_RESULT:
-		rv = recvAppendEntriesResult(r, message->server_id,
-					     &message->append_entries_result);
-		break;
-	case RAFT_IO_REQUEST_VOTE:
-		rv = recvRequestVote(r, message->server_id, &message->request_vote);
-		break;
-	case RAFT_IO_REQUEST_VOTE_RESULT:
-		rv = recvRequestVoteResult(r, message->server_id, &message->request_vote_result);
-		break;
-	case RAFT_IO_INSTALL_SNAPSHOT:
-		rv = recvInstallSnapshot(r, message->server_id, &message->install_snapshot);
-		/* Already installing a snapshot, wait for it and ignore this one */
-		if (rv == RAFT_BUSY) {
-			raft_free(message->install_snapshot.data.base);
-			raft_configuration_close(&message->install_snapshot.conf);
-			rv = 0;
-		}
-		break;
-	case RAFT_IO_TIMEOUT_NOW:
-		rv = recvTimeoutNow(r, message->server_id, &message->timeout_now);
-		break;
-	case RAFT_IO_PGREP_COPY_CHUNKS:
-		r->io->pgrep_recv_copy_chunks(r->io, message->copy_chunks, r->current_term);
-		break;
-	case RAFT_IO_PGREP_COPY_CHUNKS_RESULT:
-		r->io->pgrep_recv_copy_chunks_result(
-			r->io, message->copy_chunks_result.cklist,
-			message->copy_chunks_result.status);
-		/* Try to apply some log entries. */
-		replicationApply(r);
-		break;
-	};
-
-	if (rv != 0 && rv != RAFT_NOCONNECTION) {
-		/* tracef("recv: %s: %s", message_descs[message->type - 1],
-		 raft_strerror(rv)); */
-		return rv;
-	}
-
-	/* If there's a leadership transfer in progress, check if it has
-     * completed. */
-	if (r->transfer != NULL) {
-		if (r->state == RAFT_FOLLOWER &&
-		    r->follower_state.current_leader.id == r->transfer->id) {
-			membershipLeadershipTransferClose(r);
-		}
-	}
-
-	return 0;
-}
-
-void recvCb(struct raft_io *io, struct raft_message *message)
-{
-	struct raft *r = io->data;
-	int rv;
-	if (r->state == RAFT_UNAVAILABLE) {
-		switch (message->type) {
-		case RAFT_IO_APPEND_ENTRIES:
-			entryBatchesDestroy(message->append_entries.entries,
-					    message->append_entries.n_entries);
-			break;
-		case RAFT_IO_INSTALL_SNAPSHOT:
-			raft_configuration_close(&message->install_snapshot.conf);
-			raft_free(message->install_snapshot.data.base);
-			break;
-		}
-		return;
-	}
-	rv = recvMessage(r, message);
-	if (rv != 0) {
-		convertToUnavailable(r);
-	}
-}
-
-int recvBumpCurrentTerm(struct raft *r, raft_term term)
-{
-	int rv;
-	char msg[128];
-
-	assert(r != NULL);
-	assert(term > r->current_term);
-
-	sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
-		term, r->current_term);
-	if (r->state != RAFT_FOLLOWER) {
-		strcat(msg, " and step down");
-	}
-	tracef("%s", msg);
-
-	/* Save the new term to persistent store, resetting the vote. */
-	rv = r->io->set_term(r->io, term);
-	if (rv != 0) {
-		return rv;
-	}
-
-	/* Update our cache too. */
-	r->current_term = term;
-	r->voted_for = 0;
-
-	if (r->state != RAFT_FOLLOWER) {
-		/* Also convert to follower. */
-		convertToFollower(r);
-	}
-
-	return 0;
-}
-
-void recvCheckMatchingTerms(struct raft *r, raft_term term, int *match)
-{
-	if (term < r->current_term) {
-		*match = -1;
-	} else if (term > r->current_term) {
-		*match = 1;
-	} else {
-		*match = 0;
-	}
-}
-
-int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
-{
-	int rv;
-
-	assert(r != NULL);
-	assert(match != NULL);
-
-	recvCheckMatchingTerms(r, term, match);
-
-	if (*match == -1) {
-		return 0;
-	}
-
-	/* From Figure 3.1:
+    /* From Figure 3.1:
      *
      *   Rules for Servers: All Servers: If RPC request or response contains
      *   term T > currentTerm: set currentTerm = T, convert to follower.
@@ -319,24 +123,168 @@ int recvEnsureMatchingTerms(struct raft *r, raft_term term, int *match)
      *   If a candidate or leader discovers that its term is out of date, it
      *   immediately reverts to follower state.
      */
-	if (*match == 1) {
-		rv = recvBumpCurrentTerm(r, term);
-		if (rv != 0) {
-			return rv;
-		}
-	}
+    assert(r);
+    assert(message);
+    assert(async);
+    raft_term term;
+    raft_id vote;
+    int match;
+    /* check and asynchronously bump term */
+    switch (message->type) {
+    case RAFT_IO_APPEND_ENTRIES:
+        term = message->append_entries.term;
+        vote = message->server_id;
+        break;
+    case RAFT_IO_APPEND_ENTRIES_RESULT:
+        term = message->append_entries_result.term;
+        vote = 0;
+        break;
+    case RAFT_IO_INSTALL_SNAPSHOT:
+        term = message->install_snapshot.term;
+        vote = message->server_id;
+        break;
+    case RAFT_IO_TIMEOUT_NOW:
+        term = message->timeout_now.term;
+        vote = message->server_id;
+        break;
+    default:
+        *async = false;
+        return 0;
+    }
+    recvCheckMatchingTerms(r, term, &match);
+    if(match > 0) {
+        *async = true;
+        return recvUpdateMeta(r,
+                              message,
+                              term,
+                              vote,
+                              recvBumpTermIOCb);
+    }
+    *async = false;
+    return 0;
+}
+/* Dispatch a single RPC message to the appropriate handler. */
+static int recvMessage(struct raft *r, struct raft_message *message)
+{
+    int rv = 0;
+    bool async;
 
-	return 0;
+    if (message->type < RAFT_IO_APPEND_ENTRIES ||
+        message->type > RAFT_IO_TIMEOUT_NOW) {
+        tracef("received unknown message type type: %d", message->type);
+        return 0;
+    }
+
+    rv = recvEnsureMatchingTerm(r, message, &async);
+
+    if (async) {
+        return rv;
+    }
+    assert(r->io->state == RAFT_IO_AVAILABLE);
+    /* tracef("%s from server %ld", message_descs[message->type - 1],
+       message->server_id); */
+
+    switch (message->type) {
+        case RAFT_IO_APPEND_ENTRIES:
+            rv = recvAppendEntries(r,
+                                   message->server_id,
+                                   &message->append_entries);
+            if (rv != 0) {
+                entryBatchesDestroy(message->append_entries.entries,
+                                    message->append_entries.n_entries);
+            }
+            break;
+        case RAFT_IO_APPEND_ENTRIES_RESULT:
+            rv = recvAppendEntriesResult(r, message->server_id,
+                                         &message->append_entries_result);
+            break;
+        case RAFT_IO_REQUEST_VOTE:
+            rv = recvRequestVote(r, message->server_id,
+                                 &message->request_vote);
+            break;
+        case RAFT_IO_REQUEST_VOTE_RESULT:
+            rv = recvRequestVoteResult(r, message->server_id,
+                                       &message->request_vote_result);
+            break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            rv = recvInstallSnapshot(r, message->server_id,
+                                     &message->install_snapshot);
+            /* Already installing a snapshot, wait for it and ignore this one */
+            if (rv == RAFT_BUSY) {
+                raft_free(message->install_snapshot.data.base);
+                raft_configuration_close(&message->install_snapshot.conf);
+                rv = 0;
+            }
+            break;
+        case RAFT_IO_TIMEOUT_NOW:
+            rv = recvTimeoutNow(r,
+                                message->server_id,
+                                &message->timeout_now);
+            break;
+    };
+
+    if (rv != 0 && rv != RAFT_NOCONNECTION) {
+        /* tracef("recv: %s: %s", message_descs[message->type - 1],
+                 raft_strerror(rv)); */
+        return rv;
+    }
+
+    /* If there's a leadership transfer in progress, check if it has
+     * completed. */
+    if (r->transfer != NULL) {
+        if (r->state == RAFT_FOLLOWER &&
+                r->follower_state.current_leader.id == r->transfer->id) {
+            membershipLeadershipTransferClose(r);
+        }
+    }
+
+    return 0;
 }
 
+void recvCb(struct raft_io *io, struct raft_message *message)
+{
+    struct raft *r = io->data;
+    int rv;
+    if (r->state == RAFT_UNAVAILABLE ||
+            r->io->state != RAFT_IO_AVAILABLE) {
+        switch (message->type) {
+            case RAFT_IO_APPEND_ENTRIES:
+                entryBatchesDestroy(message->append_entries.entries,
+                                    message->append_entries.n_entries);
+                break;
+            case RAFT_IO_INSTALL_SNAPSHOT:
+                raft_configuration_close(&message->install_snapshot.conf);
+                raft_free(message->install_snapshot.data.base);
+                break;
+        }
+        return;
+    }
+    rv = recvMessage(r, message);
+    if (rv != 0) {
+        convertToUnavailable(r);
+    }
+}
+
+void recvCheckMatchingTerms(struct raft *r, raft_term term, int *match)
+{
+    if (term < r->current_term) {
+        *match = -1;
+    } else if (term > r->current_term) {
+        *match = 1;
+    } else {
+        *match = 0;
+    }
+}
 int recvUpdateLeader(struct raft *r, const raft_id id)
 {
-	assert(r->state == RAFT_FOLLOWER);
-	if (r->follower_state.current_leader.id == id)
-		return RAFT_BADID;
+    assert(r->state == RAFT_FOLLOWER);
+
+    if (r->follower_state.current_leader.id != id) {
 	r->follower_state.current_leader.id = id;
+	if (r->state_change_cb)
+		r->state_change_cb(r, RAFT_FOLLOWER);
+    }
 
-	return 0;
+    return 0;
 }
-
 #undef tracef

@@ -5,6 +5,13 @@
 #include "log.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
 #endif
@@ -20,11 +27,9 @@ static void initProgress(struct raft_progress *p, raft_index last_index)
     p->match_index = 0;
     p->snapshot_index = 0;
     p->last_send = 0;
+    p->snapshot_last_send = 0;
     p->recent_recv = false;
     p->state = PROGRESS__PROBE;
-    p->probe_count = 0;
-	p->replicating = false;
-	p->prev_applied_index = 1;
 }
 
 int progressBuildArray(struct raft *r)
@@ -119,8 +124,14 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
 
     switch (p->state) {
         case PROGRESS__SNAPSHOT:
-            /* Raft will retry sending a Snapshot if the timeout has elapsed. */
-            result = now - p->last_send >= r->install_snapshot_timeout;
+            /* Snapshot timed out, move to PROBE */
+            if (now - p->snapshot_last_send >= r->install_snapshot_timeout) {
+                result = true;
+                progressAbortSnapshot(r, i);
+            } else {
+                /* Enforce Leadership during follower Snapshot installation */
+                result = needs_heartbeat;
+            }
             break;
         case PROGRESS__PROBE:
             /* We send at most one message per heartbeat interval. */
@@ -150,6 +161,11 @@ void progressUpdateLastSend(struct raft *r, unsigned i)
     r->leader_state.progress[i].last_send = r->io->time(r->io);
 }
 
+void progressUpdateSnapshotLastSend(struct raft *r, unsigned i)
+{
+    r->leader_state.progress[i].snapshot_last_send = r->io->time(r->io);
+}
+
 bool progressResetRecentRecv(struct raft *r, const unsigned i)
 {
     bool prev = r->leader_state.progress[i].recent_recv;
@@ -160,6 +176,11 @@ bool progressResetRecentRecv(struct raft *r, const unsigned i)
 void progressMarkRecentRecv(struct raft *r, const unsigned i)
 {
     r->leader_state.progress[i].recent_recv = true;
+}
+
+bool progressGetRecentRecv(const struct raft *r, const unsigned i)
+{
+    return r->leader_state.progress[i].recent_recv;
 }
 
 void progressToSnapshot(struct raft *r, unsigned i)
@@ -224,10 +245,6 @@ bool progressMaybeDecrement(struct raft *r,
     }
 
     p->next_index = min(rejected, last_index + 1);
-    //p->next_index = max(p->next_index, 1);
-
-	tracef("[raft][%d][%d][%s] next_index[%lld].",
-		   rkey(r), r->state, __func__, p->next_index);
 
     return true;
 }
@@ -238,8 +255,6 @@ void progressOptimisticNextIndex(struct raft *r,
 {
     struct raft_progress *p = &r->leader_state.progress[i];
     p->next_index = next_index;
-	tracef("[raft][%d][%d][%s] next_index[%lld].",
-		   rkey(r), r->state, __func__, p->next_index);
 }
 
 bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
@@ -252,8 +267,6 @@ bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
     }
     if (p->next_index < last_index + 1) {
         p->next_index = last_index + 1;
-		tracef("[raft][%d][%d][%s] next_index[%lld].",
-			   rkey(r), r->state, __func__, p->next_index);
     }
     return updated;
 }
@@ -273,9 +286,6 @@ void progressToProbe(struct raft *r, const unsigned i)
         p->next_index = p->match_index + 1;
     }
     p->state = PROGRESS__PROBE;
-
-	tracef("[raft][%d][%d][%s] next_index[%lld].",
-		   rkey(r), r->state, __func__, p->next_index);
 }
 
 void progressToPipeline(struct raft *r, const unsigned i)
@@ -289,70 +299,6 @@ bool progressSnapshotDone(struct raft *r, const unsigned i)
     struct raft_progress *p = &r->leader_state.progress[i];
     assert(p->state == PROGRESS__SNAPSHOT);
     return p->match_index >= p->snapshot_index;
-}
-
-void progressUpdateAppliedIndex(struct raft *r, unsigned i, raft_index last_applied)
-{
-	struct raft_progress *p = &r->leader_state.progress[i];
-	p->prev_applied_index = last_applied;
-}
-
-raft_index progressGetAppliedIndex(struct raft *r, unsigned i)
-{
-	struct raft_progress *p = &r->leader_state.progress[i];
-	return p->prev_applied_index;
-}
-
-bool progressPgreplicating(struct raft *r, unsigned i)
-{
-	struct raft_progress *p = &r->leader_state.progress[i];
-	return p->replicating;
-}
-
-int progressSetPgreplicating(struct raft *r, unsigned i, bool value)
-{
-    struct raft_progress *p = &r->leader_state.progress[i];
-    int res = 0;
-
-    if (value) {
-        res = __sync_bool_compare_and_swap(
-            &r->pgrep_id, RAFT_INVALID_ID, r->configuration.servers[i].id);
-    } else {
-        res = __sync_bool_compare_and_swap(
-            &r->pgrep_id, r->configuration.servers[i].id, RAFT_INVALID_ID);
-    }
-
-    if (res != 0) {
-        p->replicating = value;
-        return 0;
-    }
-
-    return -1;
-}
-
-void progressUpdateProbeCount(struct raft *r, unsigned i)
-{
-	struct raft_progress *p = &r->leader_state.progress[i];
-	if (p->state == PROGRESS__PROBE)
-		p->probe_count++;
-}
-
-void progressResetProbeCount(struct raft *r, unsigned i)
-{
-	struct raft_progress *p = &r->leader_state.progress[i];
-	if (p->state == PROGRESS__PROBE)
-		p->probe_count = 0;
-}
-
-bool progressMaybeUpdateNextIndex(struct raft *r, unsigned i)
-{
-	struct raft_progress *p = &r->leader_state.progress[i];
-	bool update = p->probe_count >= 1;
-
-	if (update)
-		p->next_index = max(p->next_index, logLastIndex(&r->log));
-
-	return update;
 }
 
 #undef tracef

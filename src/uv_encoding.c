@@ -102,7 +102,8 @@ static void encodeRequestVoteResult(const struct raft_request_vote_result *p,
     void *cursor = buf;
 
     bytePut64(&cursor, p->term);
-    bytePut64(&cursor, p->vote_granted);
+    bytePut32(&cursor, p->vote_granted);
+    bytePut32(&cursor, p->pre_vote);
 }
 
 static void encodeAppendEntries(const struct raft_append_entries *p, void *buf)
@@ -322,7 +323,8 @@ static void decodeRequestVoteResult(const uv_buf_t *buf,
     cursor = buf->base;
 
     p->term = byteGet64(&cursor);
-    p->vote_granted = byteGet64(&cursor);
+    p->vote_granted = byteGet32(&cursor);
+    p->pre_vote = byteGet32(&cursor);
 }
 
 int uvDecodeBatchHeader(const void *batch,
@@ -368,7 +370,8 @@ int uvDecodeBatchHeader(const void *batch,
     return 0;
 
 err_after_alloc:
-    raft_free(entries);
+    raft_free(*entries);
+    *entries = NULL;
 
 err:
     assert(rv != 0);

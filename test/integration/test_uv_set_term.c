@@ -46,11 +46,16 @@ static void closeCb(struct raft_io *io)
         raft_uv_close(&f->io);        \
     } while (0)
 
+static void setMetaCb(struct raft_io_set_meta *req, int status)
+{
+    (void)req;
+    (void)status;
+}
 /* Invoke f->io->set_term() and assert that no error occurs. */
 #define SET_TERM(TERM)                      \
     do {                                    \
         int _rv;                            \
-        _rv = f->io.set_term(&f->io, TERM); \
+        _rv = f->io.set_meta(&f->io, NULL, TERM, 0, setMetaCb); \
         munit_assert_int(_rv, ==, 0);       \
     } while (0)
 

@@ -9,6 +9,7 @@
 #include "queue.h"
 #include "request.h"
 #include "replication.h"
+
 /* Set to 1 to enable tracing. */
 #if 0
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -73,15 +74,6 @@ static void convertFailChange(struct raft_change *req)
 /* Clear leader state. */
 static void convertClearLeader(struct raft *r)
 {
-    /* Stop pgrep. */
-    if(r->pgrep_id != RAFT_INVALID_ID) {
-        r->io->pgrep_cancel(r->io);
-        struct pgrep_permit_info pi = {0}; 
-        int status = r->io->pgrep_tick(r->io, r->id, r->pgrep_id, r->current_term, &pi);
-        assert(status == PGREP_TICK_ABD);
-        r->pgrep_id = RAFT_INVALID_ID;
-    }
-
     if (r->leader_state.progress != NULL) {
         raft_free(r->leader_state.progress);
         r->leader_state.progress = NULL;
@@ -105,19 +97,6 @@ static void convertClearLeader(struct raft *r)
         };
     }
 
-    while (!QUEUE_IS_EMPTY(&r->leader_state.optbarriers)) {
-	struct request *req;
-	queue *head;
-	head = QUEUE_HEAD(&r->leader_state.optbarriers);
-	QUEUE_REMOVE(head);
-	req = QUEUE_DATA(head, struct request, queue);
-	assert(req->type == RAFT_BARRIER);
-	switch (req->type) {
-	    case RAFT_BARRIER:
-		convertFailBarrier((struct raft_barrier *)req);
-		break;
-	};
-    }
     /* Fail any promote request that is still outstanding because the server is
      * still catching up and no entry was submitted. */
     if (r->leader_state.change != NULL) {
@@ -153,9 +132,6 @@ void convertToFollower(struct raft *r)
     electionResetTimer(r);
 
     r->follower_state.current_leader.id = 0;
-    /* notify the user */
-    if(r->state_change_cb != NULL)
-	    r->state_change_cb(r, RAFT_FOLLOWER);
 }
 
 int convertToCandidate(struct raft *r, bool disrupt_leader)
@@ -184,11 +160,11 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
     assert(server->role == RAFT_VOTER);
 
     if (n_voters == 1) {
-            tracef("self elect and convert to leader");
+        tracef("self elect and convert to leader");
         rv =  convertToLeader(r);
+	r->leader_state.readable = true;
         if (rv != 0)
             return rv;
-	r->leader_state.readable = true;
         /* Check if we can commit some new entries. */
         replicationQuorum(r, r->last_stored);
 
@@ -207,10 +183,8 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
         raft_free(r->candidate_state.votes);
         return rv;
     }
-    /* notify the user */
-    if(r->state_change_cb != NULL)
-	    r->state_change_cb(r, RAFT_CANDIDATE);
-
+    if (r->state_change_cb)
+		r->state_change_cb(r, RAFT_CANDIDATE);
     return 0;
 }
 
@@ -226,7 +200,6 @@ int convertToLeader(struct raft *r)
 
     /* Reset apply requests queue */
     QUEUE_INIT(&r->leader_state.requests);
-    QUEUE_INIT(&r->leader_state.optbarriers);
 
     /* Allocate and initialize the progress array. */
     rv = progressBuildArray(r);
@@ -243,10 +216,8 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_start = 0;
     r->leader_state.readable = false;
 
-    /* notify the user */
-    if(r->state_change_cb != NULL)
-	    r->state_change_cb(r, RAFT_LEADER);
-
+    if (r->state_change_cb)
+		r->state_change_cb(r, RAFT_LEADER);
     return 0;
 }
 
@@ -258,10 +229,8 @@ void convertToUnavailable(struct raft *r)
     }
     convertClear(r);
     convertSetState(r, RAFT_UNAVAILABLE);
-
-    /* notify the user */
-    if(r->state_change_cb != NULL)
-	    r->state_change_cb(r, RAFT_UNAVAILABLE);
+    if (r->state_change_cb)
+		r->state_change_cb(r, RAFT_UNAVAILABLE);
 }
 
 #undef tracef

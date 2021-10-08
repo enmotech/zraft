@@ -4,7 +4,13 @@
 #include "tracing.h"
 #include "recv.h"
 #include "replication.h"
-#include "progress.h"
+
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
 
 int recvAppendEntriesResult(struct raft *r,
                             const raft_id id,
@@ -12,35 +18,23 @@ int recvAppendEntriesResult(struct raft *r,
 {
     int match;
     const struct raft_server *server;
-    int rv = 0;
-
-	bool pgrep_proc = false;
-	struct pgrep_permit_info pi = result->pi;
+    int rv;
 
     assert(r != NULL);
     assert(id > 0);
     assert(result != NULL);
 
-	unsigned i = configurationIndexOf(&r->configuration, id);
-	
-	tracef("[raft][%d][%d][pkt:%u][%s]: peer[%lld] replicating[%u] "
-		   "permit[%d] pi.time[%ld] rejected[%lld] last_log_index[%lld]",
-		   rkey(r), r->state, result->pkt, __func__, id, result->pi.replicating,
-		   result->pi.permit, result->pi.time, result->rejected, result->last_log_index);
-
     if (r->state != RAFT_LEADER) {
         tracef("local server is not leader -> ignore");
-        goto __pgrep_proc;
+        return 0;
     }
 
-    rv = recvEnsureMatchingTerms(r, result->term, &match);
-    if (rv != 0) {
-        goto __pgrep_proc;
-    }
+    recvCheckMatchingTerms(r, result->term, &match);
+    assert(match <= 0);
 
     if (match < 0) {
         tracef("local term is higher -> ignore ");
-        goto __pgrep_proc;
+        return 0;
     }
 
     /* If we have stepped down, abort here.
@@ -52,7 +46,7 @@ int recvAppendEntriesResult(struct raft *r,
      */
     if (match > 0) {
         assert(r->state == RAFT_FOLLOWER);
-        goto __pgrep_proc;
+        return 0;
     }
 
     assert(result->term == r->current_term);
@@ -61,96 +55,16 @@ int recvAppendEntriesResult(struct raft *r,
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         tracef("unknown server -> ignore");
-        goto __pgrep_proc;
+        return 0;
     }
-
-	if (result->pi.replicating == PGREP_RND_HRT)
-		goto __pgrep_proc;
 
     /* Update the progress of this server, possibly sending further entries. */
     rv = replicationUpdate(r, server->id, result);
     if (rv != 0) {
-        goto __pgrep_proc;
+        return rv;
     }
 
-	pgrep_proc = true;
-
-__pgrep_proc:
-
-	/* Pgrep:
-	 *
-	 * Release the pgrep permit. And check the returned status.
-	 */
-	if (result->pi.permit) {
-
-		raft_index prev_applied_index = min(
-			max(result->last_log_index, r->log.snapshot.last_index), r->last_applied);
-		bool unpermit = false;
-
-		if (!pgrep_proc) {
-			tracef("[raft][%d][%d][%s] meet some error pgrep_cancel.",
-				   rkey(r), r->state, __func__);
-			unpermit = true;
-			r->io->pgrep_cancel(r->io);
-
-		} else {
-			if (id != r->pgrep_id) {
-				/* i is't the pgrep destination. */
-				unpermit = true;
-
-			} else if (result->pi.replicating == PGREP_RND_ERR) {
-				/* Catch-up meet some error. */
-				tracef("[raft][%d][%d][%s] catch-up meet some error pgrep_cancel.",
-					   rkey(r), r->state, __func__);
-				unpermit = true;
-				r->io->pgrep_cancel(r->io);
-
-			} else  if (result->pi.replicating == PGREP_RND_BGN ||
-						result->pi.replicating == PGREP_RND_ING) {
-
-				/* Update the prev_applied_index and check
-				   to start a new relication. */
-				assert(prev_applied_index > 0);
-				progressUpdateAppliedIndex(r, i, prev_applied_index);
-
-				if (r->last_applied > prev_applied_index ||
-					result->pi.replicating == PGREP_RND_BGN) {
-
-					r->io->pgrep_raft_permit(r->io, &pi);
-					/* Can't get the permit with the old granted permit,
-					   because permit timeout changed. */
-					if (!pi.permit)
-						r->io->pgrep_cancel(r->io);
-
-					else {
-						/* Still some entries need applying to destination,
-						   before copy chunks.*/
-                        if (r->commit_index > r->last_applying &&
-                            r->last_applied == r->last_applying) {
-                            replicationApplyPi(r, pi);
-                        } else {
-							unsigned inx = configurationIndexOf(&r->configuration, r->pgrep_id);
-                            replicationProgressPi(r, inx, pi);
-                        }
-					}
-				} else {
-					unpermit = true;
-				}
-			}
-		}
-
-		if (unpermit) {
-			r->io->pgrep_raft_unpermit(r->io, &result->pi);
-			tracef("[raft][%d][%d][%s]: pgrep permit released.",
-				   rkey(r), r->state, __func__);
-		}
-	}
-
-	if (r->commit_index > r->last_applying &&
-		r->last_applied == r->last_applying)
-		replicationApply(r);
-
-    return rv;
+    return 0;
 }
 
 #undef tracef

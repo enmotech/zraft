@@ -14,9 +14,9 @@ void configurationInit(struct raft_configuration *c)
 
 void configurationClose(struct raft_configuration *c)
 {
+
     assert(c != NULL);
     assert(c->n == 0 || c->servers != NULL);
-
     if (c->servers != NULL) {
         raft_free(c->servers);
     }
@@ -98,7 +98,7 @@ int configurationCopy(const struct raft_configuration *src,
     configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
-	rv = configurationAdd(dst, server->id, server->role);
+        rv = configurationAdd(dst, server->id, server->role);
         if (rv != 0) {
             return rv;
         }
@@ -116,9 +116,7 @@ int configurationAdd(struct raft_configuration *c,
     assert(c != NULL);
     assert(id != 0);
 
-    if (role != RAFT_STANDBY &&
-	role != RAFT_VOTER &&
-	role != RAFT_SPARE) {
+    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
         return RAFT_BADROLE;
     }
 
@@ -139,17 +137,16 @@ int configurationAdd(struct raft_configuration *c,
     i = c->n;
     /* make sure the array is sorted */
     while (i > 0) {
-	    server = &servers[i - 1];
-	    if (server->id > id)
-		    servers[i--] = *server;
-	    else
-		    break;
+        server = &servers[i - 1];
+        if (server->id > id)
+            servers[i--] = *server;
+        else
+            break;
     }
     /* Fill the newly allocated slot (the last one) with the given details. */
     server = &servers[i];
     server->id = id;
     server->role = role;
-    server->pre_role = RAFT_UNKNOW;
 
     c->n++;
 
@@ -301,7 +298,7 @@ int configurationDecode(const struct raft_buffer *buf,
         /* Role code. */
         role = byteGet8(&cursor);
 
-	rv = configurationAdd(c, id, role);
+        rv = configurationAdd(c, id, role);
         if (rv != 0) {
             return rv;
         }

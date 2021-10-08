@@ -6,8 +6,6 @@
 #include "err.h"
 #include "log.h"
 #include "progress.h"
-#include "tracing.h"
-
 
 int membershipCanChangeConfiguration(struct raft *r)
 {
@@ -24,11 +22,6 @@ int membershipCanChangeConfiguration(struct raft *r)
     }
 
     if (r->leader_state.promotee_id != 0) {
-        rv = RAFT_CANTCHANGE;
-        goto err;
-    }
-
-    if (r->pgrep_id != RAFT_INVALID_ID) {
         rv = RAFT_CANTCHANGE;
         goto err;
     }
@@ -54,12 +47,62 @@ err:
     return rv;
 }
 
+bool membershipUpdateCatchUpRound(struct raft *r)
+{
+    unsigned server_index;
+    raft_index match_index;
+    raft_index last_index;
+    raft_time now = r->io->time(r->io);
+    raft_time round_duration;
+    bool is_up_to_date;
+    bool is_fast_enough;
+
+    assert(r->state == RAFT_LEADER);
+    assert(r->leader_state.promotee_id != 0);
+
+    server_index =
+        configurationIndexOf(&r->configuration, r->leader_state.promotee_id);
+    assert(server_index < r->configuration.n);
+
+    match_index = progressMatchIndex(r, server_index);
+
+    /* If the server did not reach the target index for this round, it did not
+     * catch up. */
+    if (match_index < r->leader_state.round_index) {
+        return false;
+    }
+
+    last_index = logLastIndex(&r->log);
+    round_duration = now - r->leader_state.round_start;
+
+    is_up_to_date = match_index == last_index;
+    is_fast_enough = round_duration < r->election_timeout;
+
+    /* If the server's log is fully up-to-date or the round that just terminated
+     * was fast enough, then the server as caught up. */
+    if (is_up_to_date || is_fast_enough) {
+        r->leader_state.round_number = 0;
+        r->leader_state.round_index = 0;
+        r->leader_state.round_start = 0;
+
+        return true;
+    }
+
+    /* If we get here it means that this catch-up round is complete, but there
+     * are more entries to replicate, or it was not fast enough. Let's start a
+     * new round. */
+    r->leader_state.round_number++;
+    r->leader_state.round_index = last_index;
+    r->leader_state.round_start = now;
+
+    return false;
+}
+
 int membershipUncommittedChange(struct raft *r,
                                 const raft_index index,
                                 const struct raft_entry *entry)
 {
     struct raft_configuration configuration;
-	const struct raft_server *server;
     int rv;
 
     assert(r != NULL);
@@ -79,26 +122,6 @@ int membershipUncommittedChange(struct raft *r,
     r->configuration = configuration;
     r->configuration_uncommitted_index = index;
 
-    /* Notify the upper module the role changed. */
-    server = configurationGet(&r->configuration, r->id);
-    if (server && r->role_change_cb) {
-        tracef("[raft][%d][%d][%s][role_notify] role[%d].",
-               rkey(r), r->state, __func__, server->role);
-		r->role_change_cb(r, server);
-		server = configurationGet(&r->configuration, r->id);
-    }
-
-	tracef("[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
-		   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
-
-	for (unsigned int i = 0; i < r->configuration.n; i++) {
-		const struct raft_server *servert = &r->configuration.servers[i];
-		(void)(servert);
-		tracef("[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
-			   rkey(r), r->state, __func__, i,
-			   servert->id, servert->role, servert->pre_role);
-	}
-
     return 0;
 
 err:
@@ -108,9 +131,8 @@ err:
 
 int membershipRollback(struct raft *r)
 {
-    const struct raft_server *server;
-    const struct raft_entry *entry;
     int rv;
+    const struct raft_entry *entry;
 
     assert(r != NULL);
     assert(r->state == RAFT_FOLLOWER);
@@ -119,43 +141,25 @@ int membershipRollback(struct raft *r)
     /* Fetch the last committed configuration entry. */
     assert(r->configuration_index != 0);
 
-    entry = logGet(&r->log, r->configuration_index);
     /* Replace the current configuration with the last committed one. */
     raft_configuration_close(&r->configuration);
-    if (entry == NULL) {/* the log has been released */
+
+    entry = logGet(&r->log, r->configuration_index);
+    if (entry != NULL) {
+        raft_configuration_init(&r->configuration);
+        rv = configurationDecode(&entry->buf, &r->configuration);
+    } else {
+        /* if the log entry was deleted, load it from the snapshot */
         assert(r->snapshot.configuration.n != 0);
         rv = configurationCopy(&r->snapshot.configuration,
                                &r->configuration);
-    } else {
-        raft_configuration_init(&r->configuration);
-        rv = configurationDecode(&entry->buf,
-                                 &r->configuration);
     }
+
     if (rv != 0) {
         return rv;
     }
 
     r->configuration_uncommitted_index = 0;
-
-    /* Notify the upper module the role changed. */
-    server = configurationGet(&r->configuration, r->id);
-    if (server && r->role_change_cb) {
-        tracef("[raft][%d][%d][%s][role_notify] role[%d].",
-               rkey(r), r->state, __func__, server->role);
-		r->role_change_cb(r, server);
-		server = configurationGet(&r->configuration, r->id);
-    }
-
-    tracef("[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
-           rkey(r), r->state, __func__, r->configuration_uncommitted_index);
-
-	for (unsigned int i = 0; i < r->configuration.n; i++) {
-		const struct raft_server *servert = &r->configuration.servers[i];
-		(void)(servert);
-		tracef("[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
-			   rkey(r), r->state, __func__, i,
-			   servert->id, servert->role, servert->pre_role);
-	}
 
     return 0;
 }
@@ -177,7 +181,7 @@ int membershipLeadershipTransferStart(struct raft *r)
     const struct raft_server *server;
     struct raft_message message;
     int rv;
-    //assert(r->transfer->send.data == NULL);
+
     server = configurationGet(&r->configuration, r->transfer->id);
     assert(server != NULL);
     message.type = RAFT_IO_TIMEOUT_NOW;

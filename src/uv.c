@@ -31,6 +31,53 @@
  * TODO: implement an exponential backoff instead.  */
 #define CONNECT_RETRY_DELAY 1000
 
+/* Cleans up files that are no longer used by the system */
+static int uvMaintenance(const char *dir, char* errmsg)
+{
+    struct uv_fs_s req;
+    struct uv_dirent_s entry;
+    int n;
+    int i;
+    int rv;
+    int rv2;
+
+    n = uv_fs_scandir(NULL, &req, dir, 0, NULL);
+    if (n < 0) {
+        ErrMsgPrintf(errmsg, "scan data directory: %s", uv_strerror(n));
+        return RAFT_IOERR;
+    }
+
+    rv = 0;
+    for (i = 0; i < n; i++) {
+        const char *filename;
+        rv = uv_fs_scandir_next(&req, &entry);
+        assert(rv == 0); /* Can't fail in libuv */
+
+        filename = entry.name;
+        /* Remove leftover tmp-files */
+        if (strncmp(filename, TMP_FILE_PREFIX, strlen(TMP_FILE_PREFIX)) == 0) {
+            UvFsRemoveFile(dir, filename, errmsg); /* Ignore errors */
+            continue;
+        }
+
+        /* Remove orphaned snapshot files */
+        bool orphan = false;
+        if ((UvSnapshotIsOrphan(dir, filename, &orphan) == 0) && orphan) {
+            UvFsRemoveFile(dir, filename, errmsg); /* Ignore errors */
+            continue;
+        }
+
+        /* Remove orphaned snapshot metadata files */
+        if ((UvSnapshotMetaIsOrphan(dir, filename, &orphan) == 0) && orphan) {
+            UvFsRemoveFile(dir, filename, errmsg); /* Ignore errors */
+        }
+    }
+
+    rv2 = uv_fs_scandir_next(&req, &entry);
+    assert(rv2 == UV_EOF);
+    return rv;
+}
+
 /* Implementation of raft_io->config. */
 static int uvInit(struct raft_io *io, raft_id id, const char *address)
 {
@@ -53,6 +100,11 @@ static int uvInit(struct raft_io *io, raft_id id, const char *address)
     }
     uv->direct_io = direct_io != 0;
     uv->block_size = direct_io != 0 ? direct_io : 4096;
+
+    rv = uvMaintenance(uv->dir, io->errmsg);
+    if (rv != 0) {
+        return rv;
+    }
 
     rv = uvMetadataLoad(uv->dir, &metadata, io->errmsg);
     if (rv != 0) {
@@ -341,7 +393,7 @@ static int uvLoadSnapshotAndEntries(struct uv *uv,
         }
         if (segments != NULL) {
             if (segments[0].is_open) {
-                *start_index = 1;
+                *start_index = (*snapshot)->index + 1;
             } else {
                 *start_index = segments[0].first_index;
             }
@@ -451,41 +503,41 @@ static int uvSetTerm(struct raft_io *io, const raft_term term)
     return 0;
 }
 
-/* Implementation of raft_io->set_term. */
-static int uvSetVote(struct raft_io *io, const raft_id server_id)
+///* Implementation of raft_io->set_term. */
+//static int uvSetVote(struct raft_io *io, const raft_id server_id)
+//{
+//    struct uv *uv;
+//    int rv;
+//    uv = io->impl;
+//    uv->metadata.version++;
+//    uv->metadata.voted_for = server_id;
+//    rv = uvMetadataStore(uv, &uv->metadata);
+//    if (rv != 0) {
+//        return rv;
+//    }
+//    return 0;
+//}
+/* Implementation of raft_io->set_meta. */
+static int uvSetMeta(struct raft_io *io,
+                     struct raft_io_set_meta *req,
+                     raft_term term,
+                     raft_id vote,
+                     raft_io_set_meta_cb cb)
 {
     struct uv *uv;
     int rv;
     uv = io->impl;
     uv->metadata.version++;
-    uv->metadata.voted_for = server_id;
+    uv->metadata.term = term;
+    uv->metadata.voted_for = vote;
     rv = uvMetadataStore(uv, &uv->metadata);
     if (rv != 0) {
         return rv;
     }
+
+    cb(req, 0);
     return 0;
 }
-
-static int uvSetTermVote(struct raft_io *io,
-                          struct raft_io_set_meta *req,
-                          raft_term term,
-                          raft_id voted_for,
-                          raft_io_set_meta_cb cb)
-{
-    int rv;
-
-    rv = uvSetTerm(io, term);
-    if(rv != 0){
-        goto callback;
-    }
-
-    rv = uvSetVote(io, voted_for);
-
-    callback:
-        cb(req, rv);
-    return 0;
-}
-
 /* Implementation of raft_io->bootstrap. */
 static int uvBootstrap(struct raft_io *io,
                        const struct raft_configuration *configuration)
@@ -564,7 +616,12 @@ static raft_time uvTime(struct raft_io *io)
 /* Implementation of raft_io->random. */
 static int uvRandom(struct raft_io *io, int min, int max)
 {
-    (void)io;
+    static bool initialized = false;
+    if (!initialized) {
+        struct uv *uv = io->impl;
+        srand((unsigned)uv_now(uv->loop) + (unsigned)uv->id);
+        initialized = true;
+    }
     return min + (abs(rand()) % (max - min));
 }
 
@@ -611,6 +668,11 @@ int raft_uv_init(struct raft_io *io,
     uv->errored = false;
     uv->direct_io = false;
     uv->async_io = false;
+#ifdef LZ4_ENABLED
+    uv->snapshot_compression = true;
+#else
+    uv->snapshot_compression = false;
+#endif
     uv->segment_size = UV__MAX_SEGMENT_SIZE;
     uv->block_size = 0;
     QUEUE_INIT(&uv->clients);
@@ -646,8 +708,9 @@ int raft_uv_init(struct raft_io *io,
     io->load = uvLoad;
     io->bootstrap = uvBootstrap;
     io->recover = uvRecover;
-    io->set_term = uvSetTerm;
-    io->set_vote = uvSetVote;
+//    io->set_term = uvSetTerm;
+//    io->set_vote = uvSetVote;
+    io->set_meta = uvSetMeta;
     io->append = UvAppend;
     io->truncate = UvTruncate;
     io->send = UvSend;
@@ -655,7 +718,6 @@ int raft_uv_init(struct raft_io *io,
     io->snapshot_get = UvSnapshotGet;
     io->time = uvTime;
     io->random = uvRandom;
-    io->set_meta = uvSetTermVote;
 
     return 0;
 
@@ -686,6 +748,19 @@ void raft_uv_set_block_size(struct raft_io *io, size_t size)
     struct uv *uv;
     uv = io->impl;
     uv->block_size = size;
+}
+
+int raft_uv_set_snapshot_compression(struct raft_io *io, bool compressed)
+{
+    struct uv *uv;
+    uv = io->impl;
+#ifndef LZ4_AVAILABLE
+    if (compressed) {
+        return RAFT_INVALID;
+    }
+#endif
+    uv->snapshot_compression = compressed;
+    return 0;
 }
 
 void raft_uv_set_connect_retry_delay(struct raft_io *io, unsigned msecs)

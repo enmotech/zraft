@@ -24,35 +24,21 @@ struct Fsm
     unsigned long long count;
 };
 
-#if defined(RAFT_ASYNC_APPLY) && RAFT_ASYNC_APPLY
 static int FsmApply(struct raft_fsm *fsm,
-		    struct raft_fsm_apply *req,
-		    const struct raft_buffer *buf,
-		    raft_fsm_apply_cb cb)
+                    struct raft_fsm_apply *req,
+		    raft_index index,
+                    const struct raft_buffer *buf,
+                    raft_fsm_apply_cb cb)
 {
+    (void)index;
     struct Fsm *f = fsm->data;
     if (buf->len != 8) {
         return RAFT_MALFORMED;
     }
     f->count += *(uint64_t *)buf->base;
     cb(req, &f->count, 0);
-    
     return 0;
 }
-#else
-static int FsmApply(struct raft_fsm *fsm,
-                    const struct raft_buffer *buf,
-                    void **result)
-{
-    struct Fsm *f = fsm->data;
-    if (buf->len != 8) {
-        return RAFT_MALFORMED;
-    }
-    f->count += *(uint64_t *)buf->base;
-    *result = &f->count;
-    return 0;
-}
-#endif
 
 static int FsmSnapshot(struct raft_fsm *fsm,
                        struct raft_buffer *bufs[],
@@ -149,7 +135,7 @@ static void serverTransferCb(struct raft_transfer *req)
     raft_id id;
     const char *address;
     raft_leader(&s->raft, &id, &address);
-    raft_close(&s->raft, 0, serverRaftCloseCb);
+    raft_close(&s->raft, false, serverRaftCloseCb);
 }
 
 /* Final callback in the shutdown sequence, invoked after the timer handle has
@@ -165,7 +151,7 @@ static void serverTimerCloseCb(struct uv_handle_s *handle)
                 return;
             }
         }
-	raft_close(&s->raft, 0, serverRaftCloseCb);
+        raft_close(&s->raft, false, serverRaftCloseCb);
     }
 }
 
@@ -236,7 +222,7 @@ static int ServerInit(struct Server *s,
         char address[64];
         unsigned server_id = i + 1;
         sprintf(address, "127.0.0.1:900%d", server_id);
-        rv = raft_configuration_add(&configuration, server_id, address,
+        rv = raft_configuration_add(&configuration, server_id,
                                     RAFT_VOTER);
         if (rv != 0) {
             Logf(s->id, "raft_configuration_add(): %s", raft_strerror(rv));

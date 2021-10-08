@@ -12,6 +12,7 @@ libraft_la_LDFLAGS = -version-info 0:7:0
 libraft_la_SOURCES = \
   src/byte.c \
   src/client.c \
+  src/compress.c \
   src/configuration.c \
   src/convert.c \
   src/election.c \
@@ -56,18 +57,31 @@ libtest_la_SOURCES = \
 
 test_unit_core_SOURCES = \
   src/byte.c \
+  src/compress.c \
   src/configuration.c \
   src/err.c \
   src/heap.c \
   src/log.c \
   test/unit/main_core.c \
   test/unit/test_byte.c \
+  test/unit/test_compress.c \
   test/unit/test_configuration.c \
   test/unit/test_err.c \
   test/unit/test_log.c \
   test/unit/test_queue.c
 test_unit_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_unit_core_LDADD = libtest.la
+
+if LZ4_AVAILABLE
+test_unit_core_CFLAGS += -DLZ4_AVAILABLE
+test_unit_core_LDFLAGS = $(LZ4_LIBS)
+libraft_la_CFLAGS += -DLZ4_AVAILABLE
+libraft_la_LDFLAGS += $(LZ4_LIBS)
+endif # LZ4_AVAILABLE
+if LZ4_ENABLED
+test_unit_core_CFLAGS += -DLZ4_ENABLED
+libraft_la_CFLAGS += -DLZ4_ENABLED
+endif # LZ4_ENABLED
 
 if FIXTURE_ENABLED
 
@@ -80,8 +94,6 @@ check_PROGRAMS += \
 
 libtest_la_SOURCES += \
   test/lib/cluster.c
-
-test_unit_core_LDADD += libraft.la
 
 test_integration_core_SOURCES = \
   test/integration/main_core.c \
@@ -100,14 +112,9 @@ test_integration_core_SOURCES = \
   test/integration/test_strerror.c \
   test/integration/test_tick.c \
   test/integration/test_transfer.c \
-  test/integration/test_start.c \
-  test/integration/test_paper.c \
-  test/integration/test_etcd_migrate_1.c \
-  test/integration/test_etcd_migrate_2.c \
-  test/integration/test_etcd_migrate_3.c 
-
+  test/integration/test_start.c
 test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
-test_integration_core_LDFLAGS = -no-install ./.libs/libraft.a
+test_integration_core_LDFLAGS = -no-install
 test_integration_core_LDADD = libtest.la libraft.la
 
 test_fuzzy_core_SOURCES = \
@@ -197,6 +204,14 @@ test_integration_uv_LDADD = libtest.la
 
 AM_CFLAGS += $(UV_CFLAGS)
 
+if LZ4_AVAILABLE
+test_integration_uv_CFLAGS += -DLZ4_AVAILABLE
+test_integration_uv_LDFLAGS += $(LZ4_LIBS)
+endif # LZ4_AVAILABLE
+if LZ4_ENABLED
+test_integration_uv_CFLAGS += -DLZ4_ENABLED
+endif # LZ4_ENABLED
+
 endif # UV_ENABLED
 
 if EXAMPLE_ENABLED
@@ -230,7 +245,7 @@ else
 endif
 
 if SANITIZE_ENABLED
-  AM_CFLAGS += -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=leak -fsanitize=undefined -fsanitize-recover=all -fcf-protection=full -fstack-protector-all
+  AM_CFLAGS += -fsanitize=address
 endif
 
 if CODE_COVERAGE_ENABLED

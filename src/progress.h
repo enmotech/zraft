@@ -49,6 +49,10 @@ raft_index progressMatchIndex(struct raft *r, unsigned i);
  * sent. */
 void progressUpdateLastSend(struct raft *r, unsigned i);
 
+/* Update the snapshot_last_send timestamp after an InstallSnaphot request has
+ * been sent. */
+void progressUpdateSnapshotLastSend(struct raft *r, unsigned i);
+
 /* Reset to false the recent_recv flag of the server at the given index,
  * returning the previous value.
  *
@@ -59,6 +63,9 @@ bool progressResetRecentRecv(struct raft *r, unsigned i);
  *
  * To be called whenever we receive an AppendEntries RPC result */
 void progressMarkRecentRecv(struct raft *r, unsigned i);
+
+/* Return the value of the recent_recv flag. */
+bool progressGetRecentRecv(const struct raft *r, unsigned i);
 
 /* Convert to the i'th server to snapshot mode. */
 void progressToSnapshot(struct raft *r, unsigned i);
@@ -100,35 +107,5 @@ bool progressMaybeDecrement(struct raft *r,
 
 /* Return true if match_index is equal or higher than the snapshot_index. */
 bool progressSnapshotDone(struct raft *r, unsigned i);
-
-
-/* Update pgrep prev_applied index to cur_applied_index. */
-void progressUpdateAppliedIndex(struct raft *r, unsigned i, raft_index last_applied);
-
-/* Get pgrep prev_applied index. */
-raft_index progressGetAppliedIndex(struct raft *r, unsigned i);
-
-/* Check if pgrep is replicating. */
-bool progressPgreplicating(struct raft *r, unsigned i);
-
-
-/* Set pgrep is relicating. */
-int progressSetPgreplicating(struct raft *r, unsigned i, bool value);
-
-/* When progress is probe state, we only send last one entry for  */
-int progressSetPgreplicating(struct raft *r, unsigned i, bool value);
-
-/* Each probe tick send out, count will plus one */
-void progressUpdateProbeCount(struct raft *r, unsigned i);
-
-/* Receive probe response, count will reset to zero */
-void progressResetProbeCount(struct raft *r, unsigned i);
-
-/*
- * Once receive no response when probe, 
- * then update next index to the lastest log index of leader
- * for avoid send more and more entries when retry probe
- */
-bool progressMaybeUpdateNextIndex(struct raft *r, unsigned i);
 
 #endif /* PROGRESS_H_ */

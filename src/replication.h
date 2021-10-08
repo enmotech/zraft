@@ -40,8 +40,6 @@ int replicationTrigger(struct raft *r, raft_index index);
  *
  * This function must be called only by leaders. */
 int replicationProgress(struct raft *r, unsigned i);
-int replicationProgressPi(struct raft *r, unsigned i, struct pgrep_permit_info pi);
-int replicationProgressInner(struct raft *r, unsigned i, struct pgrep_permit_info pi);
 
 /* Update the replication state (match and next indexes) for the given server
  * using the given AppendEntries RPC result.
@@ -52,8 +50,8 @@ int replicationProgressInner(struct raft *r, unsigned i, struct pgrep_permit_inf
  *
  * It must be called only by leaders. */
 int replicationUpdate(struct raft *r,
-                      const raft_id id,
-                      const struct raft_append_entries_result *result);
+		      const raft_id id,
+		      const struct raft_append_entries_result *result);
 
 /* Append the log entries in the given request if the Log Matching Property is
  * satisfied.
@@ -71,21 +69,20 @@ int replicationUpdate(struct raft *r,
 int replicationAppend(struct raft *r,
                       const struct raft_append_entries *args,
                       raft_index *rejected,
-                      bool *async,
-					  struct pgrep_permit_info *pi);
+                      bool *async);
 
 int replicationInstallSnapshot(struct raft *r,
                                const struct raft_install_snapshot *args,
                                raft_index *rejected,
                                bool *async);
 
+/* Returns `true` if the raft instance is currently installing a snapshot */
+bool replicationInstallSnapshotBusy(struct raft *r);
+
 /* Apply any committed entry that was not applied yet.
  *
  * It must be called by leaders or followers. */
 int replicationApply(struct raft *r);
-int replicationApplyReq(struct raft *r, void *extra);
-int replicationApplyPi(struct raft *r, struct pgrep_permit_info pi);
-int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info pi);
 
 /* Check if a quorum has been reached for the given log index, and update the
  * commit index accordingly if so.
@@ -96,6 +93,6 @@ int replicationApplyInner(struct raft *r, void *extra, struct pgrep_permit_info 
  *
  *   If there exists an N such that N > commitIndex, a majority of
  *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N */
-RAFT_API void replicationQuorum(struct raft *r, const raft_index index);
+void replicationQuorum(struct raft *r, const raft_index index);
 
 #endif /* REPLICATION_H_ */

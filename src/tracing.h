@@ -16,13 +16,4 @@ extern struct raft_tracer NoopTracer;
         TRACER->emit(TRACER, __FILE__, __LINE__, _msg); \
     } while (0)
 
-/* user-defined tracer */
-extern struct raft_tracer *UserTracer;
-
-#if !NDEBUG
-#define tracef(...) Tracef(UserTracer, __VA_ARGS__);
-#else
-#define tracef(...) 
-#endif
-
 #endif /* TRACING_H_ */

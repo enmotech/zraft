@@ -38,8 +38,3 @@ raft_index raft_last_applied(struct raft *r)
 {
     return r->last_applied;
 }
-
-raft_index raft_last_applying(struct raft *r)
-{
-    return r->last_applying;
-}

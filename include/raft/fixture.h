@@ -26,7 +26,6 @@ struct raft_fixture_server
 {
     bool alive;                /* If false, the server is down. */
     raft_id id;                /* Server ID. */
-    char address[16];          /* Server address (stringified ID). */
     struct raft_tracer tracer; /* Tracer. */
     struct raft_io io;         /* In-memory raft_io implementation. */
     struct raft raft;          /* Raft instance. */
@@ -262,14 +261,15 @@ RAFT_API bool raft_fixture_step_until_applied(struct raft_fixture *f,
                                               unsigned i,
                                               raft_index index,
                                               unsigned max_msecs);
+/**
+ * Step the cluster until the @i'th server has appended the entry at the given
+ * index, or @max_msecs have elapsed. If @i equals the number of servers, then
+ * step until all servers have appended the given entry.
+ */
 RAFT_API bool raft_fixture_step_until_appended(struct raft_fixture *f,
-				      unsigned i,
-				      raft_index index,
-				      unsigned max_msecs);
-RAFT_API bool raft_fixture_step_until_append_confirmed(struct raft_fixture *f,
-					      unsigned i,
-					      raft_index index,
-					      unsigned max_msecs);
+                                     unsigned i,
+                                     raft_index index,
+                                     unsigned max_msecs);
 /**
  * Step the cluster until the state of the @i'th server matches the given one,
  * or @max_msecs have elapsed.
@@ -305,74 +305,6 @@ RAFT_API bool raft_fixture_step_until_delivered(struct raft_fixture *f,
                                                 unsigned i,
                                                 unsigned j,
                                                 unsigned max_msecs);
-
-/**
- * Step the until cluster got a request_vote for send to i
- */
-RAFT_API bool raft_fixture_step_until_rv_for_send(struct raft_fixture *f,
-												 unsigned i,
-												 struct raft_request_vote *rv,
-												 unsigned max_msecs);
-
-/**
- * Step the server I reply request_vote_result to server J
- */
-RAFT_API bool raft_fixture_step_until_rv_response(struct raft_fixture *f,
-										 unsigned i,
-										 unsigned j,
-										 struct raft_request_vote_result *res,
-										 unsigned max_msecs);
-
-/**
- *  Step until there's a AE from leader to dst I
- */
-RAFT_API bool raft_fixture_step_until_ae_for_send(struct raft_fixture *f,
-										 unsigned i,
-										 unsigned j,
-										 struct raft_append_entries *ae,
-										 unsigned max_msecs);
-
-
-/**
- * Step until there's a AE response form I to J
- */
-RAFT_API bool raft_fixture_step_until_ae_response(struct raft_fixture *f,
-										 unsigned i,
-										 unsigned j,
-										 struct raft_append_entries_result *res,
-										 unsigned max_msecs);
-
-/**
- * Step for mock a request vote to I
- */
-RAFT_API bool raft_fixture_step_rv_mock(struct raft_fixture *f,
-									 	unsigned i,
-										struct raft_request_vote *rv);
-
-
-/**
- * Step for mock a append_entry to I
- */
-RAFT_API bool raft_fixture_step_ae_mock(struct raft_fixture *f,
-									 	unsigned i,
-									 	unsigned j,
-										struct raft_append_entries *ae);
-/**
- * Step for mock a heartbeat append_entry to I
- */
-RAFT_API bool raft_fixture_step_heartbeat_mock(struct raft_fixture *f,
-	unsigned i,
-	unsigned j,
-	struct raft_append_entries *ae);
-
-/**
- * Return te append_entry's address for mock it more convenient 
- */
- RAFT_API struct raft_append_entries *raft_fixture_get_ae_req(
-										struct raft_fixture *f,
-										unsigned i,
-										unsigned j,
-										struct raft_append_entries *ae);
 
 /**
  * Set a function to be called after every time a fixture event occurs as
@@ -505,46 +437,5 @@ RAFT_API unsigned raft_fixture_n_send(struct raft_fixture *f,
 RAFT_API unsigned raft_fixture_n_recv(struct raft_fixture *f,
                                       unsigned i,
                                       int type);
-
-
-RAFT_API void raft_fixture_set_election_timeout_min(struct raft_fixture *f,
-													unsigned i);
-/**
- * Compare the logs between @i'th and @j'th server.
- */
-
-RAFT_API bool raft_fixture_log_cmp(struct raft_fixture *f, unsigned i, unsigned j);
-
-/**
- * Step the cluster until the @i'th server has committed the entry at the given
- * index, or @max_msecs have elapsed. If @i equals the number of servers, then
- * step until all servers have committed the given entry.
- */
-bool raft_fixture_step_until_committed(struct raft_fixture *f,
-				       unsigned i,
-				       raft_index index,
-				       unsigned max_msecs);
-/**
- * Mock a global fixture errno
- */
-RAFT_API void raft_fixture_mock_errno(int errno);
-
-/**
- * Construct buf of configuration log 
- */
-RAFT_API int raft_fixture_construct_configuration_log_buf(unsigned n_server,
-														unsigned n_voter,
-														struct raft_entry *et);
-
-/**
- *	Construct a n_server, n_voter configuration
- */
-RAFT_API int raft_fixture_construct_configuration(unsigned n_server,
-												unsigned n_voter,
-												struct raft_configuration *conf);
-/**
- * check server @id can be promoted to leader
- */
-RAFT_API bool raft_fixture_promotable(struct raft_configuration *conf, unsigned id);
 
 #endif /* RAFT_FIXTURE_H */

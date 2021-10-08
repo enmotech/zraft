@@ -56,7 +56,7 @@ bool electionTimerExpired(struct raft *r);
  *   RequestVote RPCs in parallel to each of the other servers in the
  *   cluster.
  */
-RAFT_API int electionStart(struct raft *r);
+int electionStart(struct raft *r);
 
 /* Decide whether our vote should be granted to the requesting server and update
  * our state accordingly.
@@ -69,9 +69,9 @@ RAFT_API int electionStart(struct raft *r);
  *     up-to-date as receiver's log, grant vote.
  *
  * The outcome of the decision is stored through the @granted pointer. */
-RAFT_API int electionVote(struct raft *r,
-                 const struct raft_request_vote *args,
-                 bool *granted);
+void electionVote(struct raft *r,
+                  const struct raft_request_vote *args,
+                  bool *granted);
 
 /* Update the votes array by adding the vote from the server at the given
  * index. Return true if with this vote the server has reached the majority of

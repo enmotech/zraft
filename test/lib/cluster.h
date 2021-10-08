@@ -24,6 +24,7 @@
     do {                                                                     \
         unsigned _n = DEFAULT_N;                                             \
         bool _pre_vote = false;                                              \
+        unsigned _hb = 0;                                                    \
         unsigned _i;                                                         \
         int _rv;                                                             \
         if (munit_parameters_get(params, CLUSTER_N_PARAM) != NULL) {         \
@@ -33,6 +34,10 @@
             _pre_vote =                                                      \
                 atoi(munit_parameters_get(params, CLUSTER_PRE_VOTE_PARAM));  \
         }                                                                    \
+        if (munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM) != NULL) { \
+            _hb =                                                            \
+                atoi(munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM)); \
+        }                                                                    \
         munit_assert_int(_n, >, 0);                                          \
         for (_i = 0; _i < _n; _i++) {                                        \
             FsmInit(&f->fsms[_i]);                                           \
@@ -41,6 +46,10 @@
         munit_assert_int(_rv, ==, 0);                                        \
         for (_i = 0; _i < _n; _i++) {                                        \
             raft_set_pre_vote(raft_fixture_get(&f->cluster, _i), _pre_vote); \
+            if (_hb) {                                                       \
+                raft_set_heartbeat_timeout(raft_fixture_get(&f->cluster, _i),\
+                                           _hb);                             \
+            }                                                                \
         }                                                                    \
     } while (0)
 
@@ -62,6 +71,9 @@
 
 /* Munit parameter for enabling pre-vote */
 #define CLUSTER_PRE_VOTE_PARAM "cluster-pre-vote"
+
+/* Munit parameter for setting HeartBeat timeout */
+#define CLUSTER_HEARTBEAT_PARAM "cluster-heartbeat"
 
 /* Get the number of servers in the cluster. */
 #define CLUSTER_N raft_fixture_n(&f->cluster)
@@ -196,28 +208,15 @@
         munit_assert_true(done);                                               \
     }
 
+/* Step the cluster until the given index was appended by the given server (or
+ * all if N) or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_APPENDED(I, INDEX, MAX_MSECS)                        \
     {                                                                          \
-	bool done;                                                             \
-	done =                                                                 \
-	    raft_fixture_step_until_appended(&f->cluster, I, INDEX, MAX_MSECS); \
-	munit_assert_true(done);                                               \
+        bool done;                                                             \
+        done =                                                                 \
+            raft_fixture_step_until_appended(&f->cluster, I, INDEX, MAX_MSECS); \
+        munit_assert_true(done);                                               \
     }
-#define CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(I, INDEX, MAX_MSECS)                        \
-    {                                                                          \
-	bool done;                                                             \
-	done =                                                                 \
-	    raft_fixture_step_until_append_confirmed(&f->cluster, I, INDEX, MAX_MSECS); \
-	munit_assert_true(done);                                               \
-    }
-
-#define CLUSTER_STEP_UNTIL_COMMITTED(I, INDEX, MAX_MSECS)                        \
-{                                                                          \
-	bool done;                                                             \
-	done =                                                                 \
-	raft_fixture_step_until_committed(&f->cluster, I, INDEX, MAX_MSECS); \
-	munit_assert_true(done);                                               \
-}
 
 /* Step the cluster until the state of the server with the given index matches
  * the given value, or #MAX_MSECS have elapsed. */
@@ -271,20 +270,6 @@
         munit_assert_int(rv_, ==, 0);               \
     }
 
-/* Request to apply n FSM commands to add the given value to x. */
-#define CLUSTER_APPLY_ADD_N(I, REQ, VALUE, N, CB)   \
-    {                                               \
-        struct raft_buffer buf_[N];                 \
-        struct raft *raft_;                         \
-        int rv_;                                    \
-		for (unsigned idx = 0; idx < N; idx++)            \
-			FsmEncodeAddX(VALUE, &buf_[idx]);		    \
-													\
-        raft_ = raft_fixture_get(&f->cluster, I);   \
-        rv_ = raft_apply(raft_, REQ, buf_, N, CB); \
-        munit_assert_int(rv_, ==, 0);               \
-    }
-
 /* Kill the I'th server. */
 #define CLUSTER_KILL(I) raft_fixture_kill(&f->cluster, I);
 
@@ -318,15 +303,15 @@
  * submit a request to add it to the configuration as an idle server. */
 #define CLUSTER_ADD(REQ)                                               \
     {                                                                  \
-	int rc;                                                        \
-	struct raft *new_raft;                                         \
-	CLUSTER_GROW;                                                  \
-	rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                  \
-	munit_assert_int(rc, ==, 0);                                   \
-	new_raft = CLUSTER_RAFT(CLUSTER_N - 1);                        \
-	rc = raft_add(CLUSTER_RAFT(CLUSTER_LEADER), REQ, new_raft->id, \
-		      NULL);                        \
-	munit_assert_int(rc, ==, 0);                                   \
+        int rc;                                                        \
+        struct raft *new_raft;                                         \
+        CLUSTER_GROW;                                                  \
+        rc = raft_start(CLUSTER_RAFT(CLUSTER_N - 1));                  \
+        munit_assert_int(rc, ==, 0);                                   \
+        new_raft = CLUSTER_RAFT(CLUSTER_N - 1);                        \
+        rc = raft_add(CLUSTER_RAFT(CLUSTER_LEADER), REQ, new_raft->id, \
+                      NULL);                        \
+        munit_assert_int(rc, ==, 0);                                   \
     }
 
 /* Assign the given role to the server that was added last. */
@@ -431,63 +416,6 @@
 #define CLUSTER_RANDOMIZE                \
     cluster_randomize_init(&f->cluster); \
     raft_fixture_hook(&f->cluster, cluster_randomize)
-
-	/* Step until there's a append_entries rpc send form I to J */
-#define CLUSTER_STEP_UNTIL_AE(I, J, AE, MAX_MSECS)										 \
-    {																					 \
-        bool done;																		 \
-        done =																			 \
-            raft_fixture_step_until_ae_for_send (&f->cluster, I, J, AE, MAX_MSECS);		 \
-        munit_assert_true(done);														 \
-    }
-
-/* Step until there's a append_entries response send form I to J */
-#define CLUSTER_STEP_UNTIL_AE_RES(I, J, AE_RES, MAX_MSECS)								 \
-    {																					 \
-        bool done;																		 \
-        done =																			 \
-            raft_fixture_step_until_ae_response (&f->cluster, I, J, AE_RES, MAX_MSECS);  \
-        munit_assert_true(done);														 \
-    }
-
-/* Step until there's a request_vote send to I */
-#define CLUSTER_STEP_UNTIL_RV(I, RV, MAX_MSECS)										 \
-    {																					 \
-        bool done;																		 \
-        done =																			 \
-            raft_fixture_step_until_rv_for_send(&f->cluster, I, RV, MAX_MSECS);		 \
-        munit_assert_true(done);														 \
-    }
-
-/* Step until there's a request_vote response send form I to J */
-#define CLUSTER_STEP_UNTIL_RV_RES(I, J, RV_RES, MAX_MSECS)								 \
-    {																					 \
-        bool done;																		 \
-        done =																			 \
-            raft_fixture_step_until_rv_response(&f->cluster, I, J, RV_RES, MAX_MSECS);   \
-        munit_assert_true(done);														 \
-    }
-
-/* Find AE message and change it with mock*/
-#define CLUSTER_STEP_AE_MOCK(F, I, J, AE) \
-    {                                     \
-    	bool done = raft_fixture_step_ae_mock(F, I, J, AE);                                    \
-    	munit_assert_true(done);\
-    }
-
-/* Find heartbeat AE message and change it with mock*/
-#define CLUSTER_STEP_HEARTBEAT_MOCK(F, I, J, AE) \
-    {                                     \
-	bool done = raft_fixture_step_heartbeat_mock(F, I, J, AE);                                    \
-	munit_assert_true(done);\
-    }
-
-/* Check @ID is can be promoted to leader*/
-#define CLUSTER_PROMOTABLE(CONF, ID, EXPECTED) \
-    {                                \
-    	bool promotable = raft_fixture_promotable(CONF, ID); \
-    	munit_assert_true(promotable == (EXPECTED)); \
-    }
 
 void cluster_randomize_init(struct raft_fixture *f);
 void cluster_randomize(struct raft_fixture *f,

@@ -10,6 +10,13 @@
 #include "request.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 int raft_apply(struct raft *r,
                struct raft_apply *req,
                const struct raft_buffer bufs[],
@@ -31,6 +38,7 @@ int raft_apply(struct raft *r,
 
     /* Index of the first entry being appended. */
     index = logLastIndex(&r->log) + 1;
+    tracef("%u commands starting at %lld", n, index);
     req->type = RAFT_COMMAND;
     req->index = index;
     req->cb = cb;
@@ -48,10 +56,7 @@ int raft_apply(struct raft *r,
         goto err_after_log_append;
     }
 
-	tracef("[raft][%d][%d] %u |usr-req-key-1|%d-%lld|.",
-		   rkey(r), r->state, n, rkey(r), index);
-
-	return 0;
+    return 0;
 
 err_after_log_append:
     logDiscard(&r->log, index);
@@ -83,6 +88,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 
     /* Index of the barrier entry being appended. */
     index = logLastIndex(&r->log) + 1;
+    tracef("barrier starting at %lld", index);
     req->type = RAFT_BARRIER;
     req->index = index;
     req->cb = cb;
@@ -99,13 +105,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
         goto err_after_log_append;
     }
 
-	tracef("[raft][%d][%d] |usr-req-key-1|%d-%lld|.",
-		   rkey(r), r->state, rkey(r), index);
-
     return 0;
-
-	tracef("[raft][%d][%d] |usr-req-key-1|%d-%lld| failed[%d].",
-		   rkey(r), r->state, rkey(r), index, rv);
 
 err_after_log_append:
     logDiscard(&r->log, index);
@@ -114,43 +114,6 @@ err_after_buf_alloc:
     raft_entry_free(buf.base);
 err:
     return rv;
-}
-
-int raft_optbarrier(struct raft *r,
-		  struct raft_barrier *req,
-		  raft_barrier_cb cb)
-{
-	raft_index index;
-	int rv;
-
-	if (r->state != RAFT_LEADER ||
-	    r->transfer != NULL) {
-		rv = RAFT_NOTLEADER;
-		goto err;
-	}
-	/* Index of the barrier entry being appended. */
-	index = logLastIndex(&r->log);//r->commit_index;
-	req->type = RAFT_BARRIER;
-	req->index = index;
-	req->cb = cb;
-	if (r->last_applying == index)
-		cb(req, 0);
-	else
-		QUEUE_PUSH(&r->leader_state.optbarriers,
-			   &req->queue);
-
-	return 0;
-err:
-	assert(rv != 0);
-	return rv;
-}
-
-bool raft_readable(struct raft *r)
-{
-	return r->state == RAFT_LEADER &&
-			r->transfer == NULL &&
-			r->io->state == RAFT_IO_AVAILABLE &&
-			r->leader_state.readable;
 }
 
 static int clientChangeConfiguration(
@@ -194,15 +157,6 @@ static int clientChangeConfiguration(
     }
 
     r->configuration_uncommitted_index = index;
-	tracef("[raft][%d][%d][%s][conf_dump] set configuration_uncommitted_index = [%lld].",
-		   rkey(r), r->state, __func__, r->configuration_uncommitted_index);
-	for (unsigned int i = 0; i < r->configuration.n; i++) {
-		const struct raft_server *servert = &r->configuration.servers[i];
-		(void)(servert);
-		tracef("[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
-			   rkey(r), r->state, __func__, i,
-			   servert->id, servert->role, servert->pre_role);
-	}
 
     return 0;
 
@@ -227,7 +181,7 @@ int raft_add(struct raft *r,
         return rv;
     }
 
-    tracef("add server: id %llu", id);
+    tracef("add server: id %d", id);
 
     /* Make a copy of the current configuration, and add the new server to
      * it. */
@@ -236,7 +190,7 @@ int raft_add(struct raft *r,
         goto err;
     }
 
-	rv = raft_configuration_add(&configuration, id, RAFT_STANDBY);
+    rv = raft_configuration_add(&configuration, id, RAFT_SPARE);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }
@@ -271,9 +225,7 @@ int raft_assign(struct raft *r,
     raft_index last_index;
     int rv;
 
-    if (role != RAFT_STANDBY &&
-	role != RAFT_VOTER &&
-	role != RAFT_SPARE) {
+    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
         return rv;
@@ -324,21 +276,39 @@ int raft_assign(struct raft *r,
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;
 
-	(void)last_index;
+    /* If we are not promoting to the voter role or if the log of this server is
+     * already up-to-date, we can submit the configuration change
+     * immediately. */
+    if (role != RAFT_VOTER ||
+        progressMatchIndex(r, server_index) == last_index) {
+        int old_role = r->configuration.servers[server_index].role;
+        r->configuration.servers[server_index].role = role;
 
-	if (role == RAFT_VOTER)
-		r->leader_state.promotee_id = server->id;
+        rv = clientChangeConfiguration(r, req, &r->configuration);
+        if (rv != 0) {
+            r->configuration.servers[server_index].role = old_role;
+            return rv;
+        }
 
-	int old_role = r->configuration.servers[server_index].role;
-	r->configuration.servers[server_index].role = role;
+        return 0;
+    }
 
-	rv = clientChangeConfiguration(r, req, &r->configuration);
-	if (rv != 0) {
-		r->configuration.servers[server_index].role = old_role;
-		return rv;
-	}
+    r->leader_state.promotee_id = server->id;
 
-	return 0;
+    /* Initialize the first catch-up round. */
+    r->leader_state.round_number = 1;
+    r->leader_state.round_index = last_index;
+    r->leader_state.round_start = r->io->time(r->io);
+
+    /* Immediately initiate an AppendEntries request. */
+    rv = replicationProgress(r, server_index);
+    if (rv != 0 && rv != RAFT_NOCONNECTION) {
+        /* This error is not fatal. */
+        tracef("failed to send append entries to server %u: %s (%d)",
+               server->id, raft_strerror(rv), rv);
+    }
+
+    return 0;
 
 err:
     assert(rv != 0);
@@ -353,18 +323,7 @@ int raft_remove(struct raft *r,
     const struct raft_server *server;
     struct raft_configuration configuration;
     int rv;
-    /* Stop pgrep. */
-    if(r->pgrep_id == id) {
-	r->io->pgrep_cancel(r->io);
-	struct pgrep_permit_info pi = {0};
-	int status = r->io->pgrep_tick(r->io,
-				       r->id,
-				       r->pgrep_id,
-				       r->current_term,
-				       &pi);
-	assert(status == PGREP_TICK_ABD);
-	r->pgrep_id = RAFT_INVALID_ID;
-    }
+
     rv = membershipCanChangeConfiguration(r);
     if (rv != 0) {
         return rv;
@@ -376,7 +335,7 @@ int raft_remove(struct raft *r,
         goto err;
     }
 
-    tracef("remove server: id %llu", id);
+    tracef("remove server: id %d", id);
 
     /* Make a copy of the current configuration, and remove the given server
      * from it. */
@@ -487,4 +446,11 @@ err:
     return rv;
 }
 
+bool raft_readable(struct raft *r)
+{
+	return r->state == RAFT_LEADER &&
+			r->transfer == NULL &&
+			r->io->state == RAFT_IO_AVAILABLE &&
+			r->leader_state.readable;
+}
 #undef tracef

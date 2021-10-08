@@ -48,10 +48,11 @@ const struct raft_entry *logGet(struct raft_log *l, const raft_index index);
 
 /* Append a new entry to the log. */
 int logAppend(struct raft_log *l,
-	      raft_term term,
-	      unsigned short type,
-	      const struct raft_buffer *buf, void *data,
-	      void *batch);
+              raft_term term,
+              unsigned short type,
+              const struct raft_buffer *buf,
+	      void *data,
+              void *batch);
 
 /* Convenience to append a series of #RAFT_COMMAND entries. */
 int logAppendCommands(struct raft_log *l,
@@ -71,12 +72,6 @@ int logAcquire(struct raft_log *l,
                raft_index index,
                struct raft_entry *entries[],
                unsigned *n);
-int logAcquireSection(
-	struct raft_log *l,
-	raft_index index,
-	raft_index to_index,
-	struct raft_entry *entries[],
-	unsigned *n);
 
 /* Release a previously acquired array of entries. */
 void logRelease(struct raft_log *l,
@@ -88,7 +83,6 @@ void logRelease(struct raft_log *l,
  * empty this is a no-op. If @index is lower than or equal to the index of the
  * first entry in the log, then the log will become empty. */
 void logTruncate(struct raft_log *l, const raft_index index);
-int isRefs(struct raft_log *l, const raft_index index);
 
 /* Discard all entries from the given index (included) onwards. This is exactly
  * the same as truncate, but the memory of the entries does not gets

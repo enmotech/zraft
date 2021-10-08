@@ -5,6 +5,7 @@
 #include "array.h"
 #include "assert.h"
 #include "byte.h"
+#include "compress.h"
 #include "configuration.h"
 #include "heap.h"
 #include "uv.h"
@@ -20,6 +21,34 @@
 /* Arbitrary maximum configuration size. Should be practically be enough */
 #define UV__META_MAX_CONFIGURATION_SIZE 1024 * 1024
 
+/* Returns true if the filename is a valid snapshot file or snapshot meta
+ * filename depending on the `meta` switch. If the parse is successful, the
+ * arguments will contain the parsed values. */
+static bool uvSnapshotParseFilename(const char *filename,
+                                    bool meta,
+                                    raft_term *term,
+                                    raft_index *index,
+                                    raft_time *timestamp)
+{
+    /* Check if it's a well-formed snapshot filename */
+    int consumed = 0;
+    int matched;
+    size_t filename_len = strlen(filename);
+    assert(filename_len < UV__FILENAME_LEN);
+    if (meta) {
+        matched = sscanf(filename, UV__SNAPSHOT_META_TEMPLATE "%n",
+                         term, index, timestamp, &consumed);
+    } else {
+        matched = sscanf(filename, UV__SNAPSHOT_TEMPLATE "%n",
+                         term, index, timestamp, &consumed);
+    }
+    if (matched != 3 || consumed != (int)filename_len) {
+        return false;
+    }
+
+    return true;
+}
+
 /* Check if the given filename matches the pattern of a snapshot metadata
  * filename (snapshot-xxx-yyy-zzz.meta), and fill the given info structure if
  * so.
@@ -28,13 +57,7 @@
 static bool uvSnapshotInfoMatch(const char *filename,
                                 struct uvSnapshotInfo *info)
 {
-    int consumed = 0;
-    int matched;
-    size_t filename_len = strlen(filename);
-    assert(filename_len < UV__FILENAME_LEN);
-    matched = sscanf(filename, UV__SNAPSHOT_META_TEMPLATE "%n", &info->term,
-                     &info->index, &info->timestamp, &consumed);
-    if (matched != 3 || consumed != (int)filename_len) {
+    if (!uvSnapshotParseFilename(filename, true, &info->term, &info->index, &info->timestamp)) {
         return false;
     }
     strcpy(info->filename, filename);
@@ -72,7 +95,8 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
 
     /* Check if there's actually a valid snapshot file for this snapshot
      * metadata. If there's none or it's empty, it means that we aborted before
-     * finishing the snapshot, so let's remove the metadata file. */
+     * finishing the snapshot, or that another thread is still busy writing the
+     * snapshot. */
     uvSnapshotFilenameOf(&info, snapshot_filename);
     rv = UvFsFileExists(uv->dir, snapshot_filename, &exists, errmsg);
     if (rv != 0) {
@@ -81,10 +105,14 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
         return rv;
     }
     if (!exists) {
-        UvFsRemoveFile(uv->dir, filename, errmsg); /* Ignore errors */
         *appended = false;
         return 0;
     }
+
+    /* TODO This check is strictly not needed, snapshot files are created by
+     * renaming fully written and synced tmp-files. Leaving it here, just to be
+     * extra-safe. Can probably be removed once more data integrity checks are
+     * performed at startup. */
     rv = UvFsFileIsEmpty(uv->dir, snapshot_filename, &is_empty, errmsg);
     if (rv != 0) {
         tracef("is_empty %s: %s", snapshot_filename, errmsg);
@@ -92,9 +120,6 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
         return rv;
     }
     if (is_empty) {
-        /* Ignore errors */
-        UvFsRemoveFile(uv->dir, filename, errmsg);
-        UvFsRemoveFile(uv->dir, snapshot_filename, errmsg);
         *appended = false;
         return 0;
     }
@@ -106,6 +131,54 @@ int UvSnapshotInfoAppendIfMatch(struct uv *uv,
     *appended = true;
 
     return 0;
+}
+
+static int uvSnapshotIsOrphanInternal(const char *dir, const char *filename, bool meta, bool *orphan)
+{
+    int rv;
+    *orphan = false;
+
+    raft_term term;
+    raft_index index;
+    raft_time timestamp;
+    if (!uvSnapshotParseFilename(filename, meta, &term, &index, &timestamp)) {
+        return 0;
+    }
+
+    /* filename is a well-formed snapshot filename, check if the sibling file exists. */
+    char sibling_filename[UV__FILENAME_LEN];
+    if (meta) {
+        rv = snprintf(sibling_filename, UV__FILENAME_LEN, UV__SNAPSHOT_TEMPLATE,
+                      term, index, timestamp);
+    } else {
+        rv = snprintf(sibling_filename, UV__FILENAME_LEN, UV__SNAPSHOT_META_TEMPLATE,
+                      term, index, timestamp);
+    }
+
+    if (rv >= UV__FILENAME_LEN) {
+        /* Output truncated */
+        return -1;
+    }
+
+    bool sibling_exists = false;
+    char ignored[RAFT_ERRMSG_BUF_SIZE];
+    rv = UvFsFileExists(dir, sibling_filename, &sibling_exists, ignored);
+    if (rv != 0) {
+        return rv;
+    }
+
+    *orphan = !sibling_exists;
+    return 0;
+}
+
+int UvSnapshotIsOrphan(const char *dir, const char *filename, bool *orphan)
+{
+    return uvSnapshotIsOrphanInternal(dir, filename, false, orphan);
+}
+
+int UvSnapshotMetaIsOrphan(const char *dir, const char *filename, bool *orphan)
+{
+    return uvSnapshotIsOrphanInternal(dir, filename, true, orphan);
 }
 
 /* Compare two snapshots to decide which one is more recent. */
@@ -257,6 +330,16 @@ static int uvSnapshotLoadData(struct uv *uv,
         goto err;
     }
 
+    if (IsCompressed(buf.base, buf.len)) {
+        struct raft_buffer decompressed = {0};
+        rv = Decompress(buf, &decompressed, errmsg);
+        if (rv != 0) {
+            goto err_after_read_file;
+        }
+        HeapFree(buf.base);
+        buf = decompressed;
+    }
+
     snapshot->bufs = HeapMalloc(sizeof *snapshot->bufs);
     snapshot->n_bufs = 1;
     if (snapshot->bufs == NULL) {
@@ -265,7 +348,6 @@ static int uvSnapshotLoadData(struct uv *uv,
     }
 
     snapshot->bufs[0] = buf;
-
     return 0;
 
 err_after_read_file:
@@ -392,6 +474,26 @@ out:
     return rv;
 }
 
+static int makeFileCompressed(const char *dir,
+                           const char *filename,
+                           struct raft_buffer *bufs,
+                           unsigned n_bufs,
+                           char *errmsg)
+{
+    int rv;
+
+    struct raft_buffer compressed = {0};
+    rv = Compress(bufs, n_bufs, &compressed, errmsg);
+    if (rv != 0) {
+        ErrMsgWrapf(errmsg, "compress %s", filename);
+        return RAFT_IOERR;
+    }
+
+    rv = UvFsMakeFile(dir, filename, &compressed, 1, errmsg);
+    raft_free(compressed.base);
+    return rv;
+}
+
 static void uvSnapshotPutWorkCb(uv_work_t *work)
 {
     struct uvSnapshotPut *put = work->data;
@@ -414,8 +516,14 @@ static void uvSnapshotPutWorkCb(uv_work_t *work)
     sprintf(snapshot, UV__SNAPSHOT_TEMPLATE, put->snapshot->term,
             put->snapshot->index, put->meta.timestamp);
 
-    rv = UvFsMakeFile(uv->dir, snapshot, put->snapshot->bufs,
-                      put->snapshot->n_bufs, put->errmsg);
+    if (uv->snapshot_compression) {
+        rv = makeFileCompressed(uv->dir, snapshot, put->snapshot->bufs,
+                                put->snapshot->n_bufs, put->errmsg);
+    } else {
+        rv = UvFsMakeFile(uv->dir, snapshot, put->snapshot->bufs,
+                          put->snapshot->n_bufs, put->errmsg);
+    }
+
     if (rv != 0) {
         ErrMsgWrapf(put->errmsg, "write %s", snapshot);
         UvFsRemoveFile(uv->dir, metadata, errmsg);

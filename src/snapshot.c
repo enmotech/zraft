@@ -9,6 +9,13 @@
 #include "log.h"
 #include "tracing.h"
 
+/* Set to 1 to enable tracing. */
+#if 0
+#define tracef(...) Tracef(r->tracer, __VA_ARGS__)
+#else
+#define tracef(...)
+#endif
+
 void snapshotClose(struct raft_snapshot *s)
 {
     unsigned i;
@@ -29,43 +36,36 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
 {
     int rv;
 
+    assert(snapshot->n_bufs == 1);
+
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rv != 0) {
-        tracef("restore snapshot %llu: %s", snapshot->index,
-               errCodeToString(rv));
-        return rv;
+        goto err;
     }
     configurationClose(&r->snapshot.configuration);
     rv = configurationCopy(&snapshot->configuration,
                            &r->snapshot.configuration);
     if (rv != 0) {
-        tracef("restore snapshot %llu: %s", snapshot->index,
-               errCodeToString(rv));
-        return rv;
+        goto err;
     }
     configurationClose(&r->configuration);
     r->configuration = snapshot->configuration;
     r->configuration_index = snapshot->configuration_index;
-
     r->commit_index = snapshot->index;
-    r->last_applied = snapshot->index;
     r->last_applying = snapshot->index;
+    r->last_applied = snapshot->index;
     r->last_stored = snapshot->index;
 
     /* Don't free the snapshot data buffer, as ownership has been transferred to
      * the fsm. */
     raft_free(snapshot->bufs);
 
-    tracef("[raft][%d][%d][%s][conf_dump]", rkey(r), r->state, __func__);
-    for (unsigned int i = 0; i < r->configuration.n; i++) {
-        const struct raft_server *server = &r->configuration.servers[i];
-		(void)(server);
-        tracef("[raft][%d][%d][%s][conf_dump] i[%d] id[%lld] role[%d] pre_role[%d]",
-               rkey(r), r->state, __func__, i,
-               server->id, server->role, server->pre_role);
-    }
-
     return 0;
+err:
+    assert(rv != 0);
+    tracef("restore snapshot %llu: %s", snapshot->index,
+           errCodeToString(rv));
+    return rv;
 }
 
 int snapshotCopy(const struct raft_snapshot *src, struct raft_snapshot *dst)

@@ -555,7 +555,6 @@ struct raft_fsm
     void *data;
     int (*apply)(struct raft_fsm *fsm,
                  struct raft_fsm_apply *req,
-		 raft_index index,
                  const struct raft_buffer *buf,
                  raft_fsm_apply_cb cb);
     int (*snapshot)(struct raft_fsm *fsm,

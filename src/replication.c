@@ -1387,7 +1387,6 @@ static int applyCommand(struct raft *r,
 
     rv = r->fsm->apply(r->fsm,
                        &request->req,
-		       index,
                        buf,
                        applyCommandCb);
     if (rv != 0)

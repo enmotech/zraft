@@ -132,6 +132,8 @@ void convertToFollower(struct raft *r)
     electionResetTimer(r);
 
     r->follower_state.current_leader.id = 0;
+    if (r->state_change_cb)
+		r->state_change_cb(r, RAFT_FOLLOWER);
 }
 
 int convertToCandidate(struct raft *r, bool disrupt_leader)

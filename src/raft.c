@@ -187,7 +187,7 @@ int raft_abootstrap(struct raft *r,
 
 void raft_set_state_change_cb(struct raft *r, raft_state_change_cb cb)
 {
-	r->state_change_cb =cb;
+	r->state_change_cb = cb;
 }
 
 int raft_recover(struct raft *r, const struct raft_configuration *conf)

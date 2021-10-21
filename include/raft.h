@@ -1108,6 +1108,39 @@ RAFT_API void raft_heap_set(struct raft_heap *heap);
  */
 RAFT_API void raft_heap_set_default(void);
 
+/**
+ * User-definable configuration encode/decode functions.
+ *
+ * The @data field will be passed as first argument to all functions.
+ */
+struct raft_configuration_codec
+{
+	void *data; /* User data */
+	size_t (*encoded_size)(void *ptr, const struct raft_configuration *c);
+	void (*encode_to_buf)(void *ptr,
+			      const struct raft_configuration *c,
+			      void *buf);
+	int (*encode)(void *ptr,
+		      const struct raft_configuration *c,
+		      struct raft_buffer *buf);
+	int (*decode)(void *ptr,
+		      const struct raft_buffer *buf,
+		      struct raft_configuration *c);
+};
+
+/**
+ * Use a custom configuration codec.
+ */
+RAFT_API void raft_configuration_codec_set(
+					struct raft_configuration_codec *codec);
+
+/**
+ * Use the default configuration codec. This clears any
+ * custom codec specified with @raft_configuration_codec_set.
+ */
+RAFT_API void raft_configuration_codec_set_default(void);
+
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

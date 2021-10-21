@@ -201,8 +201,9 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     return 0;
 }
 
-size_t configurationEncodedSize(const struct raft_configuration *c)
+static size_t defaultEncodedSize(void *ptr, const struct raft_configuration *c)
 {
+    (void)ptr;
     size_t n = 0;
     unsigned i;
 
@@ -221,8 +222,12 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
     return bytePad64(n);
 }
 
-void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
+
+static void defaultEncodeToBuf(void *ptr,
+			       const struct raft_configuration *c,
+			       void *buf)
 {
+    (void)ptr;
     void *cursor = buf;
     unsigned i;
 
@@ -239,10 +244,11 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
         bytePut8(&cursor, (uint8_t)server->role);
     };
 }
-
-int configurationEncode(const struct raft_configuration *c,
-                        struct raft_buffer *buf)
+static int defaultEncode(void *ptr,
+			 const struct raft_configuration *c,
+			 struct raft_buffer *buf)
 {
+    (void)ptr;
     assert(c != NULL);
     assert(buf != NULL);
 
@@ -260,9 +266,11 @@ int configurationEncode(const struct raft_configuration *c,
     return 0;
 }
 
-int configurationDecode(const struct raft_buffer *buf,
-                        struct raft_configuration *c)
+static int defaultDecode(void *ptr,
+			 const struct raft_buffer *buf,
+			 struct raft_configuration *c)
 {
+    (void)ptr;
     const void *cursor;
     size_t i;
     size_t n;
@@ -305,4 +313,48 @@ int configurationDecode(const struct raft_buffer *buf,
     }
 
     return 0;
+}
+
+static struct raft_configuration_codec defaultCodec = {
+	NULL,
+	defaultEncodedSize,
+	defaultEncodeToBuf,
+	defaultEncode,
+	defaultDecode,
+};
+
+static struct raft_configuration_codec *currentCodec = &defaultCodec;
+
+
+size_t configurationEncodedSize(const struct raft_configuration *c)
+{
+	return currentCodec->encoded_size(currentCodec->data, c);
+}
+
+void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
+{
+	currentCodec->encode_to_buf(currentCodec->data, c, buf);
+}
+
+int configurationEncode(const struct raft_configuration *c,
+			struct raft_buffer *buf)
+{
+	return currentCodec->encode(currentCodec->data, c, buf);
+}
+
+int configurationDecode(const struct raft_buffer *buf,
+			struct raft_configuration *c)
+{
+	return currentCodec->decode(currentCodec->data, buf, c);
+}
+
+
+void raft_configuration_codec_set(struct raft_configuration_codec *codec)
+{
+	currentCodec = codec;
+}
+
+void raft_configuration_codec_set_default(void)
+{
+	currentCodec = &defaultCodec;
 }

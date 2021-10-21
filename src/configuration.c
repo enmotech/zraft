@@ -201,9 +201,8 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     return 0;
 }
 
-static size_t defaultEncodedSize(void *ptr, const struct raft_configuration *c)
+size_t configurationEncodedSize(const struct raft_configuration *c)
 {
-    (void)ptr;
     size_t n = 0;
     unsigned i;
 
@@ -223,11 +222,8 @@ static size_t defaultEncodedSize(void *ptr, const struct raft_configuration *c)
 }
 
 
-static void defaultEncodeToBuf(void *ptr,
-			       const struct raft_configuration *c,
-			       void *buf)
+void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 {
-    (void)ptr;
     void *cursor = buf;
     unsigned i;
 
@@ -317,24 +313,11 @@ static int defaultDecode(void *ptr,
 
 static struct raft_configuration_codec defaultCodec = {
 	NULL,
-	defaultEncodedSize,
-	defaultEncodeToBuf,
 	defaultEncode,
 	defaultDecode,
 };
 
 static struct raft_configuration_codec *currentCodec = &defaultCodec;
-
-
-size_t configurationEncodedSize(const struct raft_configuration *c)
-{
-	return currentCodec->encoded_size(currentCodec->data, c);
-}
-
-void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
-{
-	currentCodec->encode_to_buf(currentCodec->data, c, buf);
-}
 
 int configurationEncode(const struct raft_configuration *c,
 			struct raft_buffer *buf)

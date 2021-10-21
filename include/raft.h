@@ -1116,10 +1116,6 @@ RAFT_API void raft_heap_set_default(void);
 struct raft_configuration_codec
 {
 	void *data; /* User data */
-	size_t (*encoded_size)(void *ptr, const struct raft_configuration *c);
-	void (*encode_to_buf)(void *ptr,
-			      const struct raft_configuration *c,
-			      void *buf);
 	int (*encode)(void *ptr,
 		      const struct raft_configuration *c,
 		      struct raft_buffer *buf);

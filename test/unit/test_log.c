@@ -36,7 +36,7 @@ struct fixture
         buf_.base = raft_entry_malloc(8);                          \
         buf_.len = 8;                                              \
         strcpy(buf_.base, "hello");                                \
-        rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL, NULL); \
+	rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
         munit_assert_int(rv_, ==, 0);                              \
     }
 
@@ -56,7 +56,7 @@ struct fixture
         int rv_;                                                   \
         buf_.base = raft_entry_malloc(8);                          \
         buf_.len = 8;                                              \
-        rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL, NULL); \
+	rv_ = logAppend(&f->log, TERM, RAFT_COMMAND, &buf_, NULL); \
         munit_assert_int(rv_, ==, RV);                             \
         raft_free(buf_.base);                                      \
     }
@@ -77,7 +77,7 @@ struct fixture
             buf.base = (uint8_t *)batch + offset;                  \
             buf.len = 8;                                           \
             *(uint64_t *)buf.base = i * 1000;                      \
-            rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, NULL, batch); \
+	    rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, batch); \
             munit_assert_int(rv, ==, 0);                           \
             offset += 8;                                           \
         }                                                          \
@@ -606,7 +606,7 @@ TEST(logAppend, oom, setUp, tearDown, 0, logAppendOom)
     buf.base = NULL;
     buf.len = 0;
     HeapFaultEnable(&f->heap);
-    rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, NULL, NULL);
+    rv = logAppend(&f->log, 1, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
     return MUNIT_OK;
 }
@@ -1029,7 +1029,7 @@ TEST(logTruncate, acquiredOom, setUp, tearDown, 0, logTruncateAcquiredOom)
 
     HeapFaultEnable(&f->heap);
 
-    rv = logAppend(&f->log, 2, RAFT_COMMAND, &buf, NULL, NULL);
+    rv = logAppend(&f->log, 2, RAFT_COMMAND, &buf, NULL);
     munit_assert_int(rv, ==, RAFT_NOMEM);
 
     RELEASE(2);

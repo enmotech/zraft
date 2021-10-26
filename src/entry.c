@@ -14,7 +14,11 @@ void entryBatchesDestroy(struct raft_entry *entries, const size_t n)
     }
     assert(n > 0);
     for (i = 0; i < n; i++) {
-        assert(entries[i].batch != NULL);
+	if (entries[i].batch == NULL) {
+		raft_entry_free(entries[i].buf.base);
+		continue;
+	}
+
         if (entries[i].batch != batch) {
             batch = entries[i].batch;
 	    raft_free(entries[i].batch);
@@ -22,6 +26,28 @@ void entryBatchesDestroy(struct raft_entry *entries, const size_t n)
     }
     raft_free(entries);
 }
+
+void entryNonBatchDestroyPrefix(struct raft_entry *entries,
+                               size_t n,
+                               size_t prefix)
+{
+	size_t i;
+	if (entries == NULL) {
+		assert(n == 0);
+		return;
+	}
+	assert(n > 0);
+	for (i = 0; i < n; i++) {
+		if (i >= prefix)
+			break;
+
+		if (entries[i].batch == NULL) {
+			raft_entry_free(entries[i].buf.base);
+			continue;
+		}
+	}
+}
+
 
 int entryCopy(const struct raft_entry *src, struct raft_entry *dst)
 {

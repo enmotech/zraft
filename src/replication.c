@@ -924,7 +924,7 @@ respond:
 
 out:
     logRelease(&r->log, request->index, request->args.entries,
-               request->args.n_entries);
+	    request->args.n_entries);
 
     raft_free(request);
 }
@@ -1157,13 +1157,14 @@ int replicationAppend(struct raft *r,
         goto err_after_acquire_entries;
     }
 
+    entryNonBatchDestroyPrefix(args->entries, args->n_entries, i);
     raft_free(args->entries);
     return 0;
 
 err_after_acquire_entries:
-    /* Release the entries related to the IO request */
-    logRelease(&r->log, request->index, request->args.entries,
-               request->args.n_entries);
+    logDecr(&r->log, request->index, request->args.entries,
+	    request->args.n_entries);
+    raft_free(request->args.entries);
 
 err_after_request_alloc:
     /* Release all entries added to the in-memory log, making
@@ -1171,7 +1172,7 @@ err_after_request_alloc:
      * to future log entries not being persisted to disk.
      */
     if (j != 0) {
-        logTruncate(&r->log, request->index);
+        logDiscard(&r->log, request->index);
     }
     raft_free(request);
 

@@ -7,6 +7,11 @@
  * itself. The entries are supposed to belong to one or more batches. */
 void entryBatchesDestroy(struct raft_entry *entries, size_t n);
 
+/* Release prefix part of the given entires without batch */
+void entryNonBatchDestroyPrefix(struct raft_entry *entries,
+                               size_t n,
+                               size_t prefix);
+
 /* Create a copy of a log entry, including its data. */
 int entryCopy(const struct raft_entry *src, struct raft_entry *dst);
 

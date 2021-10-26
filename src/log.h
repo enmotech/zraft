@@ -64,12 +64,6 @@ int logAppendConfiguration(struct raft_log *l,
                            const raft_term term,
                            const struct raft_configuration *configuration);
 
-/* Decrease reference count for entry in array entires */
-void logDecr(struct raft_log *l,
-            const raft_index index,
-            struct raft_entry entries[],
-            unsigned n);
-
 /* Acquire an array of entries from the given index onwards. * The payload
  * memory referenced by the @buf attribute of the returned entries is guaranteed
  * to be valid until logRelease() is called. */

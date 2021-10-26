@@ -1162,9 +1162,9 @@ int replicationAppend(struct raft *r,
     return 0;
 
 err_after_acquire_entries:
-    logDecr(&r->log, request->index, request->args.entries,
-	    request->args.n_entries);
-    raft_free(request->args.entries);
+    /* Release the entries related to the IO request */
+    logRelease(&r->log, request->index, request->args.entries,
+               request->args.n_entries);
 
 err_after_request_alloc:
     /* Release all entries added to the in-memory log, making

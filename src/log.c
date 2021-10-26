@@ -662,22 +662,6 @@ const struct raft_entry *logGet(struct raft_log *l, const raft_index index)
     return &l->entries[i];
 }
 
-void logDecr(struct raft_log *l,
-            const raft_index index,
-            struct raft_entry entries[],
-            unsigned n)
-{
-	size_t i;
-
-	assert(l != NULL);
-	assert((entries == NULL && n == 0) || (entries != NULL && n > 0));
-
-	for (i = 0; i < n; i++) {
-		struct raft_entry *entry = &entries[i];
-		refsDecr(l, entry->term, index + i);
-	}
-}
-
 int logAcquire(struct raft_log *l,
                const raft_index index,
                struct raft_entry *entries[],

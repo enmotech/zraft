@@ -184,7 +184,7 @@ int raft_add(struct raft *r,
         goto err;
     }
 
-    rv = raft_configuration_add(&configuration, id, RAFT_STANDBY);
+    rv = raft_configuration_add(&configuration, id, RAFT_SPARE);
     if (rv != 0) {
         goto err_after_configuration_copy;
     }

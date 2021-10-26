@@ -769,8 +769,6 @@ struct raft
      * current leader, as described in 4.2.3 and 9.6. */
     bool pre_vote;
 
-    bool no_op;
-
     /* Limit how long to wait for a stand-by to catch-up with the log when its
      * being promoted to voter. */
     unsigned max_catch_up_rounds;
@@ -917,9 +915,6 @@ RAFT_API int raft_io_state(struct raft_io *io);
  */
 RAFT_API void raft_leader(struct raft *r, raft_id *id);
 
-RAFT_API bool raft_readable(struct raft *r);
-
-RAFT_API void raft_set_no_op(struct raft *r,bool enabled);
 /**
  * Return the index of the last entry that was appended to the local log.
  */

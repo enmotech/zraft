@@ -52,25 +52,11 @@ err:
     raft_free(request);
 }
 
-static void no_op_cb(struct raft_barrier *req, int status)
-{
-	struct raft *r;
-
-	if (status == 0) {
-		r = req->data;
-		assert(r->state == RAFT_LEADER);
-		r->leader_state.readable = true;
-	}
-
-	raft_free(req);
-}
-
 int recvRequestVoteResult(struct raft *r,
                           raft_id id,
                           const struct raft_request_vote_result *result)
 {
     size_t votes_index;
-    struct raft_barrier *breq;
     int match;
     int rv;
 
@@ -150,16 +136,6 @@ int recvRequestVoteResult(struct raft *r,
                 if (rv != 0) {
                     return rv;
                 }
-		if (r->no_op) {
-			/* add a no op entry */
-			breq = raft_malloc(sizeof(*breq));
-			if (breq == NULL) {
-				return RAFT_NOMEM;
-			}
-			breq->data = r;
-
-			return raft_barrier(r, breq, no_op_cb);
-		}
                 /* Send initial heartbeat. */
                 replicationHeartbeat(r);
             }

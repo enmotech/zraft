@@ -724,7 +724,6 @@ struct raft
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
             void *requests[2];              /* Outstanding client requests. */
-            bool readable;
         } leader_state;
     };
 

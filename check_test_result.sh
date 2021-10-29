@@ -52,9 +52,15 @@ function check_test_pass(){
 		test_cnt=`grep $test_suite_name $log_file | wc -l` 
 		pass_cnt=`grep $test_suite_name $log_file | grep 'OK' | wc -l`
 
+		if [ $test_cnt -eq 0 ];then
+			echo $test_suite_name" not found"
+			return 1
+		fi
+
 		if [ $test_cnt -eq $pass_cnt ];then
 			return 0
 		else
+			echo $test_suite_name" not all pass"
 			return 1
 		fi
 	else
@@ -78,6 +84,7 @@ function work(){
 	if [[ fail_cnt -eq 0 ]];then
 		exit 0
 	else
+		echo "raft test fail"
 		exit 1
 	fi
 }

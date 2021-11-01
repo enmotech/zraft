@@ -82,6 +82,7 @@ function work(){
 	done
 
 	if [[ fail_cnt -eq 0 ]];then
+		echo "raft test success"
 		exit 0
 	else
 		echo "raft test fail"

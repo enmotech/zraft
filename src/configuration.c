@@ -221,6 +221,7 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
     return bytePad64(n);
 }
 
+
 void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 {
     void *cursor = buf;
@@ -240,9 +241,44 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
     };
 }
 
-int configurationEncode(const struct raft_configuration *c,
-                        struct raft_buffer *buf)
+int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c)
 {
+    size_t i;
+    size_t n;
+
+    /* Check the encoding format version */
+    if (byteGet8(&buf) != ENCODING_FORMAT) {
+	return RAFT_MALFORMED;
+    }
+
+    /* Read the number of servers. */
+    n = (size_t)byteGet64Unaligned(&buf);
+
+    /* Decode the individual servers. */
+    for (i = 0; i < n; i++) {
+	raft_id id;
+	int role;
+	int rv;
+
+	/* Server ID. */
+	id = byteGet64Unaligned(&buf);
+	/* Role code. */
+	role = byteGet8(&buf);
+
+	rv = configurationAdd(c, id, role);
+	if (rv != 0) {
+	    return rv;
+	}
+    }
+
+    return 0;
+}
+
+static int defaultEncode(void *ptr,
+			 const struct raft_configuration *c,
+			 struct raft_buffer *buf)
+{
+    (void)ptr;
     assert(c != NULL);
     assert(buf != NULL);
 
@@ -260,12 +296,12 @@ int configurationEncode(const struct raft_configuration *c,
     return 0;
 }
 
-int configurationDecode(const struct raft_buffer *buf,
-                        struct raft_configuration *c)
+static int defaultDecode(void *ptr,
+			 const struct raft_buffer *buf,
+			 struct raft_configuration *c)
 {
-    const void *cursor;
-    size_t i;
-    size_t n;
+    (void)ptr;
+
 
     assert(c != NULL);
     assert(buf != NULL);
@@ -277,32 +313,36 @@ int configurationDecode(const struct raft_buffer *buf,
     assert(c->n == 0);
     assert(c->servers == NULL);
 
-    cursor = buf->base;
+    return configurationDecodeFromBuf(buf->base, c);
+}
 
-    /* Check the encoding format version */
-    if (byteGet8(&cursor) != ENCODING_FORMAT) {
-        return RAFT_MALFORMED;
-    }
+static struct raft_configuration_codec defaultCodec = {
+	NULL,
+	defaultEncode,
+	defaultDecode,
+};
 
-    /* Read the number of servers. */
-    n = (size_t)byteGet64Unaligned(&cursor);
+static struct raft_configuration_codec *currentCodec = &defaultCodec;
 
-    /* Decode the individual servers. */
-    for (i = 0; i < n; i++) {
-        raft_id id;
-        int role;
-        int rv;
+int configurationEncode(const struct raft_configuration *c,
+			struct raft_buffer *buf)
+{
+	return currentCodec->encode(currentCodec->data, c, buf);
+}
 
-        /* Server ID. */
-        id = byteGet64Unaligned(&cursor);
-        /* Role code. */
-        role = byteGet8(&cursor);
+int configurationDecode(const struct raft_buffer *buf,
+			struct raft_configuration *c)
+{
+	return currentCodec->decode(currentCodec->data, buf, c);
+}
 
-        rv = configurationAdd(c, id, role);
-        if (rv != 0) {
-            return rv;
-        }
-    }
 
-    return 0;
+void raft_configuration_codec_set(struct raft_configuration_codec *codec)
+{
+	currentCodec = codec;
+}
+
+void raft_configuration_codec_set_default(void)
+{
+	currentCodec = &defaultCodec;
 }

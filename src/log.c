@@ -400,7 +400,7 @@ void logClose(struct raft_log *l)
                 if (entry->batch != batch) {
                     /* This batch was not released yet, so let's do it now. */
                     batch = entry->batch;
-                    raft_entry_batch_free(entry);
+		    raft_free(entry->batch);
                 }
             }
         }
@@ -473,7 +473,6 @@ int logAppend(struct raft_log *l,
               const raft_term term,
               const unsigned short type,
               const struct raft_buffer *buf,
-	      void *data,
               void *batch)
 {
     int rv;
@@ -501,7 +500,6 @@ int logAppend(struct raft_log *l,
     entry->term = term;
     entry->type = type;
     entry->buf = *buf;
-    entry->data = data;
     entry->batch = batch;
 
     l->back += 1;
@@ -525,7 +523,7 @@ int logAppendCommands(struct raft_log *l,
 
     for (i = 0; i < n; i++) {
         const struct raft_buffer *buf = &bufs[i];
-        rv = logAppend(l, term, RAFT_COMMAND, buf, NULL, NULL);
+	rv = logAppend(l, term, RAFT_COMMAND, buf, NULL);
         if (rv != 0) {
             return rv;
         }
@@ -552,7 +550,7 @@ int logAppendConfiguration(struct raft_log *l,
     }
 
     /* Append the new entry to the log. */
-    rv = logAppend(l, term, RAFT_CHANGE, &buf, NULL, NULL);
+    rv = logAppend(l, term, RAFT_CHANGE, &buf, NULL);
     if (rv != 0) {
         goto err_after_encode;
     }
@@ -762,7 +760,7 @@ void logRelease(struct raft_log *l,
                 if (entry->batch != batch) {
                     if (!isBatchReferenced(l, entry->batch)) {
                         batch = entry->batch;
-                        raft_entry_batch_free(entry);
+			raft_free(entry->batch);
                     }
                 }
             }
@@ -796,7 +794,7 @@ static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
         }
     } else {
         if (!isBatchReferenced(l, entry->batch)) {
-            raft_entry_batch_free(entry);
+	    raft_free(entry->batch);
         }
     }
 }

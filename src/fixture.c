@@ -622,20 +622,22 @@ static int ioMethodTruncate(struct raft_io *raft_io, raft_index index)
         if (io->entries != NULL) {
             size_t i;
             for (i = n; i < io->n; i++) {
-                raft_free(io->entries[i].buf.base);
+		    if (io->entries[i].buf.base != NULL)
+			    raft_free(io->entries[i].buf.base);
             }
             raft_free(io->entries);
         }
         io->entries = entries;
     } else {
         /* Release everything we have */
-        if (io->entries != NULL) {
-            size_t i;
-            for (i = 0; i < io->n; i++) {
-                raft_free(io->entries[i].buf.base);
-            }
-            raft_free(io->entries);
-            io->entries = NULL;
+	if (io->entries != NULL) {
+	    size_t i;
+	    for (i = 0; i < io->n; i++) {
+		    if (io->entries[i].buf.base != NULL)
+			    raft_free(io->entries[i].buf.base);
+	    }
+	    raft_free(io->entries);
+	    io->entries = NULL;
         }
     }
 
@@ -904,7 +906,8 @@ void ioClose(struct raft_io *raft_io)
     size_t i;
     for (i = 0; i < io->n; i++) {
         struct raft_entry *entry = &io->entries[i];
-        raft_free(entry->buf.base);
+	if (entry->buf.base != NULL)
+		raft_free(entry->buf.base);
     }
     if (io->entries != NULL) {
         raft_free(io->entries);
@@ -1281,10 +1284,13 @@ static void copyLeaderLog(struct raft_fixture *f)
         struct raft_entry *entry = &entries[i];
         struct raft_buffer buf;
         buf.len = entry->buf.len;
-        buf.base = raft_entry_malloc(buf.len);
-        assert(buf.base != NULL);
-        memcpy(buf.base, entry->buf.base, buf.len);
-        rv = logAppend(&f->log, entry->term, entry->type, &buf, NULL, NULL);
+	if (buf.len > 0) {
+		buf.base = raft_entry_malloc(buf.len);
+		assert(buf.base != NULL);
+		memcpy(buf.base, entry->buf.base, buf.len);
+	} else
+		buf.base = NULL;
+	rv = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
         assert(rv == 0);
     }
     logRelease(&raft->log, 1, entries, n);

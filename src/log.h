@@ -48,11 +48,10 @@ const struct raft_entry *logGet(struct raft_log *l, const raft_index index);
 
 /* Append a new entry to the log. */
 int logAppend(struct raft_log *l,
-              raft_term term,
-              unsigned short type,
-              const struct raft_buffer *buf,
-	      void *data,
-              void *batch);
+	      raft_term term,
+	      unsigned short type,
+	      const struct raft_buffer *buf,
+	      void *batch);
 
 /* Convenience to append a series of #RAFT_COMMAND entries. */
 int logAppendCommands(struct raft_log *l,

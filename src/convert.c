@@ -132,6 +132,8 @@ void convertToFollower(struct raft *r)
     electionResetTimer(r);
 
     r->follower_state.current_leader.id = 0;
+    if (r->state_change_cb)
+		r->state_change_cb(r, RAFT_FOLLOWER);
 }
 
 int convertToCandidate(struct raft *r, bool disrupt_leader)
@@ -162,7 +164,6 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
     if (n_voters == 1) {
         tracef("self elect and convert to leader");
         rv =  convertToLeader(r);
-	r->leader_state.readable = true;
         if (rv != 0)
             return rv;
         /* Check if we can commit some new entries. */
@@ -214,7 +215,6 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_number = 0;
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
-    r->leader_state.readable = false;
 
     if (r->state_change_cb)
 		r->state_change_cb(r, RAFT_LEADER);

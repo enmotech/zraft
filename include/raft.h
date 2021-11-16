@@ -183,7 +183,6 @@ struct raft_entry
     raft_term term;         /* Term in which the entry was created. */
     unsigned short type;    /* Type (FSM command, barrier, config change). */
     struct raft_buffer buf; /* Entry data. */
-    void *data;             /* User data. */
     void *batch;            /* Batch that buf's memory points to, if any. */
 };
 
@@ -555,7 +554,6 @@ struct raft_fsm
     void *data;
     int (*apply)(struct raft_fsm *fsm,
                  struct raft_fsm_apply *req,
-		 raft_index index,
                  const struct raft_buffer *buf,
                  raft_fsm_apply_cb cb);
     int (*snapshot)(struct raft_fsm *fsm,
@@ -726,7 +724,6 @@ struct raft
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
             void *requests[2];              /* Outstanding client requests. */
-            bool readable;
         } leader_state;
     };
 
@@ -770,8 +767,6 @@ struct raft
     /* Whether to use pre-vote to avoid disconnected servers disrupting the
      * current leader, as described in 4.2.3 and 9.6. */
     bool pre_vote;
-
-    bool no_op;
 
     /* Limit how long to wait for a stand-by to catch-up with the log when its
      * being promoted to voter. */
@@ -919,9 +914,6 @@ RAFT_API int raft_io_state(struct raft_io *io);
  */
 RAFT_API void raft_leader(struct raft *r, raft_id *id);
 
-RAFT_API bool raft_readable(struct raft *r);
-
-RAFT_API void raft_set_no_op(struct raft *r,bool enabled);
 /**
  * Return the index of the last entry that was appended to the local log.
  */
@@ -1088,7 +1080,6 @@ struct raft_heap
     void (*aligned_free)(void *data, size_t alignment, void *ptr);
     void *(*entry_malloc)(void *data, size_t size);
     void (*entry_free)(void *data, void *ptr);
-    void (*entry_batch_free)(void *data, struct raft_entry *entry);
 };
 
 RAFT_API void *raft_malloc(size_t size);
@@ -1099,7 +1090,6 @@ RAFT_API void *raft_aligned_alloc(size_t alignment, size_t size);
 RAFT_API void raft_aligned_free(size_t alignment, void *ptr);
 RAFT_API void *raft_entry_malloc(size_t size);
 RAFT_API void raft_entry_free(void *ptr);
-RAFT_API void raft_entry_batch_free(struct raft_entry *entry);
 
 /**
  * Use a custom dynamic memory allocator.
@@ -1111,6 +1101,35 @@ RAFT_API void raft_heap_set(struct raft_heap *heap);
  * custom allocator specified with @raft_heap_set.
  */
 RAFT_API void raft_heap_set_default(void);
+
+/**
+ * User-definable configuration encode/decode functions.
+ *
+ * The @data field will be passed as first argument to all functions.
+ */
+struct raft_configuration_codec
+{
+	void *data; /* User data */
+	int (*encode)(void *ptr,
+		      const struct raft_configuration *c,
+		      struct raft_buffer *buf);
+	int (*decode)(void *ptr,
+		      const struct raft_buffer *buf,
+		      struct raft_configuration *c);
+};
+
+/**
+ * Use a custom configuration codec.
+ */
+RAFT_API void raft_configuration_codec_set(
+					struct raft_configuration_codec *codec);
+
+/**
+ * Use the default configuration codec. This clears any
+ * custom codec specified with @raft_configuration_codec_set.
+ */
+RAFT_API void raft_configuration_codec_set_default(void);
+
 
 #undef RAFT__REQUEST
 

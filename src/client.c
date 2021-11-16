@@ -78,13 +78,8 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     }
 
     /* TODO: use a completely empty buffer */
-    buf.len = 8;
-    buf.base = raft_entry_malloc(buf.len);
-
-    if (buf.base == NULL) {
-        rv = RAFT_NOMEM;
-        goto err;
-    }
+    buf.len = 0;
+    buf.base = NULL;
 
     /* Index of the barrier entry being appended. */
     index = logLastIndex(&r->log) + 1;
@@ -93,7 +88,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     req->index = index;
     req->cb = cb;
 
-    rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL, NULL);
+    rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
     if (rv != 0) {
         goto err_after_buf_alloc;
     }
@@ -111,7 +106,6 @@ err_after_log_append:
     logDiscard(&r->log, index);
     QUEUE_REMOVE(&req->queue);
 err_after_buf_alloc:
-    raft_entry_free(buf.base);
 err:
     return rv;
 }
@@ -446,11 +440,4 @@ err:
     return rv;
 }
 
-bool raft_readable(struct raft *r)
-{
-	return r->state == RAFT_LEADER &&
-			r->transfer == NULL &&
-			r->io->state == RAFT_IO_AVAILABLE &&
-			r->leader_state.readable;
-}
 #undef tracef

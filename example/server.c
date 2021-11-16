@@ -26,11 +26,9 @@ struct Fsm
 
 static int FsmApply(struct raft_fsm *fsm,
                     struct raft_fsm_apply *req,
-		    raft_index index,
                     const struct raft_buffer *buf,
                     raft_fsm_apply_cb cb)
 {
-    (void)index;
     struct Fsm *f = fsm->data;
     if (buf->len != 8) {
         return RAFT_MALFORMED;

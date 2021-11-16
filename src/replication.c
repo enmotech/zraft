@@ -924,7 +924,7 @@ respond:
 
 out:
     logRelease(&r->log, request->index, request->args.entries,
-               request->args.n_entries);
+	    request->args.n_entries);
 
     raft_free(request);
 }
@@ -1134,7 +1134,7 @@ int replicationAppend(struct raft *r,
           * However, this would lead to memory spikes in certain edge cases.
           * https://github.com/canonical/dqlite/issues/276
           */
-        rv = logAppend(&r->log, entry->term, entry->type, &entry->buf, entry->data, entry->batch);
+	rv = logAppend(&r->log, entry->term, entry->type, &entry->buf, entry->batch);
         if (rv != 0) {
             goto err_after_request_alloc;
         }
@@ -1157,6 +1157,7 @@ int replicationAppend(struct raft *r,
         goto err_after_acquire_entries;
     }
 
+    entryNonBatchDestroyPrefix(args->entries, args->n_entries, i);
     raft_free(args->entries);
     return 0;
 
@@ -1171,7 +1172,7 @@ err_after_request_alloc:
      * to future log entries not being persisted to disk.
      */
     if (j != 0) {
-        logTruncate(&r->log, request->index);
+        logDiscard(&r->log, request->index);
     }
     raft_free(request);
 
@@ -1387,7 +1388,6 @@ static int applyCommand(struct raft *r,
 
     rv = r->fsm->apply(r->fsm,
                        &request->req,
-		       index,
                        buf,
                        applyCommandCb);
     if (rv != 0)
@@ -1586,17 +1586,14 @@ int replicationApply(struct raft *r)
                     return 0;
                 applyBarrier(r, index);
                 r->last_applied = index;
-                rv = 0;
                 break;
             case RAFT_CHANGE:
                 if (r->last_applying > r->last_applied)
                     return 0;
                 applyChange(r, index);
                 r->last_applied = index;
-                rv = 0;
                 break;
-            default:
-                rv = 0; /* For coverity. This case can't be taken. */
+            default:/* For coverity. This case can't be taken. */
                 break;
         }
 

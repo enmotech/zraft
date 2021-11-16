@@ -50,6 +50,8 @@ size_t configurationEncodedSize(const struct raft_configuration *c);
  * which is assumed to be at least configurationEncodedSize(c) bytes. */
 void configurationEncodeToBuf(const struct raft_configuration *c, void *buf);
 
+int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c);
+
 /* Encode the given configuration object. The memory of the returned buffer is
  * allocated using raft_malloc(), and client code is responsible for releasing
  * it when no longer needed. */

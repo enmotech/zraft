@@ -304,17 +304,6 @@ int replicationProgress(struct raft *r, unsigned i)
         return 0;
     }
 
-    if (r->transfer != NULL &&
-            r->transfer->id == server->id) {
-        if (progressIsUpToDate(r, i)) {
-            int rv = membershipLeadershipTransferStart(r);
-
-            if (rv != 0) {
-                membershipLeadershipTransferClose(r);
-            }
-            return rv;
-        }
-    }
     /* From Section 3.5:
      *
      *   When sending an AppendEntries RPC, the leader includes the index and

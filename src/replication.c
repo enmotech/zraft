@@ -850,6 +850,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
+    result.pkt = args->pkt;
     result.term = r->current_term;
     if (status != 0) {
         if (r->state != RAFT_FOLLOWER) {

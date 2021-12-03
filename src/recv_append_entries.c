@@ -37,6 +37,7 @@ int recvAppendEntries(struct raft *r,
     assert(id > 0);
     assert(args != NULL);
 
+    result->pkt = args->pkt;
     result->rejected = args->prev_log_index;
     result->last_log_index = logLastIndex(&r->log);
 

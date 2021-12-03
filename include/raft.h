@@ -263,6 +263,7 @@ struct raft_request_vote_result
  */
 struct raft_append_entries
 {
+    raft_index  pkt;
     raft_term term;             /* Leader's term. */
     raft_index prev_log_index;  /* Index of log entry preceeding new ones. */
     raft_term prev_log_term;    /* Term of entry at prev_log_index. */
@@ -276,6 +277,7 @@ struct raft_append_entries
  */
 struct raft_append_entries_result
 {
+    raft_index pkt;
     raft_term term;            /* Receiver's current_term. */
     raft_index rejected;       /* If non-zero, the index that was rejected. */
     raft_index last_log_index; /* Receiver's last log entry index, as hint. */

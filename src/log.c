@@ -892,16 +892,15 @@ void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
 
     /* We must have an entry at this index */
     assert(last_term != 0);
-
-    l->snapshot.last_index = last_index;
-    l->snapshot.last_term = last_term;
-
     /* If we have not at least n entries preceeding the given last index, then
      * there's nothing to remove and we're done. */
     if (last_index <= trailing ||
         locateEntry(l, last_index - trailing) == l->size) {
         return;
     }
+
+    l->snapshot.last_index = last_index;
+    l->snapshot.last_term = last_term;
 
     removePrefix(l, last_index - trailing);
 }

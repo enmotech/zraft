@@ -18,6 +18,8 @@
 #define DEFAULT_INSTALL_SNAPSHOT_TIMEOUT 30000 /* 30 seconds */
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 #define DEFAULT_SNAPSHOT_TRAILING 2048
+#define DEFAULT_MESSAGE_LOG_THRESHOLD 32
+#define DEFAULT_INFLIGHT_LOG_THRESHOLD 1024
 
 /* Number of milliseconds after which a server promotion will be aborted if the
  * server hasn't caught up with the logs yet. */
@@ -61,6 +63,8 @@ int raft_init(struct raft *r,
     r->pre_vote = false;
     r->max_catch_up_rounds = DEFAULT_MAX_CATCH_UP_ROUNDS;
     r->max_catch_up_round_duration = DEFAULT_MAX_CATCH_UP_ROUND_DURATION;
+    r->message_log_threshold = DEFAULT_MESSAGE_LOG_THRESHOLD;
+    r->inflight_log_threshold = DEFAULT_INFLIGHT_LOG_THRESHOLD;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -244,3 +248,14 @@ unsigned long long raft_digest(const char *text, unsigned long long n)
 
     return byteFlip64(digest);
 }
+
+void raft_set_replication_message_log_threshold(struct raft *r, unsigned n)
+{
+	r->message_log_threshold = n;
+}
+
+void raft_set_replication_inflight_log_threshold(struct raft *r, unsigned n)
+{
+	r->inflight_log_threshold = n;
+}
+

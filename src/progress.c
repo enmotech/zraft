@@ -106,6 +106,15 @@ bool progressIsUpToDate(struct raft *r, unsigned i)
     return p->next_index == last_index + 1;
 }
 
+static bool progressShouldPipeMore(struct raft *r, unsigned i)
+{
+	unsigned long long size;
+
+	assert(progressNextIndex(r, i) > progressMatchIndex(r, i));
+	size = progressNextIndex(r, i) - progressMatchIndex(r, i) - 1;
+	return size < r->inflight_log_threshold;
+}
+
 bool progressShouldReplicate(struct raft *r, unsigned i)
 {
     struct raft_progress *p = &r->leader_state.progress[i];
@@ -140,7 +149,8 @@ bool progressShouldReplicate(struct raft *r, unsigned i)
         case PROGRESS__PIPELINE:
             /* In replication mode we send empty append entries messages only if
              * haven't sent anything in the last heartbeat interval. */
-            result = !progressIsUpToDate(r, i) || needs_heartbeat;
+            result = (!progressIsUpToDate(r, i) && progressShouldPipeMore(r, i))
+		    || needs_heartbeat;
             break;
     }
     return result;

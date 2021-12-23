@@ -72,6 +72,13 @@ int logAcquire(struct raft_log *l,
                struct raft_entry *entries[],
                unsigned *n);
 
+/* It's Same with logAcquire, except the max threshold*/
+int logAcquireWithMax(struct raft_log *l,
+                      const raft_index index,
+                      struct raft_entry *entries[],
+                      unsigned *n,
+                      unsigned max);
+
 /* Release a previously acquired array of entries. */
 void logRelease(struct raft_log *l,
                 raft_index index,

@@ -1092,7 +1092,7 @@ TEST(logSnapshot, trailingHigherThanNumEntries, setUp, tearDown, 0, NULL)
            2 /* offset                                               */,
            2 /* n */);
 
-    ASSERT_SNAPSHOT(4 /* index */, 2 /* term */);
+    ASSERT_SNAPSHOT(3 /* index */, 1 /* term */);
 
     munit_assert_int(NUM_ENTRIES, ==, 2);
     munit_assert_int(LAST_INDEX, ==, 4);
@@ -1121,7 +1121,7 @@ TEST(logSnapshot, trailingMatchesOutstanding, setUp, tearDown, 0, NULL)
            2 /* offset                                               */,
            2 /* n */);
 
-    ASSERT_SNAPSHOT(4 /* index */, 2 /* term */);
+    ASSERT_SNAPSHOT(3 /* index */, 1 /* term */);
 
     munit_assert_int(NUM_ENTRIES, ==, 2);
     munit_assert_int(LAST_INDEX, ==, 4);

@@ -774,6 +774,11 @@ struct raft
      * being promoted to voter. */
     unsigned max_catch_up_rounds;
     unsigned max_catch_up_round_duration;
+
+    /* Threshold for log count per AE message */
+    unsigned message_log_threshold;
+    /* The limit for unconfirmed log in pipeline mode*/
+    unsigned inflight_log_threshold;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1132,6 +1137,16 @@ RAFT_API void raft_configuration_codec_set(
  */
 RAFT_API void raft_configuration_codec_set_default(void);
 
+/**
+ *  Set log threshold per message. default(32)
+ */
+RAFT_API void raft_set_replication_message_log_threshold(struct raft *r,
+							 unsigned n);
+/**
+ * Set replication inflight log threshold. default(1024)
+ */
+RAFT_API void raft_set_replication_inflight_log_threshold(struct raft *r,
+							  unsigned n);
 
 #undef RAFT__REQUEST
 

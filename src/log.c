@@ -1,6 +1,7 @@
 #include "log.h"
 
 #include <string.h>
+#include <stdint.h>
 
 #include "../include/raft.h"
 #include "assert.h"
@@ -662,10 +663,11 @@ const struct raft_entry *logGet(struct raft_log *l, const raft_index index)
     return &l->entries[i];
 }
 
-int logAcquire(struct raft_log *l,
-               const raft_index index,
-               struct raft_entry *entries[],
-               unsigned *n)
+int logAcquireWithMax(struct raft_log *l,
+		      const raft_index index,
+		      struct raft_entry *entries[],
+		      unsigned *n,
+		      unsigned max)
 {
     size_t i;
     size_t j;
@@ -678,7 +680,7 @@ int logAcquire(struct raft_log *l,
     /* Get the array index of the first entry to acquire. */
     i = locateEntry(l, index);
 
-    if (i == l->size) {
+    if (i == l->size || max == 0) {
         *n = 0;
         *entries = NULL;
         return 0;
@@ -696,6 +698,8 @@ int logAcquire(struct raft_log *l,
     }
 
     assert(*n > 0);
+    if (*n > max)
+	    *n = max;
 
     *entries = raft_calloc(*n, sizeof **entries);
     if (*entries == NULL) {
@@ -710,6 +714,14 @@ int logAcquire(struct raft_log *l,
     }
 
     return 0;
+}
+
+int logAcquire(struct raft_log *l,
+               const raft_index index,
+               struct raft_entry *entries[],
+               unsigned *n)
+{
+	return logAcquireWithMax(l, index, entries, n, UINT32_MAX);
 }
 
 /* Return true if the given batch is referenced by any entry currently in the

@@ -66,6 +66,18 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
     raft_free(req);
 }
 
+static unsigned calcAppendEntriesNum(struct raft *r, const unsigned i)
+{
+	raft_index size;
+
+	assert(progressNextIndex(r, i) > progressMatchIndex(r, i));
+	size = progressNextIndex(r, i) - progressMatchIndex(r, i) - 1;
+
+	if (size < r->inflight_log_threshold)
+		return (unsigned)(r->inflight_log_threshold - size);
+	return 0;
+}
+
 /* Send an AppendEntries message to the i'th server, including all log entries
  * from the given point onwards. */
 static int sendAppendEntries(struct raft *r,
@@ -85,8 +97,8 @@ static int sendAppendEntries(struct raft *r,
     args->prev_log_index = prev_index;
     args->prev_log_term = prev_term;
 
-    /* TODO: implement a limit to the total size of the entries being sent */
-    rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries);
+    rv = logAcquireWithMax(&r->log, next_index, &args->entries,
+			   &args->n_entries, calcAppendEntriesNum(r, i));
     if (rv != 0) {
         goto err;
     }

@@ -19,7 +19,7 @@
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 #define DEFAULT_SNAPSHOT_TRAILING 2048
 #define DEFAULT_MESSAGE_LOG_THRESHOLD 32
-#define DEFAULT_INFLIGHT_LOG_THRESHOLD 1024
+#define DEFAULT_INFLIGHT_LOG_THRESHOLD 0
 
 /* Number of milliseconds after which a server promotion will be aborted if the
  * server hasn't caught up with the logs yet. */

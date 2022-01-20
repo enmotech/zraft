@@ -73,8 +73,12 @@ static unsigned calcAppendEntriesNum(struct raft *r, const unsigned i)
 	assert(progressNextIndex(r, i) > progressMatchIndex(r, i));
 	size = progressNextIndex(r, i) - progressMatchIndex(r, i) - 1;
 
+	if (r->inflight_log_threshold == 0)
+		return r->message_log_threshold;
+
 	if (size < r->inflight_log_threshold)
-		return (unsigned)(r->inflight_log_threshold - size);
+		return (unsigned)min((r->inflight_log_threshold - size),
+				     r->message_log_threshold);
 	return 0;
 }
 

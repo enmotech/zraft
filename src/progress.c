@@ -110,6 +110,9 @@ static bool progressShouldPipeMore(struct raft *r, unsigned i)
 {
 	unsigned long long size;
 
+	if (r->inflight_log_threshold == 0)
+		return true;
+
 	assert(progressNextIndex(r, i) > progressMatchIndex(r, i));
 	size = progressNextIndex(r, i) - progressMatchIndex(r, i) - 1;
 	return size < r->inflight_log_threshold;

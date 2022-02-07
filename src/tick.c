@@ -122,7 +122,7 @@ static int tickLeader(struct raft *r)
      *   successful round of heartbeats to a majority of its cluster; this
      *   allows clients to retry their requests with another server.
      */
-    if (now - r->election_timer_start >= r->election_timeout) {
+    if (now - r->election_timer_start >= (r->election_timeout - r->heartbeat_timeout)) {
         if (!checkContactQuorum(r)) {
             tracef("unable to contact majority of cluster -> step down");
             convertToFollower(r);

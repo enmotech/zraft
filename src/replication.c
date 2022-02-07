@@ -1154,7 +1154,14 @@ int replicationAppend(struct raft *r,
     }
 
     assert(request->args.n_entries == n);
-
+    if (request->args.n_entries == 0) {
+	    tracef("No log entries found at index %llu", request->index);
+	    tracef("args->prev_log_term = %lu, args->prev_log_index = %lu, args->n_entries = %lu",
+		   args->prev_log_term, args->prev_log_index, args->n_entries);
+	    ErrMsgPrintf(r->errmsg, "No log entries found at index %llu", request->index);
+	    rv = RAFT_SHUTDOWN;
+	    goto err_after_acquire_entries;
+    }
     request->req.data = request;
     rv = r->io->append(r->io, &request->req, request->args.entries,
                        request->args.n_entries, appendFollowerCb);

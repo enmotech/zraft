@@ -49,6 +49,7 @@ struct ioRequest
 {
     REQUEST;
 };
+static int g_fixture_errno = 0;
 
 /* Pending request to append entries to the log. */
 struct append
@@ -355,7 +356,7 @@ static void ioFlushSend(struct io *io, struct send *send)
 
     /* tracef("io: flush: %s", describeMessage(&send->message)); */
     io->n_send[send->message.type]++;
-    status = 0;
+    status = g_fixture_errno;
 
 out:
     if (send->req->cb != NULL) {
@@ -2371,6 +2372,11 @@ bool raft_fixture_step_until_committed(struct raft_fixture *f,
 {
 	struct step_commit commit = {i, index};
 	return raft_fixture_step_until(f, hasCommittedIndex, &commit, max_msecs);
+}
+
+void raft_fixture_mock_errno(int errno)
+{
+	g_fixture_errno = errno;
 }
 
 int raft_fixture_construct_configuration_log_buf(unsigned n_server,

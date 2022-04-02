@@ -1344,7 +1344,7 @@ TEST(paper_test, voterRejectLowerLastLogTerm, setUp, tearDown, 0, NULL)
 		.last_log_index = 3,
 		.candidate_id = j
 	};
-	CLUSTER_STEP_UNTIL_RV(i, &rv, 200);
+	CLUSTER_STEP_UNTIL_RV(i, &rv, 1000);
 
 	//mock a lower last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
@@ -1415,7 +1415,7 @@ TEST(paper_test, voterGrantEqualLastLogTerm, setUp, tearDown, 0, NULL)
 		.last_log_index = 3,
 		.candidate_id = j
 	};
-	CLUSTER_STEP_UNTIL_RV(i, &rv, 200);
+	CLUSTER_STEP_UNTIL_RV(i, &rv, 1000);
 
 	//mock a equal last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));
@@ -1485,7 +1485,7 @@ TEST(paper_test, voterGrantHigherLastLogTerm, setUp, tearDown, 0, NULL)
 		.last_log_index = 3,
 		.candidate_id = j
 	};
-	CLUSTER_STEP_UNTIL_RV(i, &rv, 200);
+	CLUSTER_STEP_UNTIL_RV(i, &rv, 1000);
 
 	//mock a higher last_log_term
 	raft_term t1 = logLastTerm(&(CLUSTER_RAFT(i)->log));

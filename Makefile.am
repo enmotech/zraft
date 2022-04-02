@@ -112,9 +112,11 @@ test_integration_core_SOURCES = \
   test/integration/test_strerror.c \
   test/integration/test_tick.c \
   test/integration/test_transfer.c \
-  test/integration/test_start.c
+  test/integration/test_start.c \
+  test/integration/test_paper.c
+
 test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
-test_integration_core_LDFLAGS = -no-install
+test_integration_core_LDFLAGS = -no-install ./.libs/libraft.a
 test_integration_core_LDADD = libtest.la libraft.la
 
 test_fuzzy_core_SOURCES = \

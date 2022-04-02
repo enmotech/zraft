@@ -217,6 +217,21 @@
             raft_fixture_step_until_appended(&f->cluster, I, INDEX, MAX_MSECS); \
         munit_assert_true(done);                                               \
     }
+#define CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(I, INDEX, MAX_MSECS)                        \
+    {                                                                          \
+	bool done;                                                             \
+	done =                                                                 \
+	    raft_fixture_step_until_append_confirmed(&f->cluster, I, INDEX, MAX_MSECS); \
+	munit_assert_true(done);                                               \
+    }
+
+#define CLUSTER_STEP_UNTIL_COMMITTED(I, INDEX, MAX_MSECS)                        \
+{                                                                          \
+	bool done;                                                             \
+	done =                                                                 \
+	raft_fixture_step_until_committed(&f->cluster, I, INDEX, MAX_MSECS); \
+	munit_assert_true(done);                                               \
+}
 
 /* Step the cluster until the state of the server with the given index matches
  * the given value, or #MAX_MSECS have elapsed. */
@@ -267,6 +282,20 @@
         FsmEncodeAddX(VALUE, &buf_);                \
         raft_ = raft_fixture_get(&f->cluster, I);   \
         rv_ = raft_apply(raft_, REQ, &buf_, 1, CB); \
+        munit_assert_int(rv_, ==, 0);               \
+    }
+
+/* Request to apply n FSM commands to add the given value to x. */
+#define CLUSTER_APPLY_ADD_N(I, REQ, VALUE, N, CB)   \
+    {                                               \
+        struct raft_buffer buf_[N];                 \
+        struct raft *raft_;                         \
+        int rv_;                                    \
+		for (unsigned idx = 0; idx < N; idx++)            \
+			FsmEncodeAddX(VALUE, &buf_[idx]);		    \
+													\
+        raft_ = raft_fixture_get(&f->cluster, I);   \
+        rv_ = raft_apply(raft_, REQ, buf_, N, CB); \
         munit_assert_int(rv_, ==, 0);               \
     }
 

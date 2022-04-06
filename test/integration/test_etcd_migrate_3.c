@@ -175,7 +175,6 @@ TEST(etcd_migrate, sendAppendForProgressProbe, setUp, tearDown, 0, cluster_2_par
 	munit_assert_not_null(pr_j);
 	munit_assert_llong(pr_j->next_index, ==, 2);
 	munit_assert_llong(pr_j->match_index, ==, 0);
-	munit_assert_llong(pr_j->probe_count, ==, 1);
 
 	//saturate from J to I for drop the heartbeat response
 	CLUSTER_SATURATE(j, i);
@@ -185,7 +184,6 @@ TEST(etcd_migrate, sendAppendForProgressProbe, setUp, tearDown, 0, cluster_2_par
 	munit_assert_llong(pr_j->state, ==, PROGRESS__PROBE);
 	munit_assert_llong(pr_j->next_index, ==, 2);
 	munit_assert_llong(pr_j->match_index, ==, 0);
-	munit_assert_llong(pr_j->probe_count, ==, 1);
 
 	//add ten entries, and none of them will be sent cause still be probe
 	struct raft_apply *req = munit_malloc(sizeof *req);	
@@ -195,48 +193,31 @@ TEST(etcd_migrate, sendAppendForProgressProbe, setUp, tearDown, 0, cluster_2_par
 	//and next index will update to 11 for avoid probe more entries
 	struct raft_append_entries ae = {
 		.term = 2,
-		.prev_log_index = 10,
-		.prev_log_term = 2,
-		.n_entries = 1
+		.prev_log_index = 1,
+		.prev_log_term = 1,
+		.n_entries = 10
 	};
 	CLUSTER_STEP_UNTIL_AE(i, j, &ae, 200);
 	munit_assert_llong(pr_j->state, ==, PROGRESS__PROBE);
-	munit_assert_llong(pr_j->next_index, ==, 11);
+	munit_assert_llong(pr_j->next_index, ==, 2);
 	munit_assert_llong(pr_j->match_index, ==, 0);
-	munit_assert_llong(pr_j->probe_count, ==, 1);
 
 	//do another step for flush send
 	//and probe_count will add to two
 	CLUSTER_STEP_N(1);
-	munit_assert_llong(pr_j->probe_count, ==, 2);
 
 	//step until follower receive
 	CLUSTER_STEP_UNTIL_ELAPSED(15);
 
-	//restore network and step until leader receive rejection,
-	//the probe count will be reset since the network is steady
 	CLUSTER_DESATURATE(j, i);
 	struct raft_append_entries_result ae_res = {
 		.term = 2,
-		.rejected = 10,
-		.last_log_index = 1
+		.rejected = 0,
+		.last_log_index = 11
 	};
-	CLUSTER_STEP_UNTIL_AE_RES(j, i, &ae_res, 1);
+	CLUSTER_STEP_UNTIL_AE_RES(j, i, &ae_res, 100);
 	CLUSTER_STEP_UNTIL_ELAPSED(15);
-	munit_assert_llong(pr_j->state, ==, PROGRESS__PROBE);
-	munit_assert_llong(pr_j->probe_count, ==, 0);
 
-	ASSERT_TIME(1230);
-
-	//step until retry another probe and receive response
-	CLUSTER_STEP_UNTIL_ELAPSED(70);
-	ae.prev_log_index = 1;
-	ae.prev_log_term = 1;
-	ae.n_entries = 10;
-	CLUSTER_STEP_UNTIL_AE(i, j, &ae, 1);
-	CLUSTER_STEP_UNTIL_ELAPSED(30);
-
-	//change to pipeline and all logs match
 	munit_assert_llong(pr_j->state, ==, PROGRESS__PIPELINE);
 	munit_assert_llong(pr_j->next_index, ==, 12);
 	munit_assert_llong(pr_j->match_index, ==, 11);

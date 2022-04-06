@@ -217,6 +217,21 @@
             raft_fixture_step_until_appended(&f->cluster, I, INDEX, MAX_MSECS); \
         munit_assert_true(done);                                               \
     }
+#define CLUSTER_STEP_UNTIL_APPEND_CONFIRMED(I, INDEX, MAX_MSECS)                        \
+    {                                                                          \
+	bool done;                                                             \
+	done =                                                                 \
+	    raft_fixture_step_until_append_confirmed(&f->cluster, I, INDEX, MAX_MSECS); \
+	munit_assert_true(done);                                               \
+    }
+
+#define CLUSTER_STEP_UNTIL_COMMITTED(I, INDEX, MAX_MSECS)                        \
+{                                                                          \
+	bool done;                                                             \
+	done =                                                                 \
+	raft_fixture_step_until_committed(&f->cluster, I, INDEX, MAX_MSECS); \
+	munit_assert_true(done);                                               \
+}
 
 /* Step the cluster until the state of the server with the given index matches
  * the given value, or #MAX_MSECS have elapsed. */
@@ -267,6 +282,20 @@
         FsmEncodeAddX(VALUE, &buf_);                \
         raft_ = raft_fixture_get(&f->cluster, I);   \
         rv_ = raft_apply(raft_, REQ, &buf_, 1, CB); \
+        munit_assert_int(rv_, ==, 0);               \
+    }
+
+/* Request to apply n FSM commands to add the given value to x. */
+#define CLUSTER_APPLY_ADD_N(I, REQ, VALUE, N, CB)   \
+    {                                               \
+        struct raft_buffer buf_[N];                 \
+        struct raft *raft_;                         \
+        int rv_;                                    \
+		for (unsigned idx = 0; idx < N; idx++)            \
+			FsmEncodeAddX(VALUE, &buf_[idx]);		    \
+													\
+        raft_ = raft_fixture_get(&f->cluster, I);   \
+        rv_ = raft_apply(raft_, REQ, buf_, N, CB); \
         munit_assert_int(rv_, ==, 0);               \
     }
 
@@ -416,6 +445,63 @@
 #define CLUSTER_RANDOMIZE                \
     cluster_randomize_init(&f->cluster); \
     raft_fixture_hook(&f->cluster, cluster_randomize)
+
+	/* Step until there's a append_entries rpc send form I to J */
+#define CLUSTER_STEP_UNTIL_AE(I, J, AE, MAX_MSECS)										 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_ae_for_send (&f->cluster, I, J, AE, MAX_MSECS);		 \
+        munit_assert_true(done);														 \
+    }
+
+/* Step until there's a append_entries response send form I to J */
+#define CLUSTER_STEP_UNTIL_AE_RES(I, J, AE_RES, MAX_MSECS)								 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_ae_response (&f->cluster, I, J, AE_RES, MAX_MSECS);  \
+        munit_assert_true(done);														 \
+    }
+
+/* Step until there's a request_vote send to I */
+#define CLUSTER_STEP_UNTIL_RV(I, RV, MAX_MSECS)										 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_rv_for_send(&f->cluster, I, RV, MAX_MSECS);		 \
+        munit_assert_true(done);														 \
+    }
+
+/* Step until there's a request_vote response send form I to J */
+#define CLUSTER_STEP_UNTIL_RV_RES(I, J, RV_RES, MAX_MSECS)								 \
+    {																					 \
+        bool done;																		 \
+        done =																			 \
+            raft_fixture_step_until_rv_response(&f->cluster, I, J, RV_RES, MAX_MSECS);   \
+        munit_assert_true(done);														 \
+    }
+
+/* Find AE message and change it with mock*/
+#define CLUSTER_STEP_AE_MOCK(F, I, J, AE) \
+    {                                     \
+    	bool done = raft_fixture_step_ae_mock(F, I, J, AE);                                    \
+    	munit_assert_true(done);\
+    }
+
+/* Find heartbeat AE message and change it with mock*/
+#define CLUSTER_STEP_HEARTBEAT_MOCK(F, I, J, AE) \
+    {                                     \
+	bool done = raft_fixture_step_heartbeat_mock(F, I, J, AE);                                    \
+	munit_assert_true(done);\
+    }
+
+/* Check @ID is can be promoted to leader*/
+#define CLUSTER_PROMOTABLE(CONF, ID, EXPECTED) \
+    {                                \
+    	bool promotable = raft_fixture_promotable(CONF, ID); \
+    	munit_assert_true(promotable == (EXPECTED)); \
+    }
 
 void cluster_randomize_init(struct raft_fixture *f);
 void cluster_randomize(struct raft_fixture *f,

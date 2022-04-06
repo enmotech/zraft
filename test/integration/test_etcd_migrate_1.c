@@ -1184,13 +1184,6 @@ TEST(etcd_migrate, newLeaderPendingConfig, setUp, tearDown, 0, cluster_1_params)
 	return MUNIT_OK;
 }
 
-
-static void dummy_raft_role_change_cb(struct raft *r, const struct raft_server *server)
-{
-	(void)r;
-	(void)server;
-}
-
 TEST(etcd_migrate, addNode, setUp, tearDown, 0, cluster_2_params)
 {
 	(void)params;
@@ -1201,7 +1194,6 @@ TEST(etcd_migrate, addNode, setUp, tearDown, 0, cluster_2_params)
 	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
 	r = CLUSTER_RAFT(0);
-	raft_set_role_change_cb(r, dummy_raft_role_change_cb);
 	ADD_MEMBER(0, 3, 0)
 
 	munit_assert_uint(r->configuration.n, ==, 3);
@@ -1217,18 +1209,18 @@ TEST(etcd_migrate, addLearner, setUp, tearDown, 0, cluster_2_params)
 	const struct raft_server *server;
 	struct fixture *f = data;
 
+	CLUSTER_GROW
 	CLUSTER_START
 	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
 	r = CLUSTER_RAFT(0);
-	raft_set_role_change_cb(r, dummy_raft_role_change_cb);
 	ADD_MEMBER(0, 3, 0)
 	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000)
 
 	munit_assert_uint(r->configuration.n, ==, 3);
 	server = &r->configuration.servers[2];
 	munit_assert_int(server->id, ==, 3);
-	munit_assert_int(server->role, ==, RAFT_STANDBY);
+	munit_assert_int(server->role, ==, RAFT_SPARE);
 
 	/* Convert server 1 to voter */
 	ASSIGN(0, 3, RAFT_VOTER);
@@ -1244,23 +1236,21 @@ TEST(etcd_migrate, addNodeCheckQuorum, setUp, tearDown, 0, cluster_1_params)
 	const struct raft_server *server;
 	struct fixture *f = data;
 
+	CLUSTER_GROW
 	CLUSTER_START
 	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
 	r = CLUSTER_RAFT(0);
-	raft_set_role_change_cb(r, dummy_raft_role_change_cb);
 	ADD_MEMBER(0, 2, 0)
 	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000)
 
 	server = &r->configuration.servers[1];
-	munit_assert_int(server->role, ==, RAFT_STANDBY);
+	munit_assert_int(server->role, ==, RAFT_SPARE);
 
 	ASSIGN_SUBMIT(0, 2, RAFT_VOTER)
-
-	ASSIGN_EXPECT(RAFT_LEADERSHIPLOST)
 	ASSIGN_WAIT
 
-	munit_assert_ushort(r->state, ==, RAFT_FOLLOWER);
+	munit_assert_ushort(r->state, ==, RAFT_LEADER);
 
 	return MUNIT_OK;
 }
@@ -1275,7 +1265,6 @@ TEST(etcd_migrate, removeNode, setUp, tearDown, 0, cluster_2_params)
 	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
 	r = CLUSTER_RAFT(0);
-	raft_set_role_change_cb(r, dummy_raft_role_change_cb);
 
 	REMOVE(0, 2, 0)
 	munit_assert_uint(r->configuration.n, ==, 1);
@@ -1294,14 +1283,13 @@ TEST(etcd_migrate, removeLearner, setUp, tearDown, 0, cluster_2_params)
 	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
 	r = CLUSTER_RAFT(0);
-	raft_set_role_change_cb(r, dummy_raft_role_change_cb);
 	ADD_MEMBER(0, 3, 0)
 	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000)
 
 	munit_assert_uint(r->configuration.n, ==, 3);
 
 	server = &r->configuration.servers[2];
-	munit_assert_int(server->role, ==, RAFT_STANDBY);
+	munit_assert_int(server->role, ==, RAFT_SPARE);
 
 	REMOVE(0, 3, 0)
 	munit_assert_uint(r->configuration.n, ==, 2);
@@ -1319,7 +1307,6 @@ TEST(etcd_migrate, promotable, setUp, tearDown, 0, cluster_2_params)
 	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000)
 
 	r = CLUSTER_RAFT(0);
-	raft_set_role_change_cb(r, dummy_raft_role_change_cb);
 	ADD_MEMBER(0, 3, 0)
 	CLUSTER_STEP_UNTIL_APPLIED(0, 2, 2000)
 
@@ -1362,13 +1349,10 @@ TEST(etcd_migrate, preCampaignWhileLeader, setUp, tearDown, 0, cluster_1_params)
 TEST(etcd_migrate, commitAfterRemoveNode, setUp, tearDown, 0, cluster_3_params)
 {
 	(void)params;
-	struct raft *r;
 	struct fixture *f = data;
 	struct raft_apply apply = {0};
 	struct raft_entry entry = {.term = 2, .type = RAFT_COMMAND};
 
-	r = CLUSTER_RAFT(0);
-	raft_set_role_change_cb(r, dummy_raft_role_change_cb);
 	FsmEncodeSetX(0, &entry.buf);
 	CLUSTER_ADD_ENTRY(0, &entry);
 

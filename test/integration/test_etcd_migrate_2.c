@@ -524,13 +524,13 @@ TEST(etcd_migrate, voteFromAnyState, setUp, tearDown, 0, NULL)
 	ASSERT_TERM(k, 3);
 
 	//mock a higher term.
-	CLUSTER_RAFT(i)->current_term = 3;
+	CLUSTER_RAFT(i)->current_term = 4;
 	CLUSTER_STEP_UNTIL_ELAPSED(700);
 
 	ASSERT_CANDIDATE(i);
 	ASSERT_CANDIDATE(j);
 	ASSERT_CANDIDATE(k);
-	ASSERT_TERM(i, 4);
+	ASSERT_TERM(i, 5);
 	ASSERT_TERM(j, 3);
 	ASSERT_TERM(k, 3);
 
@@ -538,7 +538,7 @@ TEST(etcd_migrate, voteFromAnyState, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(i, k);
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
-	CLUSTER_STEP_UNTIL_ELAPSED(30);
+	CLUSTER_STEP_UNTIL_ELAPSED(1000);
 
 	//I be the leader, cause candidate vote for it.
 	ASSERT_LEADER(i);
@@ -611,18 +611,22 @@ TEST(etcd_migrate, voteFromAnyStatePreVote, setUp, tearDown, 0, NULL)
 	CLUSTER_DESATURATE_BOTHWAYS(i, k);
 	CLUSTER_DESATURATE_BOTHWAYS(j, k);
 
+	CLUSTER_RAFT(i)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(j)->election_timer_start = CLUSTER_TIME;
+	CLUSTER_RAFT(k)->election_timer_start = CLUSTER_TIME;
+
 	//after pre-vote
 	CLUSTER_STEP_UNTIL_ELAPSED(30);
 
 	ASSERT_CANDIDATE(i);
 	ASSERT_CANDIDATE(j);
 	ASSERT_CANDIDATE(k);
-	ASSERT_TERM(i, 4);
+	ASSERT_TERM(i, 3);
 	ASSERT_TERM(j, 2);
 	ASSERT_TERM(k, 2);
 
 	//after real vote
-	CLUSTER_STEP_UNTIL_ELAPSED(30);
+	CLUSTER_STEP_UNTIL_ELAPSED(2000);
 
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);

@@ -4,9 +4,9 @@ function print_ret(){
 	msg=$1
 	ret=$2
 	if [[ ret -eq 0 ]];then
-		echo $msg ": SUCCESS"
+		echo $msg" SUCCESS"
 	else
-		echo $msg ": FAILED"
+		echo $msg" FAILED"
 		exit $ret
 	fi
 }

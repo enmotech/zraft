@@ -1,8 +1,5 @@
 #! /usr/bin/env bash
 
-log_file='./test-suite.log'
-test_suites=('paper_test' 'etcd_migrate')
-
 function print_ret(){
 	msg=$1
 	ret=$2
@@ -10,85 +7,47 @@ function print_ret(){
 		echo $msg ": SUCCESS"
 	else
 		echo $msg ": FAILED"
+		exit $ret
 	fi
 }
 
 #make and run tests
-function make_check(){
+function work(){
 	#autoreconf
 	if [ ! -e "./configure" ];then
 		autoreconf -i
-		print_ret "Autoreconf" $?
+		print_ret "autoreconf" $?
 	fi
 
 	#update code
 	git stash ./
 	git checkout master
 	git pull
-	print_ret "Swtich To Master And Update" $?
+	print_ret "update master" $?
 	
-
 	#clean
 	if [ -e "./Makefile" ];then
 		make clean 1>/dev/null 2>&1
 		rm -f Makefile
 	fi 
-	print_ret "Clean Environment" $?
+	print_ret "clean env" $?
 
 	#configure
 	./configure --disable-libtool-lock --disable-uv --enable-debug=yes --enable-sanitize=yes --enable-code-coverage 1>/dev/null 2>&1
-	print_ret "Configure Enable Fixture And Debug" $?
+	print_ret "configure" $?
 
 	#make check
 	make check 1>/dev/null 2>&1
-	print_ret "Make & Run Tests" 0
+	if [[ $? -eq 0 ]];then
+		echo "compile run SUCCESS"
+		exit 0
+	else
+		#TODO colloect logs
+		echo "compile run FAIL"
+		exit 1
+	fi
 }
 
 #check tests result
-function check_test_pass(){
-	test_suite_name=$1
-	if [ -e "./test-suite.log" ];then
-		grep $test_suite_name $log_file
-		test_cnt=`grep $test_suite_name $log_file | wc -l` 
-		pass_cnt=`grep $test_suite_name $log_file | grep 'OK' | wc -l`
-
-		if [ $test_cnt -eq 0 ];then
-			echo $test_suite_name" not found"
-			return 1
-		fi
-
-		if [ $test_cnt -eq $pass_cnt ];then
-			return 0
-		else
-			echo $test_suite_name" not all pass"
-			return 1
-		fi
-	else
-		exit 1
-	fi
-}
-
-function work(){
-	make_check
-
-	echo "----------------------------------------Check Results---------------------------------------------"
-	echo "--------------------------------------------------------------------------------------------------"
-
-	fail_cnt=0
-	for test_suite in ${test_suites[@]}; do
-		check_test_pass $test_suite
-		ret=$?
-		fail_cnt=$[$ret+$fail_cnt]
-	done
-
-	if [[ fail_cnt -eq 0 ]];then
-		echo "raft test success"
-		exit 0
-	else
-		echo "raft test fail"
-		exit 1
-	fi
-}
-
 work
 

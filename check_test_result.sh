@@ -22,7 +22,7 @@ function make_check(){
 	fi
 
 	#update code
-	git restore ./
+	git stash ./
 	git checkout master
 	git pull
 	print_ret "Swtich To Master And Update" $?

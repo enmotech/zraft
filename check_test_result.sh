@@ -20,7 +20,7 @@ function work(){
 	fi
 
 	#update code
-	git stash ./
+	git stash
 	git checkout master
 	git pull
 	print_ret "update master" $?

@@ -6,7 +6,7 @@ function print_ret(){
 	if [[ ret -eq 0 ]];then
 		echo $msg" SUCCESS"
 	else
-		echo $msg" FAILED"
+		echo $msg" FAIL"
 		exit $ret
 	fi
 }
@@ -39,11 +39,10 @@ function work(){
 	#make check
 	make check 1>/dev/null 2>&1
 	if [[ $? -eq 0 ]];then
-		echo "compile run SUCCESS"
+		echo "raft test success"
 		exit 0
 	else
-		#TODO colloect logs
-		echo "compile run FAIL"
+		echo "raft test fail"
 		exit 1
 	fi
 }

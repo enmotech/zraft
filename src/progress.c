@@ -258,6 +258,7 @@ bool progressMaybeDecrement(struct raft *r,
     }
 
     p->next_index = min(rejected, last_index + 1);
+    assert(p->next_index > p->match_index);
 
     return true;
 }
@@ -268,6 +269,7 @@ void progressOptimisticNextIndex(struct raft *r,
 {
     struct raft_progress *p = &r->leader_state.progress[i];
     p->next_index = next_index;
+    assert(p->next_index > p->match_index);
 }
 
 bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
@@ -281,6 +283,8 @@ bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
     if (p->next_index < last_index + 1) {
         p->next_index = last_index + 1;
     }
+
+    assert(p->next_index > p->match_index);
     return updated;
 }
 

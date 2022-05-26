@@ -36,7 +36,8 @@ libraft_la_SOURCES = \
   src/state.c \
   src/syscall.c \
   src/tick.c \
-  src/tracing.c
+  src/tracing.c \
+  src/hook.c
 
 bin_PROGRAMS =
 

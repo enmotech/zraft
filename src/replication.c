@@ -616,6 +616,7 @@ static int triggerActualPromotion(struct raft *r)
     struct raft_server *server;
     int old_role;
     int rv;
+    const struct raft_entry *entry;
 
     assert(r->state == RAFT_LEADER);
     assert(r->leader_state.promotee_id != 0);
@@ -640,6 +641,11 @@ static int triggerActualPromotion(struct raft *r)
     if (rv != 0) {
         goto err;
     }
+
+    entry = logGet(&r->log, index);
+    assert(entry);
+    assert(entry->type == RAFT_CHANGE);
+    r->hook->conf_after_append(r->hook, index, entry);
 
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);

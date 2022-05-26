@@ -12,6 +12,7 @@
 #include "log.h"
 #include "membership.h"
 #include "tracing.h"
+#include "hook.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -65,6 +66,7 @@ int raft_init(struct raft *r,
     r->max_catch_up_round_duration = DEFAULT_MAX_CATCH_UP_ROUND_DURATION;
     r->message_log_threshold = DEFAULT_MESSAGE_LOG_THRESHOLD;
     r->inflight_log_threshold = DEFAULT_INFLIGHT_LOG_THRESHOLD;
+    r->hook = &defaultHook;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -259,3 +261,7 @@ void raft_set_replication_inflight_log_threshold(struct raft *r, unsigned n)
 	r->inflight_log_threshold = n;
 }
 
+void raft_set_hook(struct raft *r, struct raft_hook *hook)
+{
+	r->hook = hook;
+}

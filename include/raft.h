@@ -779,6 +779,8 @@ struct raft
     unsigned message_log_threshold;
     /* The limit for unconfirmed log in pipeline mode*/
     unsigned inflight_log_threshold;
+
+    struct raft_hook *hook;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1147,6 +1149,18 @@ RAFT_API void raft_set_replication_message_log_threshold(struct raft *r,
  */
 RAFT_API void raft_set_replication_inflight_log_threshold(struct raft *r,
 							  unsigned n);
+
+/**
+ * User-definable hook for predefined points
+ */
+struct raft_hook
+{
+	void *data;
+	void (*conf_after_append)(struct raft_hook* hook, raft_index index,
+				  const struct raft_entry *entry);
+};
+
+RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);
 
 #undef RAFT__REQUEST
 

@@ -118,6 +118,7 @@ static int clientChangeConfiguration(
     raft_index index;
     raft_term term = r->current_term;
     int rv;
+    const struct raft_entry *entry;
 
     (void)req;
 
@@ -129,6 +130,11 @@ static int clientChangeConfiguration(
     if (rv != 0) {
         goto err;
     }
+
+    entry = logGet(&r->log, index);
+    assert(entry);
+    assert(entry->type == RAFT_CHANGE);
+    r->hook->conf_after_append(r->hook, index, entry);
 
     if (configuration->n != r->configuration.n) {
         rv = progressRebuildArray(r, configuration);

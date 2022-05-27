@@ -1149,6 +1149,12 @@ RAFT_API void raft_set_replication_message_log_threshold(struct raft *r,
  */
 RAFT_API void raft_set_replication_inflight_log_threshold(struct raft *r,
 							  unsigned n);
+/**
+ * set custom tracer
+ * @param r
+ * @param tracer
+ */
+RAFT_API void raft_set_tracer(struct raft *r, struct raft_tracer *tracer);
 
 /**
  * User-definable hook for predefined points

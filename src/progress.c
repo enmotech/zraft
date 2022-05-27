@@ -5,8 +5,7 @@
 #include "log.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
+#ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 #else
 #define tracef(...)

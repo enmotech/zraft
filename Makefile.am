@@ -247,7 +247,7 @@ endif # BENCHMARK_ENABLED
 if DEBUG_ENABLED
   AM_CFLAGS += -Werror -O0 -fno-omit-frame-pointer -DENABLE_TRACE
 else
-  AM_CFLAGS += -DNDEBUG -fno-omit-frame-pointer -DENABLE_TRACE
+  AM_CFLAGS += -DNDEBUG -fno-omit-frame-pointer
 endif
 
 if SANITIZE_ENABLED

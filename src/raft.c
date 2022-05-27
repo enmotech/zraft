@@ -265,3 +265,8 @@ void raft_set_hook(struct raft *r, struct raft_hook *hook)
 {
 	r->hook = hook;
 }
+
+void raft_set_tracer(struct raft *r, struct raft_tracer *tracer)
+{
+	r->tracer = tracer;
+}

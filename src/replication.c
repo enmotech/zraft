@@ -18,8 +18,7 @@
 #include "snapshot.h"
 #include "tracing.h"
 
-/* Set to 1 to enable tracing. */
-#if 0
+#ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 #else
 #define tracef(...)
@@ -54,7 +53,7 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 
     if (r->state == RAFT_LEADER && i < r->configuration.n) {
         if (status != 0) {
-            tracef("failed to send append entries to server %u: %s",
+            tracef("failed to send append entries to server %llu: %s",
                    req->server_id, raft_strerror(status));
             /* Go back to probe mode. */
             progressToProbe(r, i);
@@ -101,7 +100,7 @@ static int sendAppendEntries(struct raft *r,
      */
     args->leader_commit = r->commit_index;
 
-    tracef("send %u entries starting at %llu to server %u (last index %llu)",
+    tracef("send %u entries starting at %llu to server %llu (last index %llu)",
            args->n_entries, args->prev_log_index, server->id,
            logLastIndex(&r->log));
 
@@ -227,7 +226,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     req->snapshot = snapshot;
     req->send.data = req;
 
-    tracef("sending snapshot with last index %llu to %u", snapshot->index,
+    tracef("sending snapshot with last index %llu to %llu", snapshot->index,
            server->id);
 
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
@@ -388,7 +387,7 @@ static int triggerAll(struct raft *r)
         rv = replicationProgress(r, i);
         if (rv != 0 && rv != RAFT_NOCONNECTION) {
             /* This is not a critical failure, let's just log it. */
-            tracef("failed to send append entries to server %u: %s (%d)",
+            tracef("failed to send append entries to server %llu: %s (%d)",
                    server->id, raft_strerror(rv), rv);
         }
     }
@@ -699,7 +698,7 @@ int replicationUpdate(struct raft *r,
                                        result->last_log_index);
         if (retry) {
             /* Retry, ignoring errors. */
-	    tracef("log mismatch -> send old entries to %u", id);
+	    tracef("log mismatch -> send old entries to %llu", id);
             replicationProgress(r, i);
         }
         return 0;
@@ -1146,7 +1145,7 @@ int replicationAppend(struct raft *r,
     assert(request->args.n_entries == n);
     if (request->args.n_entries == 0) {
 	    tracef("No log entries found at index %llu", request->index);
-	    tracef("args->prev_log_term = %lu, args->prev_log_index = %lu, args->n_entries = %lu",
+	    tracef("args->prev_log_term = %llu, args->prev_log_index = %llu, args->n_entries = %u",
 		   args->prev_log_term, args->prev_log_index, args->n_entries);
 	    ErrMsgPrintf(r->errmsg, "No log entries found at index %llu", request->index);
 	    rv = RAFT_SHUTDOWN;

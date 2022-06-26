@@ -1162,8 +1162,8 @@ RAFT_API void raft_set_tracer(struct raft *r, struct raft_tracer *tracer);
 struct raft_hook
 {
 	void *data;
-	void (*conf_after_append)(struct raft_hook* hook, raft_index index,
-				  const struct raft_entry *entry);
+	void (*append_post_process)(struct raft_hook* h, raft_index index,
+				    const struct raft_entry *entry);
 };
 
 RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);

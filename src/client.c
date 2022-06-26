@@ -69,7 +69,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 {
     raft_index index;
     struct raft_buffer buf;
-    struct raft_entry *entry;
+    const struct raft_entry *entry;
     int rv;
 
     if (r->state != RAFT_LEADER || r->transfer != NULL) {

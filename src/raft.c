@@ -270,3 +270,10 @@ void raft_set_tracer(struct raft *r, struct raft_tracer *tracer)
 {
 	r->tracer = tracer;
 }
+
+bool raft_aux_match_leader(struct raft *r)
+{
+	assert(r->state == RAFT_FOLLOWER);
+
+	return r->follower_aux.match_leader;
+}

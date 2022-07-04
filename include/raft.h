@@ -1177,6 +1177,8 @@ struct raft_hook
 
 RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);
 
+RAFT_API bool raft_aux_match_leader(struct raft *r);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

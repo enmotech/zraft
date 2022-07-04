@@ -97,7 +97,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     entry = logGet(&r->log, index);
     assert(entry);
     assert(entry->type == RAFT_BARRIER);
-    r->hook->append_post_process(r->hook, index, entry);
+    r->hook->entry_after_append_fn(r->hook, index, entry);
 
     rv = replicationTrigger(r, index);
     if (rv != 0) {
@@ -138,7 +138,7 @@ static int clientChangeConfiguration(
     entry = logGet(&r->log, index);
     assert(entry);
     assert(entry->type == RAFT_CHANGE);
-    r->hook->append_post_process(r->hook, index, entry);
+    r->hook->entry_after_append_fn(r->hook, index, entry);
 
     if (configuration->n != r->configuration.n) {
         rv = progressRebuildArray(r, configuration);

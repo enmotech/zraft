@@ -39,6 +39,7 @@ static void convertSetState(struct raft *r, unsigned short new_state)
 static void convertClearFollower(struct raft *r)
 {
     r->follower_state.current_leader.id = 0;
+    r->follower_aux.match_leader = false;
 }
 
 /* Clear candidate state. */

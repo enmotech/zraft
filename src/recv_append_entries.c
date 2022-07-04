@@ -21,6 +21,21 @@ static void recvSendAppendEntriesResultCb(struct raft_io_send *req, int status)
     HeapFree(req);
 }
 
+static void recvInvokeEntryHook(struct raft *r,
+				const struct raft_append_entries *args,
+				raft_index rejected)
+{
+	if (r->follower_aux.match_leader && rejected == 0)
+		return;
+	if (!r->follower_aux.match_leader && rejected != 0)
+		return;
+
+	r->follower_aux.match_leader = rejected == 0;
+	r->hook->entry_match_change_cb(r->hook, rejected == 0,
+				       args->prev_log_index,
+				       args->prev_log_term);
+}
+
 int recvAppendEntries(struct raft *r,
                       raft_id id,
                       const struct raft_append_entries *args)
@@ -117,6 +132,8 @@ int recvAppendEntries(struct raft *r,
     if (rv != 0) {
         return rv;
     }
+
+    recvInvokeEntryHook(r, args, result->rejected);
 
     if (async) {
         return 0;

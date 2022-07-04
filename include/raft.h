@@ -780,7 +780,14 @@ struct raft
     /* The limit for unconfirmed log in pipeline mode*/
     unsigned inflight_log_threshold;
 
+    /* Hook implementation */
     struct raft_hook *hook;
+    /* Auxiliary information */
+    union {
+	    struct {
+		    bool match_leader;
+	    } follower_aux;
+    };
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1162,8 +1169,10 @@ RAFT_API void raft_set_tracer(struct raft *r, struct raft_tracer *tracer);
 struct raft_hook
 {
 	void *data;
-	void (*append_post_process)(struct raft_hook* h, raft_index index,
-				    const struct raft_entry *entry);
+	void (*entry_after_append_fn)(struct raft_hook* h, raft_index index,
+				      const struct raft_entry *entry);
+	void (*entry_match_change_cb)(struct raft_hook *h, bool match,
+				      raft_index index, raft_term term);
 };
 
 RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);

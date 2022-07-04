@@ -280,8 +280,6 @@ int recvUpdateLeader(struct raft *r, const raft_id id)
 
     if (r->follower_state.current_leader.id != id) {
 	r->follower_state.current_leader.id = id;
-	if (r->state_change_cb)
-		r->state_change_cb(r, RAFT_FOLLOWER);
     }
 
     return 0;

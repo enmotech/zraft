@@ -644,7 +644,7 @@ static int triggerActualPromotion(struct raft *r)
     entry = logGet(&r->log, index);
     assert(entry);
     assert(entry->type == RAFT_CHANGE);
-    r->hook->append_post_process(r->hook, index, entry);
+    r->hook->entry_after_append_fn(r->hook, index, entry);
 
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);

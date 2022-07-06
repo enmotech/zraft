@@ -1588,12 +1588,14 @@ int replicationApply(struct raft *r)
                     return 0;
                 applyBarrier(r, index);
                 r->last_applied = index;
+		r->hook->entry_after_apply_fn(r->hook, index, entry);
                 break;
             case RAFT_CHANGE:
                 if (r->last_applying > r->last_applied)
                     return 0;
                 applyChange(r, index);
                 r->last_applied = index;
+		r->hook->entry_after_apply_fn(r->hook, index, entry);
                 break;
             default:/* For coverity. This case can't be taken. */
                 break;

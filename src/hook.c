@@ -17,8 +17,18 @@ static void defaultEntryMatchChange(struct raft_hook *h, bool match,
 	(void)term;
 }
 
+static void defaultEntryAfterApply(struct raft_hook *h, raft_index index,
+				   const struct raft_entry *entry)
+{
+	(void)h;
+	(void)index;
+	(void)entry;
+}
+
+
 struct raft_hook defaultHook = {
 	.data = NULL,
 	.entry_after_append_fn = defaultEntryAfterAppend,
 	.entry_match_change_cb = defaultEntryMatchChange,
+	.entry_after_apply_fn  = defaultEntryAfterApply,
 };

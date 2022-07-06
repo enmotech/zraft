@@ -1173,6 +1173,8 @@ struct raft_hook
 				      const struct raft_entry *entry);
 	void (*entry_match_change_cb)(struct raft_hook *h, bool match,
 				      raft_index index, raft_term term);
+	void (*entry_after_apply_fn)(struct raft_hook *h, raft_index index,
+				     const struct raft_entry *entry);
 };
 
 RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);

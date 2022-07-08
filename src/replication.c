@@ -644,7 +644,7 @@ static int triggerActualPromotion(struct raft *r)
     entry = logGet(&r->log, index);
     assert(entry);
     assert(entry->type == RAFT_CHANGE);
-    r->hook->append_post_process(r->hook, index, entry);
+    r->hook->entry_after_append_fn(r->hook, index, entry);
 
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);
@@ -1586,12 +1586,14 @@ int replicationApply(struct raft *r)
             case RAFT_BARRIER:
                 if (r->last_applying > r->last_applied)
                     return 0;
+		r->hook->entry_after_apply_fn(r->hook, index, entry);
                 applyBarrier(r, index);
                 r->last_applied = index;
                 break;
             case RAFT_CHANGE:
                 if (r->last_applying > r->last_applied)
                     return 0;
+		r->hook->entry_after_apply_fn(r->hook, index, entry);
                 applyChange(r, index);
                 r->last_applied = index;
                 break;

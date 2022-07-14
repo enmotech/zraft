@@ -5,6 +5,7 @@
 #include "heap.h"
 #include "log.h"
 #include "tracing.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -122,6 +123,7 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
     assert(r->state == RAFT_CANDIDATE);
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
+	evtErrf("raft %x set meta failed %d", r->id, status);
         convertToUnavailable(r);
         goto err;
     }

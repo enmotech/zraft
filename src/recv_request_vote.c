@@ -5,6 +5,7 @@
 #include "recv.h"
 #include "tracing.h"
 #include "convert.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -36,6 +37,8 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
         goto err;
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
+	evtErrf("raft %x set meta for rv %x %u failed %d", r->id,
+		request->voted_for, request->term, status);
         convertToUnavailable(r);
         goto err;
     }
@@ -50,6 +53,7 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 
     reqs = raft_malloc(sizeof *reqs);
     if (reqs == NULL) {
+	evtErrf("raft %x malloc req failed", r->id);
         convertToUnavailable(r);
         goto err;
     }

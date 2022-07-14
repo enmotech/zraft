@@ -14,6 +14,7 @@
 #include "recv_timeout_now.h"
 #include "string.h"
 #include "tracing.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -87,7 +88,8 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
 
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
-        convertToUnavailable(r);
+	evtErrf("raft %x bump term failed %d", r->id, status);
+	convertToUnavailable(r);
         goto err;
     }
 
@@ -260,7 +262,9 @@ void recvCb(struct raft_io *io, struct raft_message *message)
     }
     rv = recvMessage(r, message);
     if (rv != 0) {
-        convertToUnavailable(r);
+	evtErrf("raft %x recv msg %d from %x failed %d", r->id, message->type,
+		message->server_id, rv);
+	convertToUnavailable(r);
     }
 }
 

@@ -37,17 +37,14 @@ int recvUpdateMeta(struct raft *r,
 {
     int rv;
     struct set_meta_req *request;
-    char msg[128];
 
-    assert(term > r->current_term ||
-            r->voted_for != voted_for);
+    assert(term > r->current_term || r->voted_for != voted_for);
+    tracef("remote term %lld is higher than %lld -> bump local term",
+	     term, r->current_term);
 
-    sprintf(msg, "remote term %lld is higher than %lld -> bump local term",
-        term, r->current_term);
-
-    if (r->state != RAFT_FOLLOWER)
-        strcat(msg, " and step down");
-    tracef("%s", msg);
+    if (r->state != RAFT_FOLLOWER) {
+        tracef("state %d step down", r->state);
+    }
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {

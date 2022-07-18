@@ -1181,6 +1181,26 @@ RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);
 
 RAFT_API bool raft_aux_match_leader(struct raft *r);
 
+
+/* event level */
+enum raft_event_level {
+	RAFT_VERBOSE = 0,
+	RAFT_INFO,
+	RAFT_WARN,
+	RAFT_ERROR,
+	RAFT_CRITICAL
+};
+
+/* User-definable event recorder for record events */
+struct raft_event_recorder {
+	void *data;
+	void (*record)(void *data, enum raft_event_level level, const char* fn,
+		       const char *file, int line, const char *fmt, ...);
+};
+
+/* set user defined event recoder */
+RAFT_API void raft_set_event_recorder(struct raft_event_recorder *r);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

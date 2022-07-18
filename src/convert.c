@@ -10,6 +10,7 @@
 #include "request.h"
 #include "replication.h"
 #include "tracing.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -173,6 +174,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
         rv = replicationApply(r);
         if (rv != 0) {
             /* TODO: just log the error? */
+	    evtErrf("raft %x replication apply failed %d", r->id, rv);
             convertToUnavailable(r);
         }
         return rv;

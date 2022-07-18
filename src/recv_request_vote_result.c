@@ -7,6 +7,7 @@
 #include "recv.h"
 #include "replication.h"
 #include "tracing.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -36,6 +37,8 @@ static void recvVoteResultBumpTermIOCb(struct raft_io_set_meta *req, int status)
         goto err;
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
+	evtErrf("raft %x bump term for rvr %x %u failed ", r->id,
+		request->voted_for, request->term, status);
         convertToUnavailable(r);
         goto err;
     }

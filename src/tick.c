@@ -7,6 +7,7 @@
 #include "progress.h"
 #include "replication.h"
 #include "tracing.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -229,6 +230,7 @@ void tickCb(struct raft_io *io)
     }
     rv = tick(r);
     if (rv != 0) {
+	evtErrf("raft %x tick failed %d", r->id, rv);
         convertToUnavailable(r);
         return;
     }

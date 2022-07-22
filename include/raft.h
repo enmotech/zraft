@@ -1184,11 +1184,11 @@ RAFT_API bool raft_aux_match_leader(struct raft *r);
 
 /* event level */
 enum raft_event_level {
-	RAFT_VERBOSE = 0,
-	RAFT_INFO,
+	RAFT_ERROR = 0,
 	RAFT_WARN,
-	RAFT_ERROR,
-	RAFT_CRITICAL
+	RAFT_NOTICE,
+	RAFT_INFO,
+	RAFT_DEBUG,
 };
 
 /* User-definable event recorder for record events */

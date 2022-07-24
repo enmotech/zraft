@@ -673,6 +673,7 @@ static int triggerActualPromotion(struct raft *r)
 
     r->leader_state.promotee_id = 0;
     r->configuration_uncommitted_index = logLastIndex(&r->log);
+    progressUpdateMinMatch(r);
 
     return 0;
 

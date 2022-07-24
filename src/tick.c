@@ -94,6 +94,7 @@ static bool checkContactQuorum(struct raft *r)
 {
     unsigned i;
     unsigned contacts = 0;
+    size_t n_voters;
     assert(r->state == RAFT_LEADER);
 
     for (i = 0; i < r->configuration.n; i++) {
@@ -105,7 +106,12 @@ static bool checkContactQuorum(struct raft *r)
         }
     }
 
-    return contacts > configurationVoterCount(&r->configuration) / 2;
+    n_voters = configurationVoterCount(&r->configuration);
+    if (r->quorum == RAFT_MAJORITY && contacts <= n_voters / 2)
+	    return false;
+    if (r->quorum == RAFT_FULL && contacts < n_voters)
+	    return false;
+    return true;
 }
 
 /* Apply time-dependent rules for leaders (Figure 3.1). */

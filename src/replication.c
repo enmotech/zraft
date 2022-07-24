@@ -1619,6 +1619,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 {
     size_t votes = 0;
     size_t i;
+    size_t n_voters;
 
     assert(r->state == RAFT_LEADER);
 
@@ -1647,12 +1648,14 @@ void replicationQuorum(struct raft *r, const raft_index index)
         }
     }
 
-    if (votes > configurationVoterCount(&r->configuration) / 2) {
-        r->commit_index = index;
-        tracef("new commit index %llu", r->commit_index);
-    }
+    n_voters = configurationVoterCount(&r->configuration);
+    if (r->quorum == RAFT_MAJORITY && votes <= n_voters / 2)
+	    return;
+    if (r->quorum == RAFT_FULL && votes < n_voters)
+	    return;
 
-    return;
+    r->commit_index = index;
+    tracef("new commit index %llu", r->commit_index);
 }
 
 inline bool replicationInstallSnapshotBusy(struct raft *r)

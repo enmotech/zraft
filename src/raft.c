@@ -67,6 +67,7 @@ int raft_init(struct raft *r,
     r->message_log_threshold = DEFAULT_MESSAGE_LOG_THRESHOLD;
     r->inflight_log_threshold = DEFAULT_INFLIGHT_LOG_THRESHOLD;
     r->hook = &defaultHook;
+    r->quorum = RAFT_MAJORITY;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -277,3 +278,18 @@ bool raft_aux_match_leader(struct raft *r)
 
 	return r->follower_aux.match_leader;
 }
+
+void raft_set_quorum(struct raft *r, enum raft_quorum q)
+{
+	assert(q == RAFT_MAJORITY || q == RAFT_FULL);
+	r->quorum = q;
+}
+
+RAFT_API void raft_replace_configuration(struct raft *r,
+					 struct raft_configuration conf)
+{
+	assert(r->state == RAFT_FOLLOWER);
+	raft_configuration_close(&r->configuration);
+	r->configuration = conf;
+}
+

@@ -68,6 +68,7 @@ int raft_init(struct raft *r,
     r->message_log_threshold = DEFAULT_MESSAGE_LOG_THRESHOLD;
     r->inflight_log_threshold = DEFAULT_INFLIGHT_LOG_THRESHOLD;
     r->hook = &defaultHook;
+    r->sync_replication = false;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -287,3 +288,9 @@ bool raft_aux_match_leader(struct raft *r)
 
 	return r->follower_aux.match_leader;
 }
+
+void raft_set_sync_replication(struct raft *r, bool sync)
+{
+	r->sync_replication = sync;
+}
+

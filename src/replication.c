@@ -1513,6 +1513,16 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
+    if (r->state == RAFT_LEADER && r->sync_replication) {
+	    if (r->leader_state.min_match_index < r->log.snapshot.last_index) {
+		    return false;
+	    }
+	    if (r->leader_state.min_match_index - r->log.snapshot.last_index
+	            < r->snapshot.threshold) {
+		    return false;
+	    }
+    }
+
     return true;
 }
 

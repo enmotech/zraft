@@ -48,6 +48,7 @@ int progressBuildArray(struct raft *r)
         }
     }
     r->leader_state.progress = progress;
+    r->leader_state.min_match_index = 0;
     return 0;
 }
 
@@ -280,6 +281,7 @@ bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
     if (p->match_index < last_index) {
         p->match_index = last_index;
         updated = true;
+	progressUpdateMinMatch(r);
     }
     if (p->next_index < last_index + 1) {
         p->next_index = last_index + 1;
@@ -316,6 +318,30 @@ bool progressSnapshotDone(struct raft *r, const unsigned i)
     struct raft_progress *p = &r->leader_state.progress[i];
     assert(p->state == PROGRESS__SNAPSHOT);
     return p->match_index >= p->snapshot_index;
+}
+
+void progressUpdateMinMatch(struct raft *r)
+{
+	assert(r->state == RAFT_LEADER);
+	unsigned i;
+	struct raft_server *s;
+	struct raft_progress *p;
+	raft_index tmp = logLastIndex(&r->log);
+
+	if (!r->sync_replication) {
+		return;
+	}
+
+	for (i = 0; i < r->configuration.n; ++i) {
+		s = &r->configuration.servers[i];
+		if (s->role == RAFT_SPARE &&
+			s->id != r->leader_state.promotee_id) {
+			continue;
+		}
+		p = &r->leader_state.progress[i];
+		tmp = min(tmp, p->match_index);
+	}
+	r->leader_state.min_match_index = tmp;
 }
 
 #undef tracef

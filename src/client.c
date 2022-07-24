@@ -219,6 +219,7 @@ int raft_add(struct raft *r,
         evtErrf("raft(%16llx) change conf failed %d", r->id, rv);
         goto err_after_configuration_copy;
     }
+    progressUpdateMinMatch(r);
 
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;
@@ -318,6 +319,8 @@ int raft_assign(struct raft *r,
 
     r->leader_state.promotee_id = server->id;
 
+    progressUpdateMinMatch(r);
+
     /* Initialize the first catch-up round. */
     r->leader_state.round_number = 1;
     r->leader_state.round_index = last_index;
@@ -384,6 +387,7 @@ int raft_remove(struct raft *r,
         evtErrf("raft(%llx) change conf failed %d", r->id, rv);
         goto err_after_configuration_copy;
     }
+    progressUpdateMinMatch(r);
 
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;

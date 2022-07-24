@@ -726,6 +726,7 @@ struct raft
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
             void *requests[2];              /* Outstanding client requests. */
+	    raft_index min_match_index;     /* The minimum match index */
         } leader_state;
     };
 
@@ -788,6 +789,7 @@ struct raft
 		    bool match_leader;
 	    } follower_aux;
     };
+    bool sync_replication;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1200,6 +1202,11 @@ struct raft_event_recorder {
 
 /* set user defined event recoder */
 RAFT_API void raft_set_event_recorder(struct raft_event_recorder *r);
+
+/**
+ * Set whether leader should sync all replica before take snapshot
+ */
+RAFT_API void raft_set_sync_replication(struct raft *r, bool sync);
 
 #undef RAFT__REQUEST
 

@@ -186,8 +186,7 @@ static int tickLeader(struct raft *r)
             if (change != NULL && change->cb != NULL) {
                 change->cb(change, RAFT_NOCONNECTION);
             }
-	    progressUpdateMinMatch(r);
-	}
+        }
     }
 
     return 0;

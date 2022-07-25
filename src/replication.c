@@ -673,7 +673,6 @@ static int triggerActualPromotion(struct raft *r)
 
     r->leader_state.promotee_id = 0;
     r->configuration_uncommitted_index = logLastIndex(&r->log);
-    progressUpdateMinMatch(r);
 
     return 0;
 
@@ -1515,6 +1514,7 @@ static bool shouldTakeSnapshot(struct raft *r)
     }
 
     if (r->state == RAFT_LEADER && r->sync_replication) {
+	    progressUpdateMinMatch(r);
 	    if (r->leader_state.min_match_index < r->log.snapshot.last_index) {
 		    return false;
 	    }

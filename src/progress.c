@@ -281,7 +281,6 @@ bool progressMaybeUpdate(struct raft *r, unsigned i, raft_index last_index)
     if (p->match_index < last_index) {
         p->match_index = last_index;
         updated = true;
-	progressUpdateMinMatch(r);
     }
     if (p->next_index < last_index + 1) {
         p->next_index = last_index + 1;

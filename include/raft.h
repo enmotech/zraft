@@ -1052,6 +1052,12 @@ RAFT_API int raft_remove(struct raft *r,
                          struct raft_change *req,
                          raft_id id,
                          raft_change_cb cb);
+/**
+ * Dup current cluster configuration.
+ */
+RAFT_API int raft_dup(struct raft *r,
+		      struct raft_change *req,
+		      raft_change_cb cb);
 
 /**
  * Asynchronous request to transfer leadership.

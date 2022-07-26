@@ -218,6 +218,42 @@ err:
     return rv;
 }
 
+int raft_dup(struct raft *r, struct raft_change *req, raft_change_cb cb)
+{
+	struct raft_configuration configuration;
+	int rv;
+
+	rv = membershipCanChangeConfiguration(r);
+	if (rv != 0) {
+		return rv;
+	}
+
+	tracef("dup configuration");
+
+	/* Make a copy of the current configuration. */
+	rv = configurationCopy(&r->configuration, &configuration);
+	if (rv != 0) {
+		goto err;
+	}
+
+	req->cb = cb;
+
+	rv = clientChangeConfiguration(r, req, &configuration);
+	if (rv != 0) {
+		goto err_after_configuration_copy;
+	}
+
+	assert(r->leader_state.change == NULL);
+	r->leader_state.change = req;
+
+	return 0;
+err_after_configuration_copy:
+	raft_configuration_close(&configuration);
+err:
+	assert(rv != 0);
+	return rv;
+}
+
 int raft_assign(struct raft *r,
                 struct raft_change *req,
                 raft_id id,

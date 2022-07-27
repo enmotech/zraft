@@ -327,10 +327,7 @@ void progressUpdateMinMatch(struct raft *r)
 	struct raft_progress *p;
 	raft_index tmp = logLastIndex(&r->log);
 
-	if (!r->sync_replication) {
-		return;
-	}
-
+	assert(r->sync_replication);
 	for (i = 0; i < r->configuration.n; ++i) {
 		s = &r->configuration.servers[i];
 		if (s->role == RAFT_SPARE &&

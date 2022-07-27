@@ -17,6 +17,7 @@
 #include "request.h"
 #include "snapshot.h"
 #include "tracing.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -323,6 +324,10 @@ int replicationProgress(struct raft *r, unsigned i)
         if (snapshot_index > 0 && !progress_state_is_snapshot) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
+	    evtNoticef("raft(%llx) send %llx snapshot %llu/%llu recent %d",
+		       r->id, server->id, next_index,
+		       r->leader_state.min_match_index,
+		       progressGetRecentRecv(r, i));
             goto send_snapshot;
         }
         prev_index = 0;
@@ -337,6 +342,10 @@ int replicationProgress(struct raft *r, unsigned i)
         if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
+	    evtNoticef("raft(%llx) send %llx snapshot %llu/%llu recent %d",
+		       r->id, server->id, next_index,
+		       r->leader_state.min_match_index,
+		       progressGetRecentRecv(r, i));
             goto send_snapshot;
         }
     }
@@ -1473,11 +1482,7 @@ static bool shouldTakeSnapshot(struct raft *r)
 
     if (r->state == RAFT_LEADER && r->sync_replication) {
 	    progressUpdateMinMatch(r);
-	    if (r->leader_state.min_match_index < r->log.snapshot.last_index) {
-		    return false;
-	    }
-	    if (r->leader_state.min_match_index - r->log.snapshot.last_index
-	            < r->snapshot.threshold) {
+	    if (r->leader_state.min_match_index < r->last_applying) {
 		    return false;
 	    }
     }

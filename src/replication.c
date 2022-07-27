@@ -1,5 +1,5 @@
 #include <string.h>
-
+#include <stdlib.h>
 #include "assert.h"
 #include "configuration.h"
 #include "convert.h"
@@ -485,6 +485,8 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     tracef("leader: written %u entries starting at %lld: status %d", request->n,
            request->index, status);
 
+    assert(r->nr_appending_requests > 0);
+    r->nr_appending_requests -= 1;
     /* In case of a failed disk write, if we were the leader creating these
      * entries in the first place, truncate our log too (since we have appended
      * these entries to it) and fire the request callback. */
@@ -498,14 +500,17 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
                 apply->cb(apply, status, NULL);
             }
         }
+	evtErrf("raft(%llx) append status %d", r->id, status);
         goto out;
     }
+
 
     updateLastStored(r, request->index, request->entries, request->n);
 
     /* If we are not leader anymore, just discard the result. */
     if (r->state != RAFT_LEADER) {
         tracef("local server is not leader -> ignore write log result");
+	evtWarnf("raft(%llx) is not leader, ignore write log result", r->id);
         goto out;
     }
 
@@ -535,14 +540,30 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     rv = replicationApply(r);
     if (rv != 0) {
         /* TODO: just log the error? */
+	evtErrf("raft(%llx) apply error %d", r->id, rv);
     }
 
 out:
+    if (r->prev_append_status != 0 && status == 0) {
+        evtErrf("raft(%llx) previous append status %d", r->id,
+		r->prev_append_status);
+	abort();
+    }
+
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, request->index, request->entries, request->n);
-    if (status != 0) {
+    if (status != 0 && r->prev_append_status == 0) {
         logTruncate(&r->log, request->index);
+        evtErrf("raft(%llx) truncate log from %llu", r->id, request->index);
     }
+
+    r->prev_append_status = status;
+    /* Reset prev append status when the last request callback*/
+    if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
+        r->prev_append_status = 0;
+        evtWarnf("raft(%llx) reset previous append status", r->id);
+    }
+
     raft_free(request);
 }
 
@@ -557,6 +578,12 @@ static int appendLeader(struct raft *r, raft_index index)
     assert(r->state == RAFT_LEADER);
     assert(index > 0);
     assert(index > r->last_stored);
+
+    if (r->prev_append_status) {
+        evtErrf("raft(%llx) reject append with prev append status %d",
+		r->id, r->prev_append_status);
+        return r->prev_append_status;
+    }
 
     /* Acquire all the entries from the given index onwards. */
     rv = logAcquire(&r->log, index, &entries, &n);
@@ -586,6 +613,7 @@ static int appendLeader(struct raft *r, raft_index index)
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_request_alloc;
     }
+    r->nr_appending_requests += 1;
 
     return 0;
 
@@ -853,9 +881,13 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
+    assert(r->nr_appending_requests > 0);
+    r->nr_appending_requests -= 1;
+
     result.pkt = args->pkt;
     result.term = r->current_term;
     if (status != 0) {
+        evtErrf("raft(%llx) append follower status %d", r->id, status);
         if (r->state != RAFT_FOLLOWER) {
             tracef("local server is not follower -> ignore I/O failure");
             goto out;
@@ -927,8 +959,26 @@ respond:
     sendAppendEntriesResult(r, &result);
 
 out:
+    if (r->prev_append_status != 0 && status == 0) {
+        evtErrf("raft(%llx) previous append status %d", r->id,
+		r->prev_append_status);
+       abort();
+    }
+
     logRelease(&r->log, request->index, request->args.entries,
 	    request->args.n_entries);
+
+    if (status != 0 && r->prev_append_status == 0) {
+        logTruncate(&r->log, request->index);
+        evtErrf("raft(%llx) truncate log from %llu", r->id, request->index);
+    }
+
+    r->prev_append_status = status;
+    /* Reset prev append status when the last request callback*/
+    if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
+        r->prev_append_status = 0;
+        evtWarnf("raft(%llx) reset previous append status", r->id);
+    }
 
     raft_free(request);
 }
@@ -1167,6 +1217,7 @@ int replicationAppend(struct raft *r,
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_acquire_entries;
     }
+    r->nr_appending_requests += 1;
 
     entryNonBatchDestroyPrefix(args->entries, args->n_entries, i);
     raft_free(args->entries);

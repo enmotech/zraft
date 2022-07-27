@@ -790,6 +790,10 @@ struct raft
 	    } follower_aux;
     };
     bool sync_replication;
+
+    /* Fields for cope with append */
+    unsigned nr_appending_requests;
+    int prev_append_status;
 };
 
 RAFT_API int raft_init(struct raft *r,

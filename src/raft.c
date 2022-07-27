@@ -69,6 +69,8 @@ int raft_init(struct raft *r,
     r->inflight_log_threshold = DEFAULT_INFLIGHT_LOG_THRESHOLD;
     r->hook = &defaultHook;
     r->sync_replication = false;
+    r->nr_appending_requests = 0;
+    r->prev_append_status = 0;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {

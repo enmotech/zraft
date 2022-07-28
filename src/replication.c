@@ -1632,7 +1632,7 @@ int replicationApply(struct raft *r)
 
     if (r->last_applied == r->commit_index) {
         /* Nothing to do. */
-        return 0;
+	goto err_take_snapshot;
     }
 
     for (index = r->last_applying + 1; index <= r->commit_index; index++) {
@@ -1675,6 +1675,7 @@ int replicationApply(struct raft *r)
         r->last_applying = index;
     }
 
+err_take_snapshot:
     if (shouldTakeSnapshot(r)) {
         rv = takeSnapshot(r);
     }

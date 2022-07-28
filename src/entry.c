@@ -3,6 +3,7 @@
 
 #include "assert.h"
 #include "entry.h"
+#include "event.h"
 
 void entryBatchesDestroy(struct raft_entry *entries, const size_t n)
 {
@@ -57,7 +58,8 @@ int entryCopy(const struct raft_entry *src, struct raft_entry *dst)
     if (src->buf.len > 0) {
 	    dst->buf.base = raft_entry_malloc(dst->buf.len);
 	    if (dst->buf.base == NULL) {
-		    return RAFT_NOMEM;
+                evtErrf("%s", "entry malloc");
+                return RAFT_NOMEM;
 	    }
 	    memcpy(dst->buf.base, src->buf.base, dst->buf.len);
     } else {
@@ -89,6 +91,7 @@ int entryBatchCopy(const struct raft_entry *src,
     if (size > 0) {
 	    batch = raft_malloc(size);
 	    if (batch == NULL) {
+		    evtErrf("%s", "malloc");
 		    return RAFT_NOMEM;
 	    }
     } else
@@ -98,6 +101,7 @@ int entryBatchCopy(const struct raft_entry *src,
     *dst = raft_malloc(n * sizeof **dst);
     if (*dst == NULL) {
         raft_free(batch);
+        evtErrf("%s", "malloc");
         return RAFT_NOMEM;
     }
 

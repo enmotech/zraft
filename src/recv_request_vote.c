@@ -159,12 +159,15 @@ int recvRequestVote(struct raft *r,
 reply:
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
+        evtErrf("%s", "malloc");
         return RAFT_NOMEM;
     }
     req->data = r;
 
     rv = r->io->send(r->io, req, &message, requestVoteSendCb);
     if (rv != 0) {
+        if (rv != RAFT_NOCONNECTION)
+            evtErrf("raft(%16llx) send failed %d", r->id, rv);
         raft_free(req);
         return rv;
     }

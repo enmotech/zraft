@@ -29,6 +29,7 @@ static int tickFollower(struct raft *r)
     /* If we have been removed from the configuration, or maybe we didn't
      * receive one yet, just stay follower. */
     if (server == NULL) {
+        evtWarnf("raft(%16llx) have been remove from conf", r->id);
         return 0;
     }
 
@@ -50,6 +51,7 @@ static int tickFollower(struct raft *r)
         rv = convertToCandidate(r, false /* disrupt leader */);
         if (rv != 0) {
             tracef("convert to candidate: %s", raft_strerror(rv));
+            evtErrf("raft(%16llx) convert to candidate failed %d", r->id, rv);
             return rv;
         }
     }

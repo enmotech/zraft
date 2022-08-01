@@ -8,6 +8,7 @@
 #include "err.h"
 #include "log.h"
 #include "tracing.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -39,12 +40,14 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
 
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rv != 0) {
+        evtErrf("raft(%16llx) restore snapshot failed %d", r->id, rv);
         goto err;
     }
     configurationClose(&r->snapshot.configuration);
     rv = configurationCopy(&snapshot->configuration,
                            &r->snapshot.configuration);
     if (rv != 0) {
+        evtErrf("raft(%16llx) copy snapshot failed %d", r->id, rv);
         goto err;
     }
     configurationClose(&r->configuration);
@@ -79,6 +82,7 @@ int snapshotCopy(const struct raft_snapshot *src, struct raft_snapshot *dst)
 
     rv = configurationCopy(&src->configuration, &dst->configuration);
     if (rv != 0) {
+        evtErrf("copy snapshot failed %d", rv);
         return rv;
     }
 
@@ -92,6 +96,7 @@ int snapshotCopy(const struct raft_snapshot *src, struct raft_snapshot *dst)
     if (size > 0){
 	    dst->bufs[0].base = raft_malloc(size);
 	    if (dst->bufs[0].base == NULL) {
+		    evtErrf("%s", "malloc");
 		    return RAFT_NOMEM;
 	    }
 	    cursor = dst->bufs[0].base;

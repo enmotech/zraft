@@ -6,6 +6,7 @@
 #include "log.h"
 #include "recv.h"
 #include "tracing.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -59,6 +60,7 @@ int recvTimeoutNow(struct raft *r,
     /* Convert to candidate and start a new election. */
     rv = convertToCandidate(r, true /* disrupt leader */);
     if (rv != 0) {
+        evtErrf("raft(%16llx) convert to candidate failed %d", rv);
         return rv;
     }
 

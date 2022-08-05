@@ -13,6 +13,7 @@
 #include "membership.h"
 #include "tracing.h"
 #include "hook.h"
+#include "event.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -74,6 +75,7 @@ int raft_init(struct raft *r,
     r->state_change_cb = NULL;
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
+        evtErrf("raft(%16llx) init failed %d", r->id, rv);
         goto err_after_address_alloc;
     }
     return 0;
@@ -159,11 +161,13 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
     int rv;
 
     if (r->state != RAFT_UNAVAILABLE) {
+        evtErrf("raft(%16llx) raft state %d", r->id, r->state);
         return RAFT_BUSY;
     }
 
     rv = r->io->bootstrap(r->io, conf);
     if (rv != 0) {
+        evtErrf("raft(%16llx) bootstrap failed %d", r->id, rv);
         return rv;
     }
 
@@ -177,11 +181,13 @@ int raft_abootstrap(struct raft *r,
     int rv;
 
     if (r->state != RAFT_UNAVAILABLE) {
+        evtErrf("raft(%16llx) raft state %d", r->id, r->state);
         return RAFT_BUSY;
     }
 
     rv = r->io->abootstrap(r->io, req, conf, cb);
     if (rv != 0) {
+        evtErrf("raft(%16llx) abootstrap failed %d", r->id, rv);
         return rv;
     }
 
@@ -198,11 +204,13 @@ int raft_recover(struct raft *r, const struct raft_configuration *conf)
     int rv;
 
     if (r->state != RAFT_UNAVAILABLE) {
+        evtErrf("raft(%16llx) state is ", r->id, r->state);
         return RAFT_BUSY;
     }
 
     rv = r->io->recover(r->io, conf);
     if (rv != 0) {
+        evtErrf("raft(%16llx) recover failed %d", r->id, rv);
         return rv;
     }
 

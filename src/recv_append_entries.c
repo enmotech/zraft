@@ -119,6 +119,7 @@ int recvAppendEntries(struct raft *r,
      * date. */
     rv = recvUpdateLeader(r, id);
     if (rv != 0) {
+        evtErrf("raft(%16llx) update leader failed %d", r->id, rv);
         return rv;
     }
 
@@ -136,6 +137,7 @@ int recvAppendEntries(struct raft *r,
 
     rv = replicationAppend(r, args, &result->rejected, &async);
     if (rv != 0) {
+        evtErrf("raft(%16llx) replication append %d", r->id, rv);
         return rv;
     }
 
@@ -155,12 +157,15 @@ reply:
 
     req = HeapMalloc(sizeof *req);
     if (req == NULL) {
+        evtErrf("%s", "malloc");
         return RAFT_NOMEM;
     }
     req->data = r;
 
     rv = r->io->send(r->io, req, &message, recvSendAppendEntriesResultCb);
     if (rv != 0) {
+        if (rv != RAFT_NOCONNECTION)
+            evtErrf("raft(%16llx) send failed %d", r->id, rv);
         raft_free(req);
         return rv;
     }

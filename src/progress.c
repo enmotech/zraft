@@ -4,6 +4,7 @@
 #include "configuration.h"
 #include "log.h"
 #include "tracing.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -62,6 +63,7 @@ int progressRebuildArray(struct raft *r,
 
     progress = raft_malloc(configuration->n * sizeof *progress);
     if (progress == NULL) {
+        evtErrf("%s", "malloc");
         return RAFT_NOMEM;
     }
 

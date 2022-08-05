@@ -88,6 +88,7 @@ static int sendAppendEntries(struct raft *r,
     rv = logAcquireWithMax(&r->log, next_index, &args->entries,
 			   &args->n_entries, r->message_log_threshold);
     if (rv != 0) {
+        evtErrf("raft(%16llx) log acquire failed %d", r->id, rv);
         goto err;
     }
 
@@ -111,6 +112,7 @@ static int sendAppendEntries(struct raft *r,
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
         rv = RAFT_NOMEM;
+        evtErrf("%s", "malloc");
         goto err_after_entries_acquired;
     }
     req->raft = r;
@@ -123,6 +125,8 @@ static int sendAppendEntries(struct raft *r,
     optimistic_next_index = req->index + req->n;
     rv = r->io->send(r->io, &req->send, &message, sendAppendEntriesCb);
     if (rv != 0) {
+        if (rv != RAFT_NOCONNECTION)
+            evtErrf("raft(%16llx) send failed %d", r->id, rv);
         goto err_after_req_alloc;
     }
 
@@ -232,6 +236,8 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
 
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
     if (rv != 0) {
+        if (rv != RAFT_NOCONNECTION)
+            evtErrf("raft(%16llx) send failed %d", r->id, rv);
         goto abort_with_snapshot;
     }
 
@@ -262,6 +268,7 @@ static int sendSnapshot(struct raft *r, const unsigned i)
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
         rv = RAFT_NOMEM;
+        evtErrf("%s", "malloc");
         goto err;
     }
     request->raft = r;
@@ -273,6 +280,7 @@ static int sendSnapshot(struct raft *r, const unsigned i)
      * later point. Otherwise the progress snapshot_index would be wrong. */
     rv = r->io->snapshot_get(r->io, &request->get, sendSnapshotGetCb);
     if (rv != 0) {
+        evtErrf("raft(%16llx) snapshot get failed %d", r->id, rv);
         goto err_after_req_alloc;
     }
 
@@ -398,6 +406,8 @@ static int triggerAll(struct raft *r)
             /* This is not a critical failure, let's just log it. */
             tracef("failed to send append entries to server %llu: %s (%d)",
                    server->id, raft_strerror(rv), rv);
+            evtErrf("raft(%16llx) send append entries to %llx failed %d",
+		    r->id, server->id, rv);
         }
     }
 
@@ -491,6 +501,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      * entries in the first place, truncate our log too (since we have appended
      * these entries to it) and fire the request callback. */
     if (status != 0) {
+        evtErrf("raft(%16llx) append leader failed %d", r->id, status);
         struct raft_apply *apply;
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         apply =
@@ -539,6 +550,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
 
     rv = replicationApply(r);
     if (rv != 0) {
+        evtErrf("raft(%16llx) replication apply failed %d", r->id, status);
         /* TODO: just log the error? */
 	evtErrf("raft(%llx) apply error %d", r->id, rv);
     }
@@ -588,6 +600,7 @@ static int appendLeader(struct raft *r, raft_index index)
     /* Acquire all the entries from the given index onwards. */
     rv = logAcquire(&r->log, index, &entries, &n);
     if (rv != 0) {
+        evtErrf("raft(%16llx) log acquire failed %d", r->id, rv);
         goto err;
     }
 
@@ -599,6 +612,7 @@ static int appendLeader(struct raft *r, raft_index index)
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
         rv = RAFT_NOMEM;
+        evtErrf("%s", "malloc");
         goto err_after_entries_acquired;
     }
 
@@ -610,6 +624,7 @@ static int appendLeader(struct raft *r, raft_index index)
 
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
+        evtErrf("raft(%16llx) append failed %d", r->id, rv);
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_request_alloc;
     }
@@ -632,6 +647,7 @@ int replicationTrigger(struct raft *r, raft_index index)
 
     rv = appendLeader(r, index);
     if (rv != 0) {
+        evtErrf("raft(%16llx) append leader failed %d", r->id, rv);
         return rv;
     }
 
@@ -675,6 +691,7 @@ static int triggerActualPromotion(struct raft *r)
     /* Encode the new configuration and append it to the log. */
     rv = logAppendConfiguration(&r->log, term, &r->configuration);
     if (rv != 0) {
+        evtErrf("raft(%16llx) log append conf failed %d", r->id, rv);
         goto err;
     }
 
@@ -686,6 +703,7 @@ static int triggerActualPromotion(struct raft *r)
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);
     if (rv != 0) {
+        evtErrf("raft(%16llx) replication trigger failed %d", r->id, rv);
         goto err_after_log_append;
     }
 
@@ -783,6 +801,7 @@ int replicationUpdate(struct raft *r,
         if (is_up_to_date) {
             rv = triggerActualPromotion(r);
             if (rv != 0) {
+                evtErrf("raft(%16llx) trigger promotion failed %d", r->id, rv);
                 return rv;
             }
         }
@@ -793,6 +812,7 @@ int replicationUpdate(struct raft *r,
 
     rv = replicationApply(r);
     if (rv != 0) {
+        evtErrf("raft(%16llx) replication apply failed %d", r->id, rv);
         /* TODO: just log the error? */
     }
 
@@ -847,12 +867,15 @@ static void sendAppendEntriesResult(
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
+        evtErrf("%s", "malloc");
         return;
     }
     req->data = r;
 
     rv = r->io->send(r->io, req, &message, sendAppendEntriesResultCb);
     if (rv != 0) {
+        if (rv != RAFT_NOCONNECTION)
+            evtErrf("raft(%16llx) send failed %d", r->id, rv);
         raft_free(req);
     }
 }
@@ -928,6 +951,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         if (entry->type == RAFT_CHANGE) {
             rv = membershipUncommittedChange(r, index, entry);
             if (rv != 0) {
+                evtErrf("raft(%16llx) ship change failed %d", r->id, rv);
                 goto out;
             }
         }
@@ -943,6 +967,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         r->commit_index = min(args->leader_commit, r->last_stored);
         rv = replicationApply(r);
         if (rv != 0) {
+            evtErrf("raft(%16llx) replication apply failed %d", r->id, rv);
             goto out;
         }
     }
@@ -1069,6 +1094,7 @@ static int deleteConflictingEntries(struct raft *r,
             if (r->configuration_uncommitted_index >= entry_index) {
                 rv = membershipRollback(r);
                 if (rv != 0) {
+                    evtErrf("raft(%16llx) rollback failed %d", r->id, rv);
                     return rv;
                 }
             }
@@ -1077,6 +1103,7 @@ static int deleteConflictingEntries(struct raft *r,
              * match. */
             rv = r->io->truncate(r->io, entry_index);
             if (rv != 0) {
+                evtErrf("raft(%16llx) truncate failed %d", r->id, rv);
                 return rv;
             }
             logTruncate(&r->log, entry_index);
@@ -1134,6 +1161,7 @@ int replicationAppend(struct raft *r,
     /* Delete conflicting entries. */
     rv = deleteConflictingEntries(r, args, &i);
     if (rv != 0) {
+        evtErrf("raft(%16llx) delete conflicting entries failed %d", r->id, rv);
         return rv;
     }
 
@@ -1158,6 +1186,7 @@ int replicationAppend(struct raft *r,
             r->commit_index = min(args->leader_commit, r->last_stored);
             rv = replicationApply(r);
             if (rv != 0) {
+                evtErrf("raft(%16llx) replication apply failed %d", r->id, rv);
                 return rv;
             }
         }
@@ -1170,6 +1199,7 @@ int replicationAppend(struct raft *r,
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
         rv = RAFT_NOMEM;
+        evtErrf("%s", "malloc");
         goto err;
     }
 
@@ -1190,6 +1220,7 @@ int replicationAppend(struct raft *r,
           */
 	rv = logAppend(&r->log, entry->term, entry->type, &entry->buf, entry->batch);
         if (rv != 0) {
+            evtErrf("raft(%16llx) log append failed %d", r->id, rv);
             goto err_after_request_alloc;
         }
     }
@@ -1198,6 +1229,7 @@ int replicationAppend(struct raft *r,
     rv = logAcquire(&r->log, request->index, &request->args.entries,
                     &request->args.n_entries);
     if (rv != 0) {
+        evtErrf("raft(%16llx) log acquire failed %d", r->id, rv);
         goto err_after_request_alloc;
     }
 
@@ -1207,6 +1239,8 @@ int replicationAppend(struct raft *r,
 	    tracef("args->prev_log_term = %llu, args->prev_log_index = %llu, args->n_entries = %u",
 		   args->prev_log_term, args->prev_log_index, args->n_entries);
 	    ErrMsgPrintf(r->errmsg, "No log entries found at index %llu", request->index);
+	    evtErrf("raft(%16llx) no log entries found at index %llu",
+		    r->id, request->index);
 	    rv = RAFT_SHUTDOWN;
 	    goto err_after_acquire_entries;
     }
@@ -1215,6 +1249,7 @@ int replicationAppend(struct raft *r,
                        request->args.n_entries, appendFollowerCb);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
+        evtErrf("raft(%16llx) append failed %d", r->id, rv);
         goto err_after_acquire_entries;
     }
     r->nr_appending_requests += 1;
@@ -1354,6 +1389,7 @@ int replicationInstallSnapshot(struct raft *r,
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
+        evtErrf("%s", "malloc");
         rv = RAFT_NOMEM;
         goto err;
     }
@@ -1368,6 +1404,7 @@ int replicationInstallSnapshot(struct raft *r,
     snapshot->bufs = raft_malloc(sizeof *snapshot->bufs);
     if (snapshot->bufs == NULL) {
         rv = RAFT_NOMEM;
+        evtErrf("%s", "malloc");
         goto err_after_request_alloc;
     }
     snapshot->bufs[0] = args->data;
@@ -1379,6 +1416,7 @@ int replicationInstallSnapshot(struct raft *r,
                              0 /* zero trailing means replace everything */,
                              &r->snapshot.put, snapshot, installSnapshotCb);
     if (rv != 0) {
+        evtErrf("raft(%16llx) snapshot put failed %d", r->id, rv);
         goto err_after_bufs_alloc;
     }
 
@@ -1424,6 +1462,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
             int rv = replicationApply(r);
 
             if (rv != 0) {
+                evtErrf("raft(%16llx) replication apply failed %d", r->id, rv);
                 /* TODO: just log the error? */
             }
         }
@@ -1452,8 +1491,10 @@ static int applyCommand(struct raft *r,
                        &request->req,
                        buf,
                        applyCommandCb);
-    if (rv != 0)
+    if (rv != 0) {
+        evtErrf("raft(%16llx) apply failed %d", r->id, rv);
         raft_free(request);
+    }
 
     return rv;
 }
@@ -1563,6 +1604,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
                snapshot->index,
                snapshot->term,
                raft_strerror(status));
+        evtErrf("copy conf failed %d", status);
         goto out;
     }
 
@@ -1586,6 +1628,7 @@ static int takeSnapshot(struct raft *r)
 
     rv = configurationCopy(&r->configuration, &snapshot->configuration);
     if (rv != 0) {
+        evtErrf("raft(%16llx) copy conf failed %d", r->id, rv);
         goto abort;
     }
 
@@ -1593,6 +1636,7 @@ static int takeSnapshot(struct raft *r)
 
     rv = r->fsm->snapshot(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
     if (rv != 0) {
+        evtErrf("raft(%16llx) snapshot failed %d", r->id, rv);
         /* Ignore transient errors. We'll retry next time. */
         if (rv == RAFT_BUSY) {
             rv = 0;
@@ -1605,6 +1649,7 @@ static int takeSnapshot(struct raft *r)
     rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
                              snapshot, takeSnapshotCb);
     if (rv != 0) {
+        evtErrf("raft(%16llx) snapshot put failed %d", r->id, rv);
         goto abort_after_fsm_snapshot;
     }
 
@@ -1669,6 +1714,7 @@ int replicationApply(struct raft *r)
         }
 
         if (rv != 0) {
+            evtErrf("raft(%16llx) apply failed %d", r->id, rv);
             break;
         }
 
@@ -1678,6 +1724,8 @@ int replicationApply(struct raft *r)
 err_take_snapshot:
     if (shouldTakeSnapshot(r)) {
         rv = takeSnapshot(r);
+	if (rv != 0)
+            evtErrf("raft(%16llx) take snapshot failed %d", r->id, rv);
     }
 
     return rv;

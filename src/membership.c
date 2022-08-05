@@ -6,6 +6,7 @@
 #include "err.h"
 #include "log.h"
 #include "progress.h"
+#include "event.h"
 
 int membershipCanChangeConfiguration(struct raft *r)
 {
@@ -114,6 +115,7 @@ int membershipUncommittedChange(struct raft *r,
 
     rv = configurationDecode(&entry->buf, &configuration);
     if (rv != 0) {
+        evtErrf("raft(%16llx) decode conf failed %d", r->id, rv);
         goto err;
     }
 
@@ -156,6 +158,7 @@ int membershipRollback(struct raft *r)
     }
 
     if (rv != 0) {
+        evtErrf("raft(%16llx) roll back conf failed %d", r->id, rv);
         return rv;
     }
 
@@ -194,6 +197,8 @@ int membershipLeadershipTransferStart(struct raft *r)
     if (rv != 0) {
         ErrMsgTransferf(r->io->errmsg, r->errmsg, "send timeout now to %llu",
                         server->id);
+	if (rv != RAFT_NOCONNECTION)
+		evtErrf("raft(%16llx) send transfer failed %d", r->id, rv);
         return rv;
     }
     return 0;

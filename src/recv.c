@@ -50,6 +50,7 @@ int recvUpdateMeta(struct raft *r,
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
         rv = RAFT_NOMEM;
+        evtErrf("raft(%16llx) malloc failed %d", r->id, rv);
         goto meta_err_nomen;
     }
     if(message) {
@@ -65,8 +66,10 @@ int recvUpdateMeta(struct raft *r,
                  term,
                  voted_for,
                  cb);
-    if (rv != 0)
+    if (rv != 0) {
+        evtErrf("raft(%16llx) set meta failed %d", r->id, rv);
         goto meta_io_err;
+    }
 
     return 0;
 meta_io_err:
@@ -170,10 +173,14 @@ static int recvMessage(struct raft *r, struct raft_message *message)
     if (message->type < RAFT_IO_APPEND_ENTRIES ||
         message->type > RAFT_IO_TIMEOUT_NOW) {
         tracef("received unknown message type type: %d", message->type);
+        evtErrf("raft(%16llx) received unknown message type %d",
+		r->id, message->type);
         return 0;
     }
 
     rv = recvEnsureMatchingTerm(r, message, &async);
+    if (rv != 0)
+        evtErrf("raft(%16llx) ensure matching term failed %d", r->id, rv);
 
     if (async) {
         return rv;
@@ -224,6 +231,8 @@ static int recvMessage(struct raft *r, struct raft_message *message)
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* tracef("recv: %s: %s", message_descs[message->type - 1],
                  raft_strerror(rv)); */
+        evtErrf("raft(%16llx) recv message %d failed %d",
+		r->id, message->type, rv);
         return rv;
     }
 

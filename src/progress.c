@@ -326,6 +326,7 @@ void progressUpdateMinMatch(struct raft *r)
 	struct raft_server *s;
 	struct raft_progress *p;
 	raft_index tmp = logLastIndex(&r->log);
+	raft_id id = 0;
 
 	assert(r->sync_replication);
 	for (i = 0; i < r->configuration.n; ++i) {
@@ -335,9 +336,13 @@ void progressUpdateMinMatch(struct raft *r)
 			continue;
 		}
 		p = &r->leader_state.progress[i];
-		tmp = min(tmp, p->match_index);
+		if (p->match_index <= tmp) {
+			tmp = p->match_index;
+			id = s->id;
+		}
 	}
 	r->leader_state.min_match_index = tmp;
+	r->leader_state.slowest_replica_id = id;
 }
 
 #undef tracef

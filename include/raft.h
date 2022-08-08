@@ -727,6 +727,7 @@ struct raft
             raft_time round_start;          /* Start of current round. */
             void *requests[2];              /* Outstanding client requests. */
 	    raft_index min_match_index;     /* The minimum match index */
+	    raft_id slowest_replica_id;     /* The slowest replica id */
         } leader_state;
     };
 

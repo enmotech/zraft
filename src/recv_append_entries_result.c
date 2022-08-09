@@ -4,6 +4,7 @@
 #include "tracing.h"
 #include "recv.h"
 #include "replication.h"
+#include "event.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -54,12 +55,14 @@ int recvAppendEntriesResult(struct raft *r,
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         tracef("unknown server -> ignore");
+        evtWarnf("raft(%16llx) ignore unknown server %llx", r->id, id);
         return 0;
     }
 
     /* Update the progress of this server, possibly sending further entries. */
     rv = replicationUpdate(r, server->id, result);
     if (rv != 0) {
+        evtErrf("raft(%16llx) replication update failed %d", r->id, rv);
         return rv;
     }
 

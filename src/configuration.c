@@ -2,6 +2,7 @@
 
 #include "assert.h"
 #include "byte.h"
+#include "event.h"
 
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
@@ -70,6 +71,7 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
 
     if (i == c->n) {
         /* No server with matching ID. */
+        evtNoticef("no server with matching id %llx", id);
         return NULL;
     }
     assert(i < c->n);
@@ -100,6 +102,7 @@ int configurationCopy(const struct raft_configuration *src,
         struct raft_server *server = &src->servers[i];
         rv = configurationAdd(dst, server->id, server->role);
         if (rv != 0) {
+            evtErrf("add conf failed id %d role %d", server->id, server->role);
             return rv;
         }
     }
@@ -117,6 +120,7 @@ int configurationAdd(struct raft_configuration *c,
     assert(id != 0);
 
     if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
+        evtErrf("conf add bad role %d", role);
         return RAFT_BADROLE;
     }
 
@@ -124,6 +128,7 @@ int configurationAdd(struct raft_configuration *c,
     for (i = 0; i < c->n; i++) {
         server = &c->servers[i];
         if (server->id == id) {
+            evtErrf("conf add duplicated id %llx", id);
             return RAFT_DUPLICATEID;
         }
     }
@@ -131,6 +136,7 @@ int configurationAdd(struct raft_configuration *c,
     /* Grow the servers array.. */
     servers = raft_realloc(c->servers, (c->n + 1) * sizeof *server);
     if (servers == NULL) {
+        evtErrf("conf add realloc failed, id %llx role %d", id, role);
         return RAFT_NOMEM;
     }
     c->servers = servers;
@@ -162,6 +168,7 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
 
     i = configurationIndexOf(c, id);
     if (i == c->n) {
+        evtErrf("conf remove bad id %llx", id);
         return RAFT_BADID;
     }
 
@@ -178,6 +185,7 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     /* Create a new servers array. */
     servers = raft_calloc(c->n - 1, sizeof *servers);
     if (servers == NULL) {
+        evtErrf("conf remove calloc failed, id %llx", id);
         return RAFT_NOMEM;
     }
 
@@ -248,6 +256,7 @@ int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c)
 
     /* Check the encoding format version */
     if (byteGet8(&buf) != ENCODING_FORMAT) {
+        evtErrf("%s", "malformed");
 	return RAFT_MALFORMED;
     }
 
@@ -267,6 +276,7 @@ int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c)
 
 	rv = configurationAdd(c, id, role);
 	if (rv != 0) {
+            evtErrf("conf add %llx failed", id, rv);
 	    return rv;
 	}
     }
@@ -288,6 +298,7 @@ static int defaultEncode(void *ptr,
     buf->len = configurationEncodedSize(c);
     buf->base = raft_entry_malloc(buf->len);
     if (buf->base == NULL) {
+        evtErrf("%s", "malloc failed");
         return RAFT_NOMEM;
     }
 

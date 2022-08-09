@@ -87,6 +87,7 @@ static int electionSend(struct raft *r, const struct raft_server *server)
 
     send = HeapMalloc(sizeof *send);
     if (send == NULL) {
+        evtErrf("raft(%16llx) heap malloc failed", r->id);
         return RAFT_NOMEM;
     }
 
@@ -94,6 +95,8 @@ static int electionSend(struct raft *r, const struct raft_server *server)
 
     rv = r->io->send(r->io, send, &message, sendRequestVoteCb);
     if (rv != 0) {
+        if (rv != RAFT_NOCONNECTION)
+            evtErrf("raft(%16llx) election send failed %d", r->id, rv);
         HeapFree(send);
         return rv;
     }
@@ -123,7 +126,7 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
     assert(r->state == RAFT_CANDIDATE);
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
-	evtErrf("raft %x set meta failed %d", r->id, status);
+	evtErrf("raft(%16llx) set meta failed %d", r->id, status);
         convertToUnavailable(r);
         goto err;
     }
@@ -156,6 +159,8 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
             /* This is not a critical failure, let's just log it. */
             tracef("failed to send vote request to server %llu: %s", server->id,
                    raft_strerror(rv));
+            if (rv != RAFT_NOCONNECTION)
+                evtErrf("send vote to server %llx failed %d", server->id, rv);
         }
     }
 
@@ -171,6 +176,7 @@ static int electionUpdateMeta(struct raft *r)
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
         rv = RAFT_NOMEM;
+        evtErrf("raft(%16llx) malloc failed %d", r->id, rv);
         goto err2;
     }
 
@@ -186,8 +192,10 @@ static int electionUpdateMeta(struct raft *r)
                  request->term,
                  request->voted_for,
                  electionSetMetaCb);
-    if (rv != 0)
+    if (rv != 0) {
+        evtErrf("raft(%16llx) set meta failed %d", r->id, rv);
         goto err1;
+    }
 
     return 0;
 
@@ -243,6 +251,8 @@ int electionStart(struct raft *r)
             /* This is not a critical failure, let's just log it. */
             tracef("failed to send vote request to server %llu: %s", server->id,
                    raft_strerror(rv));
+	    if (rv != RAFT_NOCONNECTION)
+                evtErrf("send vote to server %llx failed %d", server->id, rv);
         }
     }
 

@@ -33,8 +33,11 @@ static void recvVoteResultBumpTermIOCb(struct raft_io_set_meta *req, int status)
     struct set_meta_req *request = req->data;
     struct raft *r = request->raft;
 
-    if (r->state == RAFT_UNAVAILABLE)
+    if (r->state == RAFT_UNAVAILABLE) {
+        evtErrf("raft(%16llx) recv rv result set meta cb, state is unavailable",
+		r->id);
         goto err;
+    }
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
 	evtErrf("raft %x bump term for rvr %x %u failed ", r->id,

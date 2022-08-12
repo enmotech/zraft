@@ -598,6 +598,12 @@ typedef void (*raft_state_change_cb)(struct raft *raft, int state);
 struct raft_change;   /* Forward declaration */
 struct raft_transfer; /* Forward declaration */
 
+/* Quorum types */
+enum raft_quorum {
+	RAFT_MAJORITY = 0,
+	RAFT_FULL
+};
+
 /**
  * Hold and drive the state of a single raft server in a cluster.
  */
@@ -788,6 +794,9 @@ struct raft
 		    bool match_leader;
 	    } follower_aux;
     };
+
+    /* Quorum type */
+    enum raft_quorum quorum;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1043,6 +1052,12 @@ RAFT_API int raft_remove(struct raft *r,
                          struct raft_change *req,
                          raft_id id,
                          raft_change_cb cb);
+/**
+ * Dup current cluster configuration.
+ */
+RAFT_API int raft_dup(struct raft *r,
+		      struct raft_change *req,
+		      raft_change_cb cb);
 
 /**
  * Asynchronous request to transfer leadership.
@@ -1200,6 +1215,17 @@ struct raft_event_recorder {
 
 /* set user defined event recoder */
 RAFT_API void raft_set_event_recorder(struct raft_event_recorder *r);
+
+
+/* Set quorum for raft */
+RAFT_API void raft_set_quorum(struct raft *r, enum raft_quorum q);
+
+/**
+ * Replace current configuration. This api must be called when raft's state is
+ * follower
+ */
+RAFT_API void raft_replace_configuration(struct raft *r,
+					 struct raft_configuration conf);
 
 #undef RAFT__REQUEST
 

@@ -356,7 +356,11 @@ bool electionTally(struct raft *r, size_t voter_index)
         }
     }
 
-    return votes >= half + 1;
+    if (r->quorum == RAFT_MAJORITY)
+	    return votes >= half + 1;
+
+    assert(r->quorum == RAFT_FULL);
+    return votes >= n_voters;
 }
 
 #undef tracef

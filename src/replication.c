@@ -1549,8 +1549,21 @@ static void applyChange(struct raft *r, const raft_index index)
     }
 }
 
+static raft_index nextSnapshotIndex(struct raft *r)
+{
+	raft_index snapshot_index = r->last_applying;
+
+	if (r->state == RAFT_LEADER && r->sync_replication) {
+		progressUpdateMinMatch(r);
+		snapshot_index = min(r->leader_state.min_match_index,
+				     r->last_applying);
+	}
+	return snapshot_index;
+}
+
 static bool shouldTakeSnapshot(struct raft *r)
 {
+    raft_index snapshot_index;
     /* If we are shutting down, let's not do anything. */
     if (r->state == RAFT_UNAVAILABLE) {
         return false;
@@ -1567,18 +1580,11 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
+    snapshot_index = nextSnapshotIndex(r);
     /* If we didn't reach the threshold yet, do nothing. */
-    if (r->last_applying - r->log.snapshot.last_index < r->snapshot.threshold) {
+    if (snapshot_index - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;
     }
-
-    if (r->state == RAFT_LEADER && r->sync_replication) {
-	    progressUpdateMinMatch(r);
-	    if (r->leader_state.min_match_index < r->last_applying) {
-		    return false;
-	    }
-    }
-
     return true;
 }
 
@@ -1619,12 +1625,13 @@ static int takeSnapshot(struct raft *r)
     struct raft_snapshot *snapshot;
     unsigned i;
     int rv;
+    raft_index snapshot_index = nextSnapshotIndex(r);
 
-    tracef("take snapshot at %lld", r->last_applying);
+    tracef("take snapshot at %lld", snapshot_index);
 
     snapshot = &r->snapshot.pending;
-    snapshot->index = r->last_applying;
-    snapshot->term = logTermOf(&r->log, r->last_applying);
+    snapshot->index = snapshot_index;
+    snapshot->term = logTermOf(&r->log, snapshot_index);
 
     rv = configurationCopy(&r->configuration, &snapshot->configuration);
     if (rv != 0) {

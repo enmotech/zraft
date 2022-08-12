@@ -1581,6 +1581,8 @@ static bool shouldTakeSnapshot(struct raft *r)
     }
 
     snapshot_index = nextSnapshotIndex(r);
+    if (snapshot_index <= r->log.snapshot.last_index)
+	    return false;
     /* If we didn't reach the threshold yet, do nothing. */
     if (snapshot_index - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;

@@ -179,6 +179,7 @@ int raft_abootstrap(struct raft *r,
            raft_io_bootstrap_cb cb)
 {
     int rv;
+    raft_id id = r->id;
 
     if (r->state != RAFT_UNAVAILABLE) {
         evtErrf("raft(%16llx) raft state %d", r->id, r->state);
@@ -187,7 +188,7 @@ int raft_abootstrap(struct raft *r,
 
     rv = r->io->abootstrap(r->io, req, conf, cb);
     if (rv != 0) {
-        evtErrf("raft(%16llx) abootstrap failed %d", r->id, rv);
+        evtErrf("raft(%16llx) abootstrap failed %d", id, rv);
         return rv;
     }
 

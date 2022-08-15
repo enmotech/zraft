@@ -983,11 +983,11 @@ static int checkLogMatchingProperty(struct raft *r,
     if (local_prev_term != args->prev_log_term) {
         if (args->prev_log_index <= r->commit_index) {
             /* Should never happen; something is seriously wrong! */
-            tracef(
-                "conflicting terms %llu and %llu for entry %llu (commit "
-                "index %llu) -> shutdown",
-                local_prev_term, args->prev_log_term, args->prev_log_index,
-                r->commit_index);
+            evtErrf(
+		"raft(%16llx) conflicting terms %llu and %llu for entry %llu"
+		"(commit index %llu) -> shutdown",
+                r->id, local_prev_term, args->prev_log_term,
+		args->prev_log_index, r->commit_index);
             return -1;
         }
         tracef("previous term mismatch -> reject");

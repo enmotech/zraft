@@ -179,6 +179,7 @@ int raft_abootstrap(struct raft *r,
            raft_io_bootstrap_cb cb)
 {
     int rv;
+    raft_id id = r->id;
 
     if (r->state != RAFT_UNAVAILABLE) {
         evtErrf("raft(%16llx) raft state %d", r->id, r->state);

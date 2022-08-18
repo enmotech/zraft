@@ -121,8 +121,11 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
     size_t i;
     int rv;
 
-    if (r->state == RAFT_UNAVAILABLE)
+    if (r->state == RAFT_UNAVAILABLE) {
+        evtErrf("raft(%16llx) election set meta cb, state is unavailable",
+		r->id);
         goto err;
+    }
     assert(r->state == RAFT_CANDIDATE);
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
@@ -187,6 +190,8 @@ static int electionUpdateMeta(struct raft *r)
 
 
     r->io->state = RAFT_IO_BUSY;
+    evtNoticef("raft(%16llx) election set meta term %u vote_fo %lu", r->id,
+	       request->term, request->voted_for);
     rv = r->io->set_meta(r->io,
                  &request->req,
                  request->term,

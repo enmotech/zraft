@@ -1,5 +1,5 @@
 #include <string.h>
-
+#include <stdlib.h>
 #include "assert.h"
 #include "configuration.h"
 #include "convert.h"
@@ -332,6 +332,10 @@ int replicationProgress(struct raft *r, unsigned i)
         if (snapshot_index > 0 && !progress_state_is_snapshot) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
+	    evtNoticef("raft(%llx) send %llx snapshot %llu/%llu recent %d",
+		       r->id, server->id, next_index,
+		       r->leader_state.min_match_index,
+		       progressGetRecentRecv(r, i));
             goto send_snapshot;
         }
         prev_index = 0;
@@ -346,6 +350,10 @@ int replicationProgress(struct raft *r, unsigned i)
         if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
+	    evtNoticef("raft(%llx) send %llx snapshot %llu/%llu recent %d",
+		       r->id, server->id, next_index,
+		       r->leader_state.min_match_index,
+		       progressGetRecentRecv(r, i));
             goto send_snapshot;
         }
     }
@@ -487,6 +495,8 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     tracef("leader: written %u entries starting at %lld: status %d", request->n,
            request->index, status);
 
+    assert(r->nr_appending_requests > 0);
+    r->nr_appending_requests -= 1;
     /* In case of a failed disk write, if we were the leader creating these
      * entries in the first place, truncate our log too (since we have appended
      * these entries to it) and fire the request callback. */
@@ -501,14 +511,17 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
                 apply->cb(apply, status, NULL);
             }
         }
+	evtErrf("raft(%llx) append status %d", r->id, status);
         goto out;
     }
+
 
     updateLastStored(r, request->index, request->entries, request->n);
 
     /* If we are not leader anymore, just discard the result. */
     if (r->state != RAFT_LEADER) {
         tracef("local server is not leader -> ignore write log result");
+	evtWarnf("raft(%llx) is not leader, ignore write log result", r->id);
         goto out;
     }
 
@@ -539,14 +552,30 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     if (rv != 0) {
         evtErrf("raft(%16llx) replication apply failed %d", r->id, status);
         /* TODO: just log the error? */
+	evtErrf("raft(%llx) apply error %d", r->id, rv);
     }
 
 out:
+    if (r->prev_append_status != 0 && status == 0) {
+        evtErrf("raft(%llx) previous append status %d", r->id,
+		r->prev_append_status);
+	abort();
+    }
+
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, request->index, request->entries, request->n);
-    if (status != 0) {
+    if (status != 0 && r->prev_append_status == 0) {
         logTruncate(&r->log, request->index);
+        evtErrf("raft(%llx) truncate log from %llu", r->id, request->index);
     }
+
+    r->prev_append_status = status;
+    /* Reset prev append status when the last request callback*/
+    if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
+        r->prev_append_status = 0;
+        evtWarnf("raft(%llx) reset previous append status", r->id);
+    }
+
     raft_free(request);
 }
 
@@ -561,6 +590,12 @@ static int appendLeader(struct raft *r, raft_index index)
     assert(r->state == RAFT_LEADER);
     assert(index > 0);
     assert(index > r->last_stored);
+
+    if (r->prev_append_status) {
+        evtErrf("raft(%llx) reject append with prev append status %d",
+		r->id, r->prev_append_status);
+        return r->prev_append_status;
+    }
 
     /* Acquire all the entries from the given index onwards. */
     rv = logAcquire(&r->log, index, &entries, &n);
@@ -593,6 +628,7 @@ static int appendLeader(struct raft *r, raft_index index)
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_request_alloc;
     }
+    r->nr_appending_requests += 1;
 
     return 0;
 
@@ -868,9 +904,13 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     assert(args->entries != NULL);
     assert(args->n_entries > 0);
 
+    assert(r->nr_appending_requests > 0);
+    r->nr_appending_requests -= 1;
+
     result.pkt = args->pkt;
     result.term = r->current_term;
     if (status != 0) {
+        evtErrf("raft(%llx) append follower status %d", r->id, status);
         if (r->state != RAFT_FOLLOWER) {
             tracef("local server is not follower -> ignore I/O failure");
             goto out;
@@ -944,8 +984,26 @@ respond:
     sendAppendEntriesResult(r, &result);
 
 out:
+    if (r->prev_append_status != 0 && status == 0) {
+        evtErrf("raft(%llx) previous append status %d", r->id,
+		r->prev_append_status);
+       abort();
+    }
+
     logRelease(&r->log, request->index, request->args.entries,
 	    request->args.n_entries);
+
+    if (status != 0 && r->prev_append_status == 0) {
+        logTruncate(&r->log, request->index);
+        evtErrf("raft(%llx) truncate log from %llu", r->id, request->index);
+    }
+
+    r->prev_append_status = status;
+    /* Reset prev append status when the last request callback*/
+    if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
+        r->prev_append_status = 0;
+        evtWarnf("raft(%llx) reset previous append status", r->id);
+    }
 
     raft_free(request);
 }
@@ -1194,6 +1252,7 @@ int replicationAppend(struct raft *r,
         evtErrf("raft(%16llx) append failed %d", r->id, rv);
         goto err_after_acquire_entries;
     }
+    r->nr_appending_requests += 1;
 
     entryNonBatchDestroyPrefix(args->entries, args->n_entries, i);
     raft_free(args->entries);
@@ -1490,8 +1549,21 @@ static void applyChange(struct raft *r, const raft_index index)
     }
 }
 
+static raft_index nextSnapshotIndex(struct raft *r)
+{
+	raft_index snapshot_index = r->last_applying;
+
+	if (r->state == RAFT_LEADER && r->sync_replication) {
+		progressUpdateMinMatch(r);
+		snapshot_index = min(r->leader_state.min_match_index,
+				     r->last_applying);
+	}
+	return snapshot_index;
+}
+
 static bool shouldTakeSnapshot(struct raft *r)
 {
+    raft_index snapshot_index;
     /* If we are shutting down, let's not do anything. */
     if (r->state == RAFT_UNAVAILABLE) {
         return false;
@@ -1508,11 +1580,13 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
+    snapshot_index = nextSnapshotIndex(r);
+    if (snapshot_index <= r->log.snapshot.last_index)
+	    return false;
     /* If we didn't reach the threshold yet, do nothing. */
-    if (r->last_applying - r->log.snapshot.last_index < r->snapshot.threshold) {
+    if (snapshot_index - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;
     }
-
     return true;
 }
 
@@ -1553,12 +1627,13 @@ static int takeSnapshot(struct raft *r)
     struct raft_snapshot *snapshot;
     unsigned i;
     int rv;
+    raft_index snapshot_index = nextSnapshotIndex(r);
 
-    tracef("take snapshot at %lld", r->last_applying);
+    tracef("take snapshot at %lld", snapshot_index);
 
     snapshot = &r->snapshot.pending;
-    snapshot->index = r->last_applying;
-    snapshot->term = logTermOf(&r->log, r->last_applying);
+    snapshot->index = snapshot_index;
+    snapshot->term = logTermOf(&r->log, snapshot_index);
 
     rv = configurationCopy(&r->configuration, &snapshot->configuration);
     if (rv != 0) {
@@ -1611,7 +1686,7 @@ int replicationApply(struct raft *r)
 
     if (r->last_applied == r->commit_index) {
         /* Nothing to do. */
-        return 0;
+	goto err_take_snapshot;
     }
 
     for (index = r->last_applying + 1; index <= r->commit_index; index++) {
@@ -1655,6 +1730,7 @@ int replicationApply(struct raft *r)
         r->last_applying = index;
     }
 
+err_take_snapshot:
     if (shouldTakeSnapshot(r)) {
         rv = takeSnapshot(r);
 	if (rv != 0)

@@ -1041,11 +1041,11 @@ static int checkLogMatchingProperty(struct raft *r,
     if (local_prev_term != args->prev_log_term) {
         if (args->prev_log_index <= r->commit_index) {
             /* Should never happen; something is seriously wrong! */
-            tracef(
-                "conflicting terms %llu and %llu for entry %llu (commit "
-                "index %llu) -> shutdown",
-                local_prev_term, args->prev_log_term, args->prev_log_index,
-                r->commit_index);
+            evtErrf(
+		"raft(%16llx) conflicting terms %llu and %llu for entry %llu"
+		"(commit index %llu) -> shutdown",
+                r->id, local_prev_term, args->prev_log_term,
+		args->prev_log_index, r->commit_index);
             return -1;
         }
         tracef("previous term mismatch -> reject");
@@ -1744,6 +1744,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 {
     size_t votes = 0;
     size_t i;
+    size_t n_voters;
 
     assert(r->state == RAFT_LEADER);
 
@@ -1772,12 +1773,14 @@ void replicationQuorum(struct raft *r, const raft_index index)
         }
     }
 
-    if (votes > configurationVoterCount(&r->configuration) / 2) {
-        r->commit_index = index;
-        tracef("new commit index %llu", r->commit_index);
-    }
+    n_voters = configurationVoterCount(&r->configuration);
+    if (r->quorum == RAFT_MAJORITY && votes <= n_voters / 2)
+	    return;
+    if (r->quorum == RAFT_FULL && votes < n_voters)
+	    return;
 
-    return;
+    r->commit_index = index;
+    tracef("new commit index %llu", r->commit_index);
 }
 
 inline bool replicationInstallSnapshotBusy(struct raft *r)

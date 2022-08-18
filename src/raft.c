@@ -71,6 +71,7 @@ int raft_init(struct raft *r,
     r->sync_replication = false;
     r->nr_appending_requests = 0;
     r->prev_append_status = 0;
+    r->quorum = RAFT_MAJORITY;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -186,6 +187,8 @@ int raft_abootstrap(struct raft *r,
         return RAFT_BUSY;
     }
 
+    //avoid r is freed in cb
+    raft_id id = r->id;
     rv = r->io->abootstrap(r->io, req, conf, cb);
     if (rv != 0) {
         evtErrf("raft(%16llx) abootstrap failed %d", id, rv);
@@ -293,5 +296,21 @@ bool raft_aux_match_leader(struct raft *r)
 void raft_set_sync_replication(struct raft *r, bool sync)
 {
 	r->sync_replication = sync;
+}
+
+void raft_set_quorum(struct raft *r, enum raft_quorum q)
+{
+	assert(q == RAFT_MAJORITY || q == RAFT_FULL);
+	r->quorum = q;
+}
+
+RAFT_API void raft_replace_configuration(struct raft *r,
+					 struct raft_configuration conf)
+{
+	if (r->state != RAFT_FOLLOWER)
+		convertToFollower(r);
+	assert(r->state == RAFT_FOLLOWER);
+	raft_configuration_close(&r->configuration);
+	r->configuration = conf;
 }
 

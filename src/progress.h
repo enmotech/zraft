@@ -108,4 +108,7 @@ bool progressMaybeDecrement(struct raft *r,
 /* Return true if match_index is equal or higher than the snapshot_index. */
 bool progressSnapshotDone(struct raft *r, unsigned i);
 
+/* Reset the minimum match index */
+void progressUpdateMinMatch(struct raft *r);
+
 #endif /* PROGRESS_H_ */

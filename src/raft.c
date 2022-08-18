@@ -68,6 +68,9 @@ int raft_init(struct raft *r,
     r->message_log_threshold = DEFAULT_MESSAGE_LOG_THRESHOLD;
     r->inflight_log_threshold = DEFAULT_INFLIGHT_LOG_THRESHOLD;
     r->hook = &defaultHook;
+    r->sync_replication = false;
+    r->nr_appending_requests = 0;
+    r->prev_append_status = 0;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -176,14 +179,13 @@ int raft_abootstrap(struct raft *r,
            raft_io_bootstrap_cb cb)
 {
     int rv;
+    raft_id id = r->id;
 
     if (r->state != RAFT_UNAVAILABLE) {
         evtErrf("raft(%16llx) raft state %d", r->id, r->state);
         return RAFT_BUSY;
     }
 
-    //avoid r is freed in cb
-    raft_id id = r->id;
     rv = r->io->abootstrap(r->io, req, conf, cb);
     if (rv != 0) {
         evtErrf("raft(%16llx) abootstrap failed %d", id, rv);
@@ -287,3 +289,9 @@ bool raft_aux_match_leader(struct raft *r)
 
 	return r->follower_aux.match_leader;
 }
+
+void raft_set_sync_replication(struct raft *r, bool sync)
+{
+	r->sync_replication = sync;
+}
+

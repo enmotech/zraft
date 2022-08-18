@@ -318,6 +318,7 @@ int raft_assign(struct raft *r,
 
     r->leader_state.promotee_id = server->id;
 
+
     /* Initialize the first catch-up round. */
     r->leader_state.round_number = 1;
     r->leader_state.round_index = last_index;

@@ -52,6 +52,11 @@ int recvAppendEntries(struct raft *r,
     assert(id > 0);
     assert(args != NULL);
 
+    if (r->prev_append_status) {
+        evtErrf("raft(%llx) reject append with prev append status %d",
+		r->id, r->prev_append_status);
+        return RAFT_NOCONNECTION;
+    }
     result->pkt = args->pkt;
     result->rejected = args->prev_log_index;
     result->last_log_index = logLastIndex(&r->log);

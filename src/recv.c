@@ -61,6 +61,8 @@ int recvUpdateMeta(struct raft *r,
     request->voted_for = voted_for;
     request->req.data = request;
     r->io->state = RAFT_IO_BUSY;
+    evtNoticef("raft(%16llx) recv set meta term %u vote_fo %lu", r->id,
+	       request->term, request->voted_for);
     rv = r->io->set_meta(r->io,
                  &request->req,
                  term,
@@ -83,8 +85,11 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
     struct set_meta_req *request = req->data;
     struct raft *r = request->raft;
 
-    if (r->state == RAFT_UNAVAILABLE)
+    if (r->state == RAFT_UNAVAILABLE) {
+        evtErrf("raft(%16llx) bump set meta cb, state is unavailable",
+		r->id);
         goto err;
+    }
 
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {

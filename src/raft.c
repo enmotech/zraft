@@ -187,8 +187,6 @@ int raft_abootstrap(struct raft *r,
         return RAFT_BUSY;
     }
 
-    //avoid r is freed in cb
-    raft_id id = r->id;
     rv = r->io->abootstrap(r->io, req, conf, cb);
     if (rv != 0) {
         evtErrf("raft(%16llx) abootstrap failed %d", id, rv);

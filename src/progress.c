@@ -225,18 +225,27 @@ bool progressMaybeDecrement(struct raft *r,
                             raft_index rejected,
                             raft_index last_index)
 {
+    assert(i < r->configuration.n);
+    raft_id id = r->configuration.servers[i].id;
     struct raft_progress *p = &r->leader_state.progress[i];
 
     assert(p->state == PROGRESS__PROBE || p->state == PROGRESS__PIPELINE ||
            p->state == PROGRESS__SNAPSHOT);
 
+    evtNoticef("raft(%llx) %llx progress %u %llu %llu %llu %llu %llu %d",
+	       r->id, id, p->state, p->next_index, p->match_index,
+	       p->snapshot_index, p->last_send, p->snapshot_last_send,
+	       p->recent_recv);
     if (p->state == PROGRESS__SNAPSHOT) {
         /* The rejection must be stale or spurious if the rejected index does
          * not match the last snapshot index. */
         if (rejected != p->snapshot_index) {
+            evtWarnf("raft(%llx) %llx rejected %lu diff snapshot index %llu",
+		     r->id, id, rejected, p->snapshot_index);
             return false;
         }
         progressAbortSnapshot(r, i);
+        evtNoticef("raft(%llx) %llx abort snapshot", r->id, id);
         return true;
     }
 
@@ -250,6 +259,8 @@ bool progressMaybeDecrement(struct raft *r,
         /* Directly decrease next to match + 1 */
         p->next_index = min(rejected, p->match_index + 1);
         progressToProbe(r, i);
+        evtNoticef("raft(%llx) %llx to probe next_index %llu",
+		   r->id, id, p->next_index);
         return true;
     }
 
@@ -258,11 +269,13 @@ bool progressMaybeDecrement(struct raft *r,
     if (rejected != p->next_index - 1) {
         tracef("rejected index %llu different from next index %lld -> ignore ",
                rejected, p->next_index);
+	evtWarnf("raft(%llx) %llx rejected %lu diff next index %llu",
+		     r->id, id, rejected, p->next_index);
         return false;
     }
 
     p->next_index = min(rejected, last_index + 1);
-
+    evtNoticef("raft(%llx) %llx set next_index %llu", r->id, id, p->next_index);
     return true;
 }
 

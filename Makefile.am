@@ -73,7 +73,7 @@ test_unit_core_SOURCES = \
   test/unit/test_log.c \
   test/unit/test_queue.c
 test_unit_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
-test_unit_core_LDADD = libtest.la
+test_unit_core_LDADD = libtest.la ./.libs/libraft.a
 
 if LZ4_AVAILABLE
 test_unit_core_CFLAGS += -DLZ4_AVAILABLE
@@ -122,8 +122,8 @@ test_integration_core_SOURCES = \
   test/integration/test_etcd_migrate_3.c
 
 test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
-test_integration_core_LDFLAGS = -no-install ./.libs/libraft.a
-test_integration_core_LDADD = libtest.la libraft.la
+test_integration_core_LDFLAGS = -no-install
+test_integration_core_LDADD = libtest.la ./.libs/libraft.a
 
 test_fuzzy_core_SOURCES = \
   test/fuzzy/main_core.c \
@@ -133,7 +133,7 @@ test_fuzzy_core_SOURCES = \
   test/fuzzy/test_replication.c
 test_fuzzy_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_fuzzy_core_LDFLAGS = -no-install
-test_fuzzy_core_LDADD = libtest.la libraft.la
+test_fuzzy_core_LDADD = libtest.la ./.libs/libraft.a
 
 endif # FIXTURE_ENABLED
 

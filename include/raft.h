@@ -1197,6 +1197,8 @@ struct raft_hook
 				      raft_index index, raft_term term);
 	void (*entry_after_apply_fn)(struct raft_hook *h, raft_index index,
 				     const struct raft_entry *entry);
+	bool (*should_take_snapshot_fn)(struct raft_hook* h, 
+				raft_index snapshot_index);
 };
 
 RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);

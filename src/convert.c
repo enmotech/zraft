@@ -166,6 +166,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
 
     if (n_voters == 1) {
         tracef("self elect and convert to leader");
+        evtInfof("raft(%16llx) self elect and convert to leader", r->id);
         rv =  convertToLeader(r);
         if (rv != 0) {
             evtErrf("raft(%16llx) convert to leader failed %d", r->id, rv);

@@ -1587,6 +1587,11 @@ static bool shouldTakeSnapshot(struct raft *r)
     if (snapshot_index - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;
     }
+	
+    if (r->hook->should_take_snapshot_fn &&
+	    !r->hook->should_take_snapshot_fn(r->hook, snapshot_index))
+	    return false;
+
     return true;
 }
 

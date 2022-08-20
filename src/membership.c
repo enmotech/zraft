@@ -14,16 +14,22 @@ int membershipCanChangeConfiguration(struct raft *r)
 
     if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
+        evtNoticef("raft(%16llx) lost leadership with state %d",
+		r->id, r->state);
         goto err;
     }
 
     if (r->configuration_uncommitted_index != 0) {
         rv = RAFT_CANTCHANGE;
+        evtNoticef("raft(%16llx) has uncommitted configuration %llu",
+		r->id, r->configuration_uncommitted_index);
         goto err;
     }
 
     if (r->leader_state.promotee_id != 0) {
         rv = RAFT_CANTCHANGE;
+        evtNoticef("raft(%16llx) has promotee server(%16llx)",
+		r->id, r->leader_state.promotee_id);
         goto err;
     }
 

@@ -37,6 +37,18 @@ static void recvInvokeEntryHook(struct raft *r,
 				       args->prev_log_term);
 }
 
+static void recvUpdateLeaderSnapshotIndex(struct raft *r,
+					  raft_index snapshot_index)
+{
+	assert(r->state == RAFT_FOLLOWER);
+	if (r->follower_state.current_leader.snapshot_index == snapshot_index)
+		return;
+
+	evtInfof("raft(%llx) update leader snapshot index %llu",
+		 r->id, snapshot_index);
+	r->follower_state.current_leader.snapshot_index = snapshot_index;
+}
+
 int recvAppendEntries(struct raft *r,
                       raft_id id,
                       const struct raft_append_entries *args)
@@ -141,8 +153,10 @@ int recvAppendEntries(struct raft *r,
         return rv;
     }
 
-    recvInvokeEntryHook(r, args, result->rejected);
+    if (!result->rejected)
+	    recvUpdateLeaderSnapshotIndex(r, args->snapshot_index);
 
+    recvInvokeEntryHook(r, args, result->rejected);
     if (async) {
         return 0;
     }

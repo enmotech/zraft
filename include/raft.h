@@ -270,6 +270,7 @@ struct raft_append_entries
     raft_index leader_commit;   /* Leader's commit index. */
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n_entries;         /* Size of the log entries array. */
+    raft_index snapshot_index;  /* Index of current snapshot */
 };
 
 /**
@@ -708,6 +709,7 @@ struct raft
             struct                                /* Current leader info. */
             {
                 raft_id id;
+		raft_index snapshot_index;
             } current_leader;
         } follower_state;
         struct
@@ -791,6 +793,7 @@ struct raft
 	    } follower_aux;
     };
     bool sync_replication;
+    bool sync_snapshot;
 
     /* Fields for cope with append */
     unsigned nr_appending_requests;
@@ -1212,6 +1215,11 @@ RAFT_API void raft_set_event_recorder(struct raft_event_recorder *r);
  * Set whether leader should sync all replica before take snapshot
  */
 RAFT_API void raft_set_sync_replication(struct raft *r, bool sync);
+
+/**
+ * Set whether follower should take snapshot sync with leader
+ */
+RAFT_API void raft_set_sync_snapshot(struct raft *r , bool sync);
 
 #undef RAFT__REQUEST
 

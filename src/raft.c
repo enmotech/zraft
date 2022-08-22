@@ -69,6 +69,7 @@ int raft_init(struct raft *r,
     r->inflight_log_threshold = DEFAULT_INFLIGHT_LOG_THRESHOLD;
     r->hook = &defaultHook;
     r->sync_replication = false;
+    r->sync_snapshot = false;
     r->nr_appending_requests = 0;
     r->prev_append_status = 0;
     rv = r->io->init(r->io, r->id);
@@ -293,5 +294,10 @@ bool raft_aux_match_leader(struct raft *r)
 void raft_set_sync_replication(struct raft *r, bool sync)
 {
 	r->sync_replication = sync;
+}
+
+void raft_set_sync_snapshot(struct raft *r , bool sync)
+{
+	r->sync_snapshot = sync;
 }
 

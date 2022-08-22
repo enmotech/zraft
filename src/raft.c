@@ -69,6 +69,7 @@ int raft_init(struct raft *r,
     r->inflight_log_threshold = DEFAULT_INFLIGHT_LOG_THRESHOLD;
     r->hook = &defaultHook;
     r->sync_replication = false;
+    r->sync_snapshot = false;
     r->nr_appending_requests = 0;
     r->prev_append_status = 0;
     r->quorum = RAFT_MAJORITY;
@@ -310,5 +311,10 @@ RAFT_API void raft_replace_configuration(struct raft *r,
 	assert(r->state == RAFT_FOLLOWER);
 	raft_configuration_close(&r->configuration);
 	r->configuration = conf;
+}
+
+void raft_set_sync_snapshot(struct raft *r , bool sync)
+{
+	r->sync_snapshot = sync;
 }
 

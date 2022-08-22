@@ -56,11 +56,12 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
         if (status != 0) {
             tracef("failed to send append entries to server %llu: %s",
                    req->server_id, raft_strerror(status));
+            evtErrf("raft(%llx) failed to send append entries to %llu %d",
+		    r->id, req->server_id, status);
             /* Go back to probe mode. */
             progressToProbe(r, i);
         }
     }
-
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, req->index, req->entries, req->n);
     raft_free(req);
@@ -84,6 +85,7 @@ static int sendAppendEntries(struct raft *r,
     args->term = r->current_term;
     args->prev_log_index = prev_index;
     args->prev_log_term = prev_term;
+    args->snapshot_index = r->log.snapshot.last_index;
 
     rv = logAcquireWithMax(&r->log, next_index, &args->entries,
 			   &args->n_entries, r->message_log_threshold);
@@ -332,9 +334,10 @@ int replicationProgress(struct raft *r, unsigned i)
         if (snapshot_index > 0 && !progress_state_is_snapshot) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
-	    evtNoticef("raft(%llx) send %llx snapshot %llu/%llu recent %d",
+	    evtNoticef("raft(%llx) send %llx snapshot %llu/%llu/%llu recent %d",
 		       r->id, server->id, next_index,
 		       r->leader_state.min_match_index,
+		       snapshot_index,
 		       progressGetRecentRecv(r, i));
             goto send_snapshot;
         }
@@ -350,9 +353,12 @@ int replicationProgress(struct raft *r, unsigned i)
         if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
-	    evtNoticef("raft(%llx) send %llx snapshot %llu/%llu recent %d",
+	    evtNoticef(
+	    "raft(%llx) send %llx snapshot %llu/%llu/%llu/%llu recent %d",
 		       r->id, server->id, next_index,
 		       r->leader_state.min_match_index,
+		       snapshot_index,
+		       logLastIndex(&r->log),
 		       progressGetRecentRecv(r, i));
             goto send_snapshot;
         }
@@ -1551,13 +1557,20 @@ static void applyChange(struct raft *r, const raft_index index)
 
 static raft_index nextSnapshotIndex(struct raft *r)
 {
-	raft_index snapshot_index = r->last_applying;
+	raft_index snapshot_index = r->last_applied;
 
 	if (r->state == RAFT_LEADER && r->sync_replication) {
 		progressUpdateMinMatch(r);
 		snapshot_index = min(r->leader_state.min_match_index,
-				     r->last_applying);
+				     r->last_applied);
 	}
+
+	if (r->state == RAFT_FOLLOWER && r->sync_snapshot) {
+		snapshot_index =
+			min(r->follower_state.current_leader.snapshot_index,
+			    r->last_applied);
+	}
+
 	return snapshot_index;
 }
 

@@ -134,6 +134,8 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
         goto err;
     }
 
+    evtNoticef("raft(%16llx) set meta succeed %d %16llx",
+	       r->id, request->term, request->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;
 

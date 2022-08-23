@@ -45,7 +45,8 @@ static void recvVoteResultBumpTermIOCb(struct raft_io_set_meta *req, int status)
         convertToUnavailable(r);
         goto err;
     }
-
+    evtNoticef("raft(%16llx) set meta succeed %u %16llx",
+	       r->id, request->term, r->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;
 

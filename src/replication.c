@@ -108,6 +108,12 @@ static int sendAppendEntries(struct raft *r,
            args->n_entries, args->prev_log_index, server->id,
            logLastIndex(&r->log));
 
+    if (prev_index == 0) {
+	    evtWarnf("raft(%llx) send %llx entries %u  %llu %llu %llu",
+		     r->id, server->id, args->n_entries, args->prev_log_index,
+		     args->prev_log_term, logLastIndex(&r->log));
+    }
+
     message.type = RAFT_IO_APPEND_ENTRIES;
     message.server_id = server->id;
 
@@ -581,7 +587,6 @@ out:
         r->prev_append_status = 0;
         evtWarnf("raft(%llx) reset previous append status", r->id);
     }
-
     raft_free(request);
 }
 
@@ -754,12 +759,16 @@ int replicationUpdate(struct raft *r,
      *     decrement nextIndex and retry.
      */
     if (result->rejected > 0) {
+        evtNoticef("raft(%llx) %llx %d rejected %lu %lu %lu %lu",
+		   r->id, id, i, result->rejected, result->last_log_index,
+		   result->term, result->pkt);
         bool retry;
         retry = progressMaybeDecrement(r, i, result->rejected,
                                        result->last_log_index);
         if (retry) {
             /* Retry, ignoring errors. */
 	    tracef("log mismatch -> send old entries to %llu", id);
+            evtNoticef("raft(%llx) send old entries to %llx", r->id, id);
             replicationProgress(r, i);
         }
         return 0;
@@ -1156,6 +1165,14 @@ int replicationAppend(struct raft *r,
 
     *rejected = args->prev_log_index;
     *async = false;
+
+    if (args->prev_log_index == 0) {
+        evtNoticef("raft(%llx) recv term %llu entries %lu %llu %llu %llu",
+		   r->id, args->term, args->n_entries, args->prev_log_index,
+		   args->prev_log_term, args->leader_commit);
+	evtNoticef("raft(%llx) snapshot %llu last log %llu",
+		   r->id, r->log.snapshot.last_index, logLastIndex(&r->log));
+    }
 
     /* Check the log matching property. */
     match = checkLogMatchingProperty(r, args);
@@ -1600,7 +1617,7 @@ static bool shouldTakeSnapshot(struct raft *r)
     if (snapshot_index - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;
     }
-	
+
     if (r->hook->should_take_snapshot_fn &&
 	    !r->hook->should_take_snapshot_fn(r->hook, snapshot_index))
 	    return false;

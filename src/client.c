@@ -23,7 +23,9 @@ int raft_apply(struct raft *r,
                const unsigned n,
                raft_apply_cb cb)
 {
+    const struct raft_entry *entry;
     raft_index index;
+    unsigned i;
     int rv;
 
     assert(r != NULL);
@@ -50,8 +52,14 @@ int raft_apply(struct raft *r,
         evtErrf("raft(%16llx) append cmd failed %d", r->id, rv);
         goto err;
     }
-
     QUEUE_PUSH(&r->leader_state.requests, &req->queue);
+
+    for (i = 0; i < n; ++i) {
+        entry = logGet(&r->log, index + i);
+        assert(entry);
+        assert(entry->type == RAFT_COMMAND);
+        r->hook->entry_after_append_fn(r->hook, index + i, entry);
+    }
 
     rv = replicationTrigger(r, index);
     if (rv != 0) {

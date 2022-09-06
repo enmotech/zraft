@@ -582,6 +582,7 @@ struct raft_progress
     raft_time last_send;          /* Timestamp of last AppendEntries RPC. */
     raft_time snapshot_last_send; /* Timestamp of last InstallSnaphot RPC. */
     bool recent_recv;             /* A msg was received within election timeout. */
+    raft_time recent_recv_time;   /* Timestamp of last AppendEntriesResult RPC.*/
 };
 
 struct raft; /* Forward declaration. */
@@ -800,6 +801,7 @@ struct raft
     };
     bool sync_replication;
     bool sync_snapshot;
+    unsigned sync_replication_timeout;
 
     /* Fields for cope with append */
     unsigned nr_appending_requests;
@@ -1246,6 +1248,11 @@ RAFT_API void raft_replace_configuration(struct raft *r,
  * Set whether follower should take snapshot sync with leader
  */
 RAFT_API void raft_set_sync_snapshot(struct raft *r , bool sync);
+
+/**
+ * Set sync replication time out
+ */
+RAFT_API void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs);
 
 #undef RAFT__REQUEST
 

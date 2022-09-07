@@ -523,7 +523,12 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
                 apply->cb(apply, status, NULL);
             }
         }
-	evtErrf("raft(%llx) append status %d", r->id, status);
+
+	if (r->state == RAFT_LEADER) {
+		convertToFollower(r);
+		evtNoticef("raft(%llx) convert from leader to follower",
+			   r->id, status);
+	}
         goto out;
     }
 

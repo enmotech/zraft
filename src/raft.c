@@ -22,6 +22,7 @@
 #define DEFAULT_SNAPSHOT_TRAILING 2048
 #define DEFAULT_MESSAGE_LOG_THRESHOLD 32
 #define DEFAULT_INFLIGHT_LOG_THRESHOLD 0
+#define DEFAULT_SYNC_REPLICATION_TIMEOUT 3000
 
 /* Number of milliseconds after which a server promotion will be aborted if the
  * server hasn't caught up with the logs yet. */
@@ -70,6 +71,7 @@ int raft_init(struct raft *r,
     r->hook = &defaultHook;
     r->sync_replication = false;
     r->sync_snapshot = false;
+    r->sync_replication_timeout = DEFAULT_SYNC_REPLICATION_TIMEOUT;
     r->nr_appending_requests = 0;
     r->prev_append_status = 0;
     r->quorum = RAFT_MAJORITY;
@@ -318,3 +320,7 @@ void raft_set_sync_snapshot(struct raft *r , bool sync)
 	r->sync_snapshot = sync;
 }
 
+void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs)
+{
+	r->sync_replication_timeout = msecs;
+}

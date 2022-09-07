@@ -43,6 +43,7 @@ int progressBuildArray(struct raft *r)
     }
     for (i = 0; i < r->configuration.n; i++) {
         initProgress(&progress[i], last_index);
+	progress[i].recent_recv_time = r->io->time(r->io);
         if (r->configuration.servers[i].id == r->id) {
             progress[i].match_index = r->last_stored;
         }
@@ -93,6 +94,7 @@ int progressRebuildArray(struct raft *r,
         }
         assert(j == r->configuration.n);
         initProgress(&progress[i], last_index);
+	progress[i].recent_recv_time = r->io->time(r->io);
     }
 
     raft_free(r->leader_state.progress);
@@ -193,6 +195,7 @@ bool progressResetRecentRecv(struct raft *r, const unsigned i)
 void progressMarkRecentRecv(struct raft *r, const unsigned i)
 {
     r->leader_state.progress[i].recent_recv = true;
+    r->leader_state.progress[i].recent_recv_time = r->io->time(r->io);
 }
 
 bool progressGetRecentRecv(const struct raft *r, const unsigned i)
@@ -340,6 +343,7 @@ void progressUpdateMinMatch(struct raft *r)
 	struct raft_progress *p;
 	raft_index tmp = logLastIndex(&r->log);
 	raft_id id = 0;
+	raft_time now = r->io->time(r->io);
 
 	assert(r->sync_replication);
 	for (i = 0; i < r->configuration.n; ++i) {
@@ -349,6 +353,10 @@ void progressUpdateMinMatch(struct raft *r)
 			continue;
 		}
 		p = &r->leader_state.progress[i];
+		if (r->sync_replication_timeout
+		&& (p->recent_recv_time + r->sync_replication_timeout < now))
+			continue;
+
 		if (p->match_index <= tmp) {
 			tmp = p->match_index;
 			id = s->id;

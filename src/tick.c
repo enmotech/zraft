@@ -141,6 +141,9 @@ static int tickLeader(struct raft *r)
         r->election_timer_start = r->io->time(r->io);
     }
 
+    /* Try to apply and take snapshot*/
+    replicationApply(r);
+
     /* Possibly send heartbeats.
      *
      * From Figure 3.1:

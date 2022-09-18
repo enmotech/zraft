@@ -1641,6 +1641,8 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     if (status != 0) {
         tracef("snapshot %lld at term %lld: %s", snapshot->index,
                snapshot->term, raft_strerror(status));
+        evtErrf("raft(%llx) take snapshot %llu/%llu failed %d", snapshot->index,
+		snapshot->term, status);
         goto out;
     }
     /* backup the configuration in case a membershipRollback occurs */
@@ -1652,10 +1654,12 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
                snapshot->index,
                snapshot->term,
                raft_strerror(status));
-        evtErrf("copy conf failed %d", status);
+        evtErrf("raft(%llx) copy conf failed %d", r->id, status);
         goto out;
     }
 
+    evtInfof("raft(%llx) take snapshot at %llu %u", r->id, snapshot->index,
+	     r->snapshot.trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
 out:
     snapshotClose(&r->snapshot.pending);

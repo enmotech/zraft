@@ -283,7 +283,8 @@ void electionVote(struct raft *r,
 
     *granted = false;
 
-    if (local_server == NULL || local_server->role != RAFT_VOTER) {
+    if (local_server == NULL
+    	|| (local_server->role != RAFT_VOTER && !r->non_voter_grant_vote)) {
         tracef("local server is not voting -> not granting vote");
         return;
     }

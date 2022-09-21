@@ -34,7 +34,7 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
     int rv = 0;
 
     if (r->state == RAFT_UNAVAILABLE) {
-        evtErrf("raft(%16llx) response to rv set meta cb, state is unavailable",
+        evtErrf("raft(%llx) response to rv set meta cb, state is unavailable",
 		r->id);
         goto err;
     }
@@ -45,7 +45,7 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
         convertToUnavailable(r);
         goto err;
     }
-    evtNoticef("raft(%16llx) set meta succeed %u %16llx",
+    evtNoticef("raft(%llx) set meta succeed %u %16llx",
 	       r->id, request->term, r->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;
@@ -171,7 +171,7 @@ reply:
     rv = r->io->send(r->io, req, &message, requestVoteSendCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
-            evtErrf("raft(%16llx) send failed %d", r->id, rv);
+            evtErrf("raft(%llx) send failed %d", r->id, rv);
         raft_free(req);
         return rv;
     }

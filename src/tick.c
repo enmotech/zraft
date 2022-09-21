@@ -29,7 +29,7 @@ static int tickFollower(struct raft *r)
     /* If we have been removed from the configuration, or maybe we didn't
      * receive one yet, just stay follower. */
     if (server == NULL) {
-        evtWarnf("raft(%16llx) have been remove from conf", r->id);
+        evtWarnf("raft(%llx) have been remove from conf", r->id);
         return 0;
     }
 
@@ -48,11 +48,11 @@ static int tickFollower(struct raft *r)
      */
     if (electionTimerExpired(r) && server->role == RAFT_VOTER) {
         tracef("convert to candidate and start new election");
-        evtInfof("raft(%16llx) convert to candidate", r->id);
+        evtInfof("raft(%llx) convert to candidate", r->id);
         rv = convertToCandidate(r, false /* disrupt leader */);
         if (rv != 0) {
             tracef("convert to candidate: %s", raft_strerror(rv));
-            evtErrf("raft(%16llx) convert to candidate failed %d", r->id, rv);
+            evtErrf("raft(%llx) convert to candidate failed %d", r->id, rv);
             return rv;
         }
     }
@@ -78,7 +78,7 @@ static int tickCandidate(struct raft *r)
      */
     if (electionTimerExpired(r)) {
         tracef("start new election");
-        evtInfof("raft(%16llx) start new election", r->id);
+        evtInfof("raft(%llx) start new election", r->id);
         r->candidate_state.in_pre_vote = r->pre_vote;
         r->candidate_state.disrupt_leader = false;
         return electionStart(r);

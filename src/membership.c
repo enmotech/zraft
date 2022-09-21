@@ -130,6 +130,9 @@ int membershipUncommittedChange(struct raft *r,
     r->configuration = configuration;
     r->configuration_uncommitted_index = index;
 
+    evtNoticef("raft(%llx) conf received at index %lu", r->id, index);
+    evtDumpConfiguration(r, &configuration);
+
     return 0;
 
 err:
@@ -164,11 +167,13 @@ int membershipRollback(struct raft *r)
     }
 
     if (rv != 0) {
-        evtErrf("raft(%llx) roll back conf failed %d", r->id, rv);
+        evtErrf("raft(%llx) rollback conf failed %d", r->id, rv);
         return rv;
     }
 
     r->configuration_uncommitted_index = 0;
+    evtNoticef("raft(%llx) conf rollback ", r->id);
+    evtDumpConfiguration(r, &r->configuration);
 
     return 0;
 }

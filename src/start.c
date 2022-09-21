@@ -321,6 +321,10 @@ static void loadCb(struct raft_io_load *req,
         goto err;
     }
 
+    evtNoticef("raft(%llx) conf start %lu/%lu", r->id, r->configuration_index,
+	       r->configuration_uncommitted_index);
+    evtDumpConfiguration(r, &r->configuration);
+
     /* By default we start as followers. */
     convertToFollower(r);
 

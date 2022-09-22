@@ -151,7 +151,7 @@ static int clientChangeConfiguration(
         goto err;
     }
 
-    evtNoticef("raft(llx) conf append at index %lu", r->id, index);
+    evtNoticef("raft(%llx) conf append at index %lu", r->id, index);
     evtDumpConfiguration(r, configuration);
 
     entry = logGet(&r->log, index);

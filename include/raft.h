@@ -809,6 +809,9 @@ struct raft
 
     /* Quorum type */
     enum raft_quorum quorum;
+
+    /* nonvoter grant vote */
+    bool non_voter_grant_vote;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1253,6 +1256,11 @@ RAFT_API void raft_set_sync_snapshot(struct raft *r , bool sync);
  * Set sync replication time out
  */
 RAFT_API void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs);
+
+/**
+ * Set whether nonvoter can grant vote
+ */
+RAFT_API void raft_set_non_voter_grant_vote(struct raft *r, bool grant);
 
 #undef RAFT__REQUEST
 

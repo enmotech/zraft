@@ -75,6 +75,7 @@ int raft_init(struct raft *r,
     r->nr_appending_requests = 0;
     r->prev_append_status = 0;
     r->quorum = RAFT_MAJORITY;
+    r->non_voter_grant_vote = false;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -323,4 +324,9 @@ void raft_set_sync_snapshot(struct raft *r , bool sync)
 void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs)
 {
 	r->sync_replication_timeout = msecs;
+}
+
+void raft_set_non_voter_grant_vote(struct raft *r, bool grant)
+{
+	r->non_voter_grant_vote = grant;
 }

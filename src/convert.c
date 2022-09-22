@@ -168,10 +168,10 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
 
     if (n_voters == 1) {
         tracef("self elect and convert to leader");
-        evtInfof("raft(%16llx) self elect and convert to leader", r->id);
+        evtInfof("raft(%llx) self elect and convert to leader", r->id);
         rv =  convertToLeader(r);
         if (rv != 0) {
-            evtErrf("raft(%16llx) convert to leader failed %d", r->id, rv);
+            evtErrf("raft(%llx) convert to leader failed %d", r->id, rv);
             return rv;
 	}
         /* Check if we can commit some new entries. */
@@ -180,7 +180,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
         rv = replicationApply(r);
         if (rv != 0) {
             /* TODO: just log the error? */
-	    evtErrf("raft(%16llx) replication apply failed %d", r->id, rv);
+	    evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
             convertToUnavailable(r);
         }
         return rv;
@@ -215,7 +215,7 @@ int convertToLeader(struct raft *r)
     /* Allocate and initialize the progress array. */
     rv = progressBuildArray(r);
     if (rv != 0) {
-        evtErrf("raft(%16llx) build array failed %d", r->id, rv);
+        evtErrf("raft(%llx) build array failed %d", r->id, rv);
         return rv;
     }
 

@@ -87,7 +87,7 @@ static int electionSend(struct raft *r, const struct raft_server *server)
 
     send = HeapMalloc(sizeof *send);
     if (send == NULL) {
-        evtErrf("raft(%16llx) heap malloc failed", r->id);
+        evtErrf("raft(%llx) heap malloc failed", r->id);
         return RAFT_NOMEM;
     }
 
@@ -96,7 +96,7 @@ static int electionSend(struct raft *r, const struct raft_server *server)
     rv = r->io->send(r->io, send, &message, sendRequestVoteCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
-            evtErrf("raft(%16llx) election send failed %d", r->id, rv);
+            evtErrf("raft(%llx) election send failed %d", r->id, rv);
         HeapFree(send);
         return rv;
     }
@@ -122,19 +122,19 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
     int rv;
 
     if (r->state == RAFT_UNAVAILABLE) {
-        evtErrf("raft(%16llx) election set meta cb, state is unavailable",
+        evtErrf("raft(%llx) election set meta cb, state is unavailable",
 		r->id);
         goto err;
     }
     assert(r->state == RAFT_CANDIDATE);
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
-	evtErrf("raft(%16llx) set meta failed %d", r->id, status);
+	evtErrf("raft(%llx) set meta failed %d", r->id, status);
         convertToUnavailable(r);
         goto err;
     }
 
-    evtNoticef("raft(%16llx) set meta succeed %d %16llx",
+    evtNoticef("raft(%llx) set meta succeed %d %16llx",
 	       r->id, request->term, request->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;
@@ -181,7 +181,7 @@ static int electionUpdateMeta(struct raft *r)
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("raft(%16llx) malloc failed %d", r->id, rv);
+        evtErrf("raft(%llx) malloc failed %d", r->id, rv);
         goto err2;
     }
 
@@ -192,7 +192,7 @@ static int electionUpdateMeta(struct raft *r)
 
 
     r->io->state = RAFT_IO_BUSY;
-    evtNoticef("raft(%16llx) election set meta term %u vote_fo %lu", r->id,
+    evtNoticef("raft(%llx) election set meta term %u vote_fo %lu", r->id,
 	       request->term, request->voted_for);
     rv = r->io->set_meta(r->io,
                  &request->req,
@@ -200,7 +200,7 @@ static int electionUpdateMeta(struct raft *r)
                  request->voted_for,
                  electionSetMetaCb);
     if (rv != 0) {
-        evtErrf("raft(%16llx) set meta failed %d", r->id, rv);
+        evtErrf("raft(%llx) set meta failed %d", r->id, rv);
         goto err1;
     }
 

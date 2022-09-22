@@ -34,7 +34,7 @@ static void recvVoteResultBumpTermIOCb(struct raft_io_set_meta *req, int status)
     struct raft *r = request->raft;
 
     if (r->state == RAFT_UNAVAILABLE) {
-        evtErrf("raft(%16llx) recv rv result set meta cb, state is unavailable",
+        evtErrf("raft(%llx) recv rv result set meta cb, state is unavailable",
 		r->id);
         goto err;
     }
@@ -45,7 +45,7 @@ static void recvVoteResultBumpTermIOCb(struct raft_io_set_meta *req, int status)
         convertToUnavailable(r);
         goto err;
     }
-    evtNoticef("raft(%16llx) set meta succeed %u %16llx",
+    evtNoticef("raft(%llx) set meta succeed %u %16llx",
 	       r->id, request->term, r->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;

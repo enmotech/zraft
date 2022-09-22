@@ -23,4 +23,6 @@ const struct raft_event_recorder *eventRecorder(void);
 #define evtInfof(fmt, ...) evtRecordf(RAFT_INFO, fmt, __VA_ARGS__)
 #define evtDebugf(fmt, ...) evtRecordf(RAFT_DEBUG, fmt, __VA_ARGS__)
 
+void evtDumpConfiguration(struct raft *r, const struct raft_configuration *c);
+
 #endif //EVENT_H

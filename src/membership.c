@@ -14,21 +14,21 @@ int membershipCanChangeConfiguration(struct raft *r)
 
     if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
-        evtNoticef("raft(%16llx) lost leadership with state %d",
+        evtNoticef("raft(%llx) lost leadership with state %d",
 		r->id, r->state);
         goto err;
     }
 
     if (r->configuration_uncommitted_index != 0) {
         rv = RAFT_CANTCHANGE;
-        evtNoticef("raft(%16llx) has uncommitted configuration %llu",
+        evtNoticef("raft(%llx) has uncommitted configuration %llu",
 		r->id, r->configuration_uncommitted_index);
         goto err;
     }
 
     if (r->leader_state.promotee_id != 0) {
         rv = RAFT_CANTCHANGE;
-        evtNoticef("raft(%16llx) has promotee server(%16llx)",
+        evtNoticef("raft(%llx) has promotee server(%16llx)",
 		r->id, r->leader_state.promotee_id);
         goto err;
     }
@@ -121,7 +121,7 @@ int membershipUncommittedChange(struct raft *r,
 
     rv = configurationDecode(&entry->buf, &configuration);
     if (rv != 0) {
-        evtErrf("raft(%16llx) decode conf failed %d", r->id, rv);
+        evtErrf("raft(%llx) decode conf failed %d", r->id, rv);
         goto err;
     }
 
@@ -129,6 +129,9 @@ int membershipUncommittedChange(struct raft *r,
 
     r->configuration = configuration;
     r->configuration_uncommitted_index = index;
+
+    evtNoticef("raft(%llx) conf received at index %lu", r->id, index);
+    evtDumpConfiguration(r, &configuration);
 
     return 0;
 
@@ -164,11 +167,13 @@ int membershipRollback(struct raft *r)
     }
 
     if (rv != 0) {
-        evtErrf("raft(%16llx) roll back conf failed %d", r->id, rv);
+        evtErrf("raft(%llx) rollback conf failed %d", r->id, rv);
         return rv;
     }
 
     r->configuration_uncommitted_index = 0;
+    evtNoticef("raft(%llx) conf rollback ", r->id);
+    evtDumpConfiguration(r, &r->configuration);
 
     return 0;
 }
@@ -204,7 +209,7 @@ int membershipLeadershipTransferStart(struct raft *r)
         ErrMsgTransferf(r->io->errmsg, r->errmsg, "send timeout now to %llu",
                         server->id);
 	if (rv != RAFT_NOCONNECTION)
-		evtErrf("raft(%16llx) send transfer failed %d", r->id, rv);
+		evtErrf("raft(%llx) send transfer failed %d", r->id, rv);
         return rv;
     }
     return 0;

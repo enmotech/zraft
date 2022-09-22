@@ -40,14 +40,14 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
 
     rv = r->fsm->restore(r->fsm, &snapshot->bufs[0]);
     if (rv != 0) {
-        evtErrf("raft(%16llx) restore snapshot failed %d", r->id, rv);
+        evtErrf("raft(%llx) restore snapshot failed %d", r->id, rv);
         goto err;
     }
     configurationClose(&r->snapshot.configuration);
     rv = configurationCopy(&snapshot->configuration,
                            &r->snapshot.configuration);
     if (rv != 0) {
-        evtErrf("raft(%16llx) copy snapshot failed %d", r->id, rv);
+        evtErrf("raft(%llx) copy snapshot failed %d", r->id, rv);
         goto err;
     }
     configurationClose(&r->configuration);

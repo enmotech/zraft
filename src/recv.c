@@ -50,7 +50,7 @@ int recvUpdateMeta(struct raft *r,
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("raft(%16llx) malloc failed %d", r->id, rv);
+        evtErrf("raft(%llx) malloc failed %d", r->id, rv);
         goto meta_err_nomen;
     }
     if(message) {
@@ -61,7 +61,7 @@ int recvUpdateMeta(struct raft *r,
     request->voted_for = voted_for;
     request->req.data = request;
     r->io->state = RAFT_IO_BUSY;
-    evtNoticef("raft(%16llx) recv set meta term %u vote_fo %lu", r->id,
+    evtNoticef("raft(%llx) recv set meta term %u vote_fo %lu", r->id,
 	       request->term, request->voted_for);
     rv = r->io->set_meta(r->io,
                  &request->req,
@@ -69,7 +69,7 @@ int recvUpdateMeta(struct raft *r,
                  voted_for,
                  cb);
     if (rv != 0) {
-        evtErrf("raft(%16llx) set meta failed %d", r->id, rv);
+        evtErrf("raft(%llx) set meta failed %d", r->id, rv);
         goto meta_io_err;
     }
 
@@ -86,7 +86,7 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
     struct raft *r = request->raft;
 
     if (r->state == RAFT_UNAVAILABLE) {
-        evtErrf("raft(%16llx) bump set meta cb, state is unavailable",
+        evtErrf("raft(%llx) bump set meta cb, state is unavailable",
 		r->id);
         goto err;
     }
@@ -98,7 +98,7 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
         goto err;
     }
 
-    evtNoticef("raft(%16llx) set meta succeed %u %16llx",
+    evtNoticef("raft(%llx) set meta succeed %u %16llx",
 	       r->id, request->term, r->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;
@@ -180,14 +180,14 @@ static int recvMessage(struct raft *r, struct raft_message *message)
     if (message->type < RAFT_IO_APPEND_ENTRIES ||
         message->type > RAFT_IO_TIMEOUT_NOW) {
         tracef("received unknown message type type: %d", message->type);
-        evtErrf("raft(%16llx) received unknown message type %d",
+        evtErrf("raft(%llx) received unknown message type %d",
 		r->id, message->type);
         return 0;
     }
 
     rv = recvEnsureMatchingTerm(r, message, &async);
     if (rv != 0)
-        evtErrf("raft(%16llx) ensure matching term failed %d", r->id, rv);
+        evtErrf("raft(%llx) ensure matching term failed %d", r->id, rv);
 
     if (async) {
         return rv;
@@ -238,7 +238,7 @@ static int recvMessage(struct raft *r, struct raft_message *message)
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
         /* tracef("recv: %s: %s", message_descs[message->type - 1],
                  raft_strerror(rv)); */
-        evtErrf("raft(%16llx) recv message %d failed %d",
+        evtErrf("raft(%llx) recv message %d failed %d",
 		r->id, message->type, rv);
         return rv;
     }

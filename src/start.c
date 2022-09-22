@@ -28,7 +28,7 @@ static int restoreMostRecentConfiguration(struct raft *r,
     rv = configurationDecode(&entry->buf, &configuration);
     if (rv != 0) {
         raft_configuration_close(&configuration);
-        evtErrf("raft(%16llx) decode conf failed %d", r->id, rv);
+        evtErrf("raft(%llx) decode conf failed %d", r->id, rv);
         return rv;
     }
     raft_configuration_close(&r->configuration);
@@ -94,7 +94,7 @@ static int restoreEntries(struct raft *r,
     if (conf != NULL) {
         rv = restoreMostRecentConfiguration(r, conf, conf_index);
         if (rv != 0) {
-            evtErrf("raft(%16llx) restore conf failed %d", r->id, rv);
+            evtErrf("raft(%llx) restore conf failed %d", r->id, rv);
             goto err;
         }
         if (r->configuration_uncommitted_index > 1) {
@@ -131,7 +131,7 @@ static int maybeSelfElect(struct raft *r)
      * automatically convert to leader. */
     rv = convertToCandidate(r, false /* disrupt leader */);
     if (rv != 0) {
-        evtErrf("raft(%16llx) convert to candidate failed %d", r->id, rv);
+        evtErrf("raft(%llx) convert to candidate failed %d", r->id, rv);
         return rv;
     }
     assert(r->state == RAFT_LEADER);
@@ -162,7 +162,7 @@ int raft_start(struct raft *r)
                      &start_index, &entries, &n_entries);
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-	evtErrf("raft(%16llx) load failed %d", r->id, rv);
+	evtErrf("raft(%llx) load failed %d", r->id, rv);
         return rv;
     }
     assert(start_index >= 1);
@@ -175,7 +175,7 @@ int raft_start(struct raft *r)
         if (rv != 0) {
             snapshotDestroy(snapshot);
             entryBatchesDestroy(entries, n_entries);
-            evtErrf("raft(%16llx) restore snapshot failed %d", r->id, rv);
+            evtErrf("raft(%llx) restore snapshot failed %d", r->id, rv);
             return rv;
         }
         snapshot_index = snapshot->index;
@@ -201,7 +201,7 @@ int raft_start(struct raft *r)
                         n_entries);
     if (rv != 0) {
         entryBatchesDestroy(entries, n_entries);
-        evtErrf("raft(%16llx) restore entries failed %d", r->id, rv);
+        evtErrf("raft(%llx) restore entries failed %d", r->id, rv);
         return rv;
     }
 
@@ -210,7 +210,7 @@ int raft_start(struct raft *r)
      * received. */
     rv = r->io->start(r->io, r->heartbeat_timeout, tickCb, recvCb);
     if (rv != 0) {
-        evtErrf("raft(%16llx) start failed %d", r->id, rv);
+        evtErrf("raft(%llx) start failed %d", r->id, rv);
         return rv;
     }
 
@@ -222,7 +222,7 @@ int raft_start(struct raft *r)
      * or we're simply configured as non-voter, and we'll stay follower. */
     rv = maybeSelfElect(r);
     if (rv != 0) {
-        evtErrf("raft(%16llx) elect self failed %d", r->id, rv);
+        evtErrf("raft(%llx) elect self failed %d", r->id, rv);
         return rv;
     }
 
@@ -255,7 +255,7 @@ static void loadCb(struct raft_io_load *req,
     if (load == NULL) {
         assert(status != 0);
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        evtErrf("raft(%16llx) load cb failed %d", r->id, status);
+        evtErrf("raft(%llx) load cb failed %d", r->id, status);
         goto err;
     }
 
@@ -282,7 +282,7 @@ static void loadCb(struct raft_io_load *req,
         if (status != 0) {
             snapshotDestroy(snapshot);
             entryBatchesDestroy(entries, n_entries);
-            evtErrf("raft(%16llx) restore snapshot failed %d", r->id, status);
+            evtErrf("raft(%llx) restore snapshot failed %d", r->id, status);
             goto err;
         }
         snapshot_index = snapshot->index;
@@ -308,7 +308,7 @@ static void loadCb(struct raft_io_load *req,
                         n_entries);
     if (status != 0) {
         entryBatchesDestroy(entries, n_entries);
-        evtErrf("raft(%16llx) restore entries failed %d", r->id, status);
+        evtErrf("raft(%llx) restore entries failed %d", r->id, status);
         goto err;
     }
 
@@ -317,9 +317,13 @@ static void loadCb(struct raft_io_load *req,
      * received. */
     status = r->io->start(r->io, r->heartbeat_timeout, tickCb, recvCb);
     if (status != 0) {
-        evtErrf("raft(%16llx) start failed %d", r->id, status);
+        evtErrf("raft(%llx) start failed %d", r->id, status);
         goto err;
     }
+
+    evtNoticef("raft(%llx) conf start %lu/%lu", r->id, r->configuration_index,
+	       r->configuration_uncommitted_index);
+    evtDumpConfiguration(r, &r->configuration);
 
     /* By default we start as followers. */
     convertToFollower(r);
@@ -329,7 +333,7 @@ static void loadCb(struct raft_io_load *req,
      * or we're simply configured as non-voter, and we'll stay follower. */
     status = maybeSelfElect(r);
     if (status != 0) {
-        evtErrf("raft(%16llx) elect self failed %d", r->id, status);
+        evtErrf("raft(%llx) elect self failed %d", r->id, status);
         goto err;
     }
 
@@ -369,7 +373,7 @@ int raft_astart(struct raft *r,
 
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        evtErrf("raft(%16llx) aload failed %d", r->id, rv);
+        evtErrf("raft(%llx) aload failed %d", r->id, rv);
         return rv;
     }
 

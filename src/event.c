@@ -32,4 +32,12 @@ const struct raft_event_recorder *eventRecorder(void)
 	return currentRecorder;
 }
 
+void evtDumpConfiguration(struct raft *r, const struct raft_configuration *c)
+{
+	unsigned i;
 
+	for (i = 0; i < c->n; ++i)
+		evtNoticef("raft(%llx) member %u %llx role %u",
+			   r->id, i, c->servers[i].id, c->servers[i].role);
+
+}

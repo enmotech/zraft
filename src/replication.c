@@ -1104,7 +1104,9 @@ static int deleteConflictingEntries(struct raft *r,
             if (entry_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
                 tracef("new index conflicts with committed entry -> shutdown");
-
+                evtErrf("raft(%llx) entry conflicts %llu/%llu %llu/%llu",
+			r->id, entry_index, r->commit_index, local_term,
+			entry->term);
                 return RAFT_SHUTDOWN;
             }
 

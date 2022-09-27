@@ -473,10 +473,9 @@ static size_t updateLastStored(struct raft *r,
     return i;
 }
 
-/* Get the request matching the given index and type, if any. */
+/* Get the request matching the given index, if any. */
 static struct request *getRequest(struct raft *r,
-                                  const raft_index index,
-                                  int type)
+                                  const raft_index index)
 {
     queue *head;
     struct request *req;
@@ -488,7 +487,6 @@ static struct request *getRequest(struct raft *r,
     {
         req = QUEUE_DATA(head, struct request, queue);
         if (req->index == index) {
-            assert(req->type == type);
             QUEUE_REMOVE(head);
             return req;
         }
@@ -517,7 +515,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
         struct raft_apply *apply;
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         apply =
-            (struct raft_apply *)getRequest(r, request->index, RAFT_COMMAND);
+            (struct raft_apply *)getRequest(r, request->index);
         if (apply != NULL) {
             if (apply->cb != NULL) {
                 apply->cb(apply, status, NULL);
@@ -1479,8 +1477,9 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 
     assert((r->last_applied + 1) == index);
 
-    creq = (struct raft_apply *)getRequest(r, index, RAFT_COMMAND);
+    creq = (struct raft_apply *)getRequest(r, index);
     if (creq != NULL && creq->cb != NULL) {
+        assert(creq->type == RAFT_COMMAND);
         creq->cb(creq, status, result);
     }
     r->last_applied = index;
@@ -1533,8 +1532,9 @@ static int applyCommand(struct raft *r,
 static void applyBarrier(struct raft *r, const raft_index index)
 {
     struct raft_barrier *req;
-    req = (struct raft_barrier *)getRequest(r, index, RAFT_BARRIER);
+    req = (struct raft_barrier *)getRequest(r, index);
     if (req != NULL && req->cb != NULL) {
+        assert(req->type == RAFT_BARRIER);
         req->cb(req, 0);
     }
 }

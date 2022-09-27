@@ -252,12 +252,12 @@ static void loadCb(struct raft_io_load *req,
     assert(r != NULL);
     assert(start);
 
-    if (load == NULL) {
-        assert(status != 0);
+    if (status != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         evtErrf("raft(%llx) load cb failed %d", r->id, status);
         goto err;
     }
+    assert(load);
 
     struct raft_snapshot *snapshot;
     raft_index snapshot_index = 0;

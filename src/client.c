@@ -10,6 +10,7 @@
 #include "request.h"
 #include "tracing.h"
 #include "event.h"
+#include "hook.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -52,7 +53,13 @@ int raft_apply(struct raft *r,
         evtErrf("raft(%llx) append cmd failed %d", r->id, rv);
         goto err;
     }
-    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
+
+    rv = requestRegEnqueue(&r->leader_state.reg, (struct request *) req);
+    if (rv != 0) {
+        evtErrf("raft(%llx) append to registry failed %d", r->id, rv);
+        goto err_after_log_append;
+    }
+    hookRequestAccept(r, index);
 
     for (i = 0; i < n; ++i) {
         entry = logGet(&r->log, index + i);
@@ -64,14 +71,15 @@ int raft_apply(struct raft *r,
     rv = replicationTrigger(r, index);
     if (rv != 0) {
         evtErrf("raft(%llx) replication trigger failed %d", r->id, rv);
-        goto err_after_log_append;
+        goto err_after_reg_append;
     }
 
     return 0;
 
+err_after_reg_append:
+	requestRegDel(&r->leader_state.reg, index);
 err_after_log_append:
     logDiscard(&r->log, index);
-    QUEUE_REMOVE(&req->queue);
 err:
     assert(rv != 0);
     return rv;
@@ -106,7 +114,12 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
         evtErrf("raft(%llx) append barrier failed %d", r->id, rv);
         goto err_after_buf_alloc;
     }
-    QUEUE_PUSH(&r->leader_state.requests, &req->queue);
+    rv = requestRegEnqueue(&r->leader_state.reg, (struct request *) req);
+    if (rv != 0) {
+	    evtErrf("raft(%llx) append to registry failed %d", r->id, rv);
+	    goto err_after_log_append;
+    }
+    hookRequestAccept(r, index);
 
     entry = logGet(&r->log, index);
     assert(entry);
@@ -116,14 +129,15 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     rv = replicationTrigger(r, index);
     if (rv != 0) {
         evtErrf("raft(%llx) replication trigger failed %d", r->id, rv);
-        goto err_after_log_append;
+        goto err_after_reg_append;
     }
 
     return 0;
 
+err_after_reg_append:
+	requestRegDel(&r->leader_state.reg, index);
 err_after_log_append:
     logDiscard(&r->log, index);
-    QUEUE_REMOVE(&req->queue);
 err_after_buf_alloc:
 err:
     return rv;

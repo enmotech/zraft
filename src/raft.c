@@ -76,6 +76,7 @@ int raft_init(struct raft *r,
     r->prev_append_status = 0;
     r->quorum = RAFT_MAJORITY;
     r->non_voter_grant_vote = false;
+    r->enable_request_hook = false;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -330,3 +331,9 @@ void raft_set_non_voter_grant_vote(struct raft *r, bool grant)
 {
 	r->non_voter_grant_vote = grant;
 }
+
+void raft_enable_request_hook(struct raft *r, bool enable)
+{
+	r->enable_request_hook = enable;
+}
+

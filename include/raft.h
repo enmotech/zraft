@@ -606,6 +606,29 @@ enum raft_quorum {
 	RAFT_FULL
 };
 
+/* Abstract request type */
+struct request
+{
+    /* Must be kept in sync with RAFT__REQUEST in raft.h */
+    void *data;
+    int type;
+    raft_index index;
+    void *queue[2];
+};
+
+struct request_slot
+{
+    void *req;
+    raft_index index;
+};
+
+struct request_registry
+{
+    struct request_slot *slots; // Circular buffer of request
+    size_t size;                // Number of slots
+    size_t front, back;         // Used slots [front, back)
+};
+
 /**
  * Hold and drive the state of a single raft server in a cluster.
  */
@@ -734,7 +757,7 @@ struct raft
             unsigned short round_number;    /* Current sync round. */
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
-            void *requests[2];              /* Outstanding client requests. */
+	    struct request_registry reg;    /* Outstanding client requests. */
 	    raft_index min_match_index;     /* The minimum match index */
 	    raft_id slowest_replica_id;     /* The slowest replica id */
         } leader_state;
@@ -812,6 +835,8 @@ struct raft
 
     /* nonvoter grant vote */
     bool non_voter_grant_vote;
+    /* Flag for enable hook for request */
+    bool enable_request_hook;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1205,8 +1230,16 @@ struct raft_hook
 				      raft_index index, raft_term term);
 	void (*entry_after_apply_fn)(struct raft_hook *h, raft_index index,
 				     const struct raft_entry *entry);
-	bool (*should_take_snapshot_fn)(struct raft_hook* h, 
-				raft_index snapshot_index);
+	bool (*should_take_snapshot_fn)(struct raft_hook* h,
+					raft_index snapshot_index);
+	void (*request_accept)(struct raft_hook *h, struct request *req);
+	void (*request_append)(struct raft_hook *h, struct request *req);
+	void (*request_append_done)(struct raft_hook *h, struct request *req);
+	void (*request_match)(struct raft_hook *h, struct request *req,
+			      raft_id id);
+	void (*request_commit)(struct raft_hook *h, struct request *req);
+	void (*request_apply)(struct raft_hook *h, struct request *req);
+	void (*request_apply_done)(struct raft_hook *h, struct request *req);
 };
 
 RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);
@@ -1261,6 +1294,11 @@ RAFT_API void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs);
  * Set whether nonvoter can grant vote
  */
 RAFT_API void raft_set_non_voter_grant_vote(struct raft *r, bool grant);
+
+/**
+ * Set request hook flag @enable
+ */
+RAFT_API void raft_enable_request_hook(struct raft *r, bool enable);
 
 #undef RAFT__REQUEST
 

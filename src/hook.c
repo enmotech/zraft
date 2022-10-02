@@ -1,4 +1,6 @@
 #include "../include/raft.h"
+#include "request.h"
+#include "assert.h"
 
 static void defaultEntryAfterAppend(struct raft_hook *h, raft_index index,
 				    const struct raft_entry *entry)
@@ -25,10 +27,125 @@ static void defaultEntryAfterApply(struct raft_hook *h, raft_index index,
 	(void)entry;
 }
 
+static void defaultRequestDummy(struct raft_hook *h, struct request *req)
+{
+	(void)h;
+	(void)req;
+}
+
+static void defaultRequestMatch(struct raft_hook *h, struct request *req,
+				raft_id id)
+{
+	(void)h;
+	(void)req;
+	(void)id;
+}
 
 struct raft_hook defaultHook = {
 	.data = NULL,
 	.entry_after_append_fn = defaultEntryAfterAppend,
 	.entry_match_change_cb = defaultEntryMatchChange,
 	.entry_after_apply_fn  = defaultEntryAfterApply,
+	.request_accept =  defaultRequestDummy,
+	.request_append = defaultRequestDummy,
+	.request_append_done = defaultRequestDummy,
+	.request_match = defaultRequestMatch,
+	.request_commit = defaultRequestDummy,
+	.request_apply = defaultRequestDummy,
+	.request_apply_done = defaultRequestDummy,
 };
+
+void hookRequestAccept(struct raft *r, raft_index index)
+{
+	struct request *req;
+	assert(r->state == RAFT_LEADER);
+	if (!r->enable_request_hook)
+		return;
+	req = requestRegFind(&r->leader_state.reg, index);
+	if (req == NULL)
+		return;
+	r->hook->request_accept(r->hook, req);
+}
+
+void hookRequestAppend(struct raft *r, raft_index index)
+{
+	struct request *req;
+	assert(r->state == RAFT_LEADER);
+	if (!r->enable_request_hook)
+		return;
+	req = requestRegFind(&r->leader_state.reg, index);
+	if (req == NULL)
+		return;
+	r->hook->request_append(r->hook, req);
+}
+
+void hookRequestAppendDone(struct raft *r, raft_index index)
+{
+	struct request *req;
+	if (!r->enable_request_hook)
+		return;
+	if (r->state != RAFT_LEADER)
+		return;
+	req = requestRegFind(&r->leader_state.reg, index);
+	if (req == NULL)
+		return;
+	r->hook->request_append_done(r->hook, req);
+}
+
+void hookRequestMatch(struct raft *r, raft_index index, size_t n, raft_id id)
+{
+	size_t i;
+	struct request *req;
+
+	assert(r->state == RAFT_LEADER);
+	if (!r->enable_request_hook)
+		return;
+	for (i = 0; i < n; ++i) {
+		req = requestRegFind(&r->leader_state.reg, index + i);
+		if (req == NULL)
+			continue;
+		r->hook->request_match(r->hook, req, id);
+	}
+}
+
+void hookRequestCommit(struct raft *r, raft_index index, size_t n)
+{
+	size_t i;
+	struct request *req;
+
+	assert(r->state == RAFT_LEADER);
+	if (!r->enable_request_hook)
+		return;
+	for (i = 0; i < n; ++i) {
+		req = requestRegFind(&r->leader_state.reg, index + i);
+		if (req == NULL)
+			continue;
+		r->hook->request_commit(r->hook, req);
+	}
+}
+
+void hookRequestApply(struct raft *r, raft_index index)
+{
+	struct request *req;
+	if (!r->enable_request_hook)
+		return;
+	if (r->state != RAFT_LEADER)
+		return;
+	req = requestRegFind(&r->leader_state.reg, index);
+	if (req == NULL)
+		return;
+	r->hook->request_apply(r->hook, req);
+}
+
+void hookRequestApplyDone(struct raft *r, raft_index index)
+{
+	struct request *req;
+	if (!r->enable_request_hook)
+		return;
+	if (r->state != RAFT_LEADER)
+		return;
+	req = requestRegFind(&r->leader_state.reg, index);
+	if (req == NULL)
+		return;
+	r->hook->request_apply_done(r->hook, req);
+}

@@ -18,6 +18,7 @@
 #include "snapshot.h"
 #include "tracing.h"
 #include "event.h"
+#include "hook.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -477,21 +478,11 @@ static size_t updateLastStored(struct raft *r,
 static struct request *getRequest(struct raft *r,
                                   const raft_index index)
 {
-    queue *head;
-    struct request *req;
-
     if (r->state != RAFT_LEADER) {
         return NULL;
     }
-    QUEUE_FOREACH(head, &r->leader_state.requests)
-    {
-        req = QUEUE_DATA(head, struct request, queue);
-        if (req->index == index) {
-            QUEUE_REMOVE(head);
-            return req;
-        }
-    }
-    return NULL;
+
+    return requestRegDel(&r->leader_state.reg, index);
 }
 
 /* Invoked once a disk write request for new entries has been completed. */
@@ -505,6 +496,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     tracef("leader: written %u entries starting at %lld: status %d", request->n,
            request->index, status);
 
+    hookRequestAppendDone(r, request->index);
     assert(r->nr_appending_requests > 0);
     r->nr_appending_requests -= 1;
     /* In case of a failed disk write, if we were the leader creating these
@@ -605,6 +597,7 @@ static int appendLeader(struct raft *r, raft_index index)
     assert(index > 0);
     assert(index > r->last_stored);
 
+    hookRequestAppend(r, index);
     if (r->prev_append_status) {
         evtErrf("raft(%llx) reject append with prev append status %d",
 		r->id, r->prev_append_status);
@@ -742,6 +735,8 @@ int replicationUpdate(struct raft *r,
 {
     bool is_being_promoted;
     raft_index last_index;
+    raft_index prev_match_index;
+    raft_index match_index;
     unsigned i;
     int rv;
 
@@ -785,6 +780,7 @@ int replicationUpdate(struct raft *r,
         last_index = logLastIndex(&r->log);
     }
 
+    prev_match_index = progressMatchIndex(r, i);
     /* If the RPC succeeded, update our counters for this server.
      *
      * From Figure 3.1:
@@ -796,6 +792,10 @@ int replicationUpdate(struct raft *r,
     if (!progressMaybeUpdate(r, i, last_index)) {
         return 0;
     }
+    match_index = progressMatchIndex(r, i);
+    assert(match_index > prev_match_index);
+    hookRequestMatch(r, prev_match_index + 1, match_index - prev_match_index,
+		     id);
 
     switch (progressState(r, i)) {
         case PROGRESS__SNAPSHOT:
@@ -1476,6 +1476,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     struct raft_apply *creq;
 
     assert((r->last_applied + 1) == index);
+    hookRequestApplyDone(r, index);
 
     creq = (struct raft_apply *)getRequest(r, index);
     if (creq != NULL && creq->cb != NULL) {
@@ -1508,6 +1509,7 @@ static int applyCommand(struct raft *r,
     assert(index > 0);
     assert(index <= r->commit_index);
 
+    hookRequestApply(r, index);
     request = raft_malloc(sizeof(*request));
     if (request == NULL)
         return RAFT_NOMEM;
@@ -1532,6 +1534,9 @@ static int applyCommand(struct raft *r,
 static void applyBarrier(struct raft *r, const raft_index index)
 {
     struct raft_barrier *req;
+
+    hookRequestApply(r, index);
+    hookRequestApplyDone(r, index);
     req = (struct raft_barrier *)getRequest(r, index);
     if (req != NULL && req->cb != NULL) {
         assert(req->type == RAFT_BARRIER);
@@ -1791,6 +1796,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
     size_t votes = 0;
     size_t i;
     size_t n_voters;
+    raft_index prev_commit_index = r->commit_index;
 
     assert(r->state == RAFT_LEADER);
 
@@ -1827,6 +1833,10 @@ void replicationQuorum(struct raft *r, const raft_index index)
 
     r->commit_index = index;
     tracef("new commit index %llu", r->commit_index);
+
+    assert(r->commit_index > prev_commit_index);
+    hookRequestCommit(r, prev_commit_index + 1,
+		      r->commit_index - prev_commit_index);
 }
 
 inline bool replicationInstallSnapshotBusy(struct raft *r)

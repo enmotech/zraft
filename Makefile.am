@@ -38,7 +38,8 @@ libraft_la_SOURCES = \
   src/tick.c \
   src/tracing.c \
   src/hook.c \
-  src/event.c
+  src/event.c \
+  src/request.c
 
 bin_PROGRAMS =
 
@@ -71,7 +72,8 @@ test_unit_core_SOURCES = \
   test/unit/test_configuration.c \
   test/unit/test_err.c \
   test/unit/test_log.c \
-  test/unit/test_queue.c
+  test/unit/test_queue.c \
+  test/unit/test_request.c
 test_unit_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
 test_unit_core_LDADD = libtest.la ./.libs/libraft.a
 

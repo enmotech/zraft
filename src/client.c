@@ -384,6 +384,9 @@ int raft_assign(struct raft *r,
     r->leader_state.round_number = 1;
     r->leader_state.round_index = last_index;
     r->leader_state.round_start = r->io->time(r->io);
+    evtNoticef("raft(%llx) promotee %llx round %u round_index %llu", r->id,
+	       r->leader_state.promotee_id, r->leader_state.round_number,
+	       r->leader_state.round_index);
 
     /* Immediately initiate an AppendEntries request. */
     rv = replicationProgress(r, server_index);

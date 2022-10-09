@@ -707,6 +707,9 @@ static int triggerActualPromotion(struct raft *r)
     assert(entry->type == RAFT_CHANGE);
     r->hook->entry_after_append_fn(r->hook, index, entry);
 
+    evtNoticef("raft(%llx) promotee %llx promoted to voter ", r->id,
+	       r->leader_state.promotee_id);
+
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);
     if (rv != 0) {

@@ -135,6 +135,7 @@ static int tickLeader(struct raft *r)
     if (now - r->election_timer_start >= (r->election_timeout - r->heartbeat_timeout)) {
         if (!checkContactQuorum(r)) {
             tracef("unable to contact majority of cluster -> step down");
+            evtNoticef("raft(%llx) leader step down", r->id);
             convertToFollower(r);
             return 0;
         }

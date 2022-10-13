@@ -257,6 +257,12 @@ bool progressMaybeDecrement(struct raft *r,
          * the matched one. */
         if (rejected <= p->match_index) {
             tracef("match index is up to date -> ignore ");
+            evtNoticef("raft(%llx) %llx reject %lld <= match %lld", r->id, id,
+		       rejected, p->match_index);
+            if (last_index == 1) {
+                initProgress(p, logLastIndex(&r->log));
+                evtWarnf("raft(%llx) %llx start over", r->id, id);
+            }
             return false;
         }
         /* Directly decrease next to match + 1 */

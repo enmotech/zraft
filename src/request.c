@@ -148,7 +148,6 @@ struct request *requestRegFind(struct request_registry *reg, raft_index index)
 
     if (slot == NULL)
 	    return NULL;
-    assert(slot->req);
     return slot->req;
 }
 
@@ -159,7 +158,6 @@ struct request *requestRegDel(struct request_registry *reg, raft_index index)
 
     if (slot == NULL)
 	    return NULL;
-    assert(slot->req);
     req = slot->req;
     slot->req = NULL;
     slot->index = 0;

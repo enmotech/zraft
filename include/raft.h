@@ -1278,8 +1278,8 @@ RAFT_API void raft_set_quorum(struct raft *r, enum raft_quorum q);
  * Replace current configuration. This api must be called when raft's state is
  * follower
  */
-RAFT_API void raft_replace_configuration(struct raft *r,
-					 struct raft_configuration conf);
+RAFT_API int raft_replace_configuration(struct raft *r,
+				        struct raft_configuration conf);
 /**
  * Set whether follower should take snapshot sync with leader
  */

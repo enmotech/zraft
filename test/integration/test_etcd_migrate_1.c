@@ -1587,12 +1587,13 @@ static void newPreVoteMigrationCluster(struct fixture *f)
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 1, 1100);
 	raft_fixture_set_randomized_election_timeout(&f->cluster, 2, 2000);
 
+	CLUSTER_SATURATE_BOTHWAYS(0, 2);
+	CLUSTER_SATURATE_BOTHWAYS(1, 2);
+
 	CLUSTER_SET_TERM(2, 4);
 	CLUSTER_START
 	CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_LEADER, 2000);
 
-	CLUSTER_SATURATE_BOTHWAYS(0, 2);
-	CLUSTER_SATURATE_BOTHWAYS(1, 2);
 	APPLY(0);
 
 	CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_CANDIDATE, 2000)

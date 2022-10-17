@@ -307,14 +307,19 @@ void raft_set_quorum(struct raft *r, enum raft_quorum q)
 	r->quorum = q;
 }
 
-RAFT_API void raft_replace_configuration(struct raft *r,
-					 struct raft_configuration conf)
+RAFT_API int raft_replace_configuration(struct raft *r,
+					struct raft_configuration conf)
 {
+	if (r->io->state != RAFT_IO_AVAILABLE) {
+		evtNoticef("raft(%llx) io busy %u", r->id, r->io->state);
+		return RAFT_BUSY;
+	}
 	if (r->state != RAFT_FOLLOWER)
 		convertToFollower(r);
 	assert(r->state == RAFT_FOLLOWER);
 	raft_configuration_close(&r->configuration);
 	r->configuration = conf;
+	return 0;
 }
 
 void raft_set_sync_snapshot(struct raft *r , bool sync)

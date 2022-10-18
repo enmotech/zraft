@@ -155,6 +155,10 @@ static int recvEnsureMatchingTerm(struct raft *r,
         term = message->timeout_now.term;
         vote = message->server_id;
         break;
+    case RAFT_IO_REQUEST_VOTE_RESULT:
+        term = message->request_vote_result.term;
+        vote = 0;
+        break;
     default:
         *async = false;
         return 0;

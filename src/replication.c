@@ -1577,6 +1577,8 @@ static void applyChange(struct raft *r, const raft_index index)
          */
             server = configurationGet(&r->configuration, r->id);
             if (server == NULL) {
+	        evtNoticef("raft(%llx) not in configuration", r->id);
+		evtDumpConfiguration(r, &r->configuration);
                 convertToFollower(r);
             }
 

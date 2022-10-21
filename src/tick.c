@@ -121,6 +121,7 @@ static bool checkContactQuorum(struct raft *r)
 /* Apply time-dependent rules for leaders (Figure 3.1). */
 static int tickLeader(struct raft *r)
 {
+    int rv;
     raft_time now = r->io->time(r->io);
     assert(r->state == RAFT_LEADER);
 
@@ -143,7 +144,15 @@ static int tickLeader(struct raft *r)
     }
 
     /* Try to apply and take snapshot*/
-    replicationApply(r);
+    rv = replicationApply(r);
+    if (rv != 0) {
+        evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+    }
+
+    if (r->state != RAFT_LEADER) {
+        evtNoticef("raft(%llx) step down after replication apply", r->id);
+        return 0;
+    }
 
     /* Possibly send heartbeats.
      *

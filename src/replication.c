@@ -293,6 +293,10 @@ static int sendSnapshot(struct raft *r, const unsigned i)
         goto err_after_req_alloc;
     }
 
+    if (r->state != RAFT_LEADER) {
+        evtNoticef("raft(%llx) leader has step down after get snapshot", r->id);
+        return 0;
+    }
     progressUpdateSnapshotLastSend(r, i);
     return 0;
 

@@ -1596,6 +1596,10 @@ static void applyChange(struct raft *r, const raft_index index)
 static raft_index nextSnapshotIndex(struct raft *r)
 {
 	raft_index snapshot_index = r->last_applied;
+	raft_index hook_snapshot_index = 0;
+	
+	if (r->hook->get_next_snapshot_index)
+		hook_snapshot_index = r->hook->get_next_snapshot_index(r->hook);
 
 	if (r->state == RAFT_LEADER && r->sync_replication) {
 		progressUpdateMinMatch(r);
@@ -1608,6 +1612,9 @@ static raft_index nextSnapshotIndex(struct raft *r)
 			min(r->follower_state.current_leader.snapshot_index,
 			    r->last_applied);
 	}
+	
+	if (hook_snapshot_index != 0)
+		snapshot_index = min(hook_snapshot_index, snapshot_index);
 
 	return snapshot_index;
 }
@@ -1638,10 +1645,6 @@ static bool shouldTakeSnapshot(struct raft *r)
     if (snapshot_index - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;
     }
-
-    if (r->hook->should_take_snapshot_fn &&
-	    !r->hook->should_take_snapshot_fn(r->hook, snapshot_index))
-	    return false;
 
     return true;
 }

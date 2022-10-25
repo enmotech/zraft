@@ -378,6 +378,17 @@ RAFT_API bool raft_fixture_step_heartbeat_mock(struct raft_fixture *f,
 										unsigned j,
 										struct raft_append_entries *ae);
 
+
+RAFT_API bool raft_fixture_step_until_snapshot_for_send(struct raft_fixture *f,
+							unsigned i,
+							unsigned j,
+							struct raft_install_snapshot *snap,
+							unsigned max_msecs);
+
+RAFT_API bool raft_fixture_step_snapshot_mock(struct raft_fixture *f,
+					      unsigned i,
+					      unsigned j,
+					      struct raft_install_snapshot *snap);
 /**
  * Set a function to be called after every time a fixture event occurs as
  * consequence of a step.

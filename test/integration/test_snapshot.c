@@ -512,3 +512,37 @@ TEST(snapshot, takeSnapshotAppendEntries, setUp, tearDown, 0, NULL)
     CLUSTER_STEP_UNTIL_APPLIED(1, 11, 5000);
     return MUNIT_OK;
 }
+
+TEST(snapshot, reInstallAfterRejected, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    struct raft_install_snapshot snap = {.term = 4};
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    munit_assert_uint64(CLUSTER_TERM(0), ==, 2);
+    /* Set term for server 2 */
+    CLUSTER_STEP_UNTIL_TERM_IS(2, 3, 10000);
+    munit_assert_uint64(CLUSTER_TERM(2), ==, 3);
+
+    /* Reconnect the follower and wait for it to catch up */
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+    CLUSTER_STEP_UNTIL_SNAPSHOT(&f->cluster, 0, 2, &snap, 3000);
+    snap.term = 2;
+    CLUSTER_STEP_SNAPSHOT_MOCK(&f->cluster, 0, 2, &snap);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 4, 5000);
+
+    /* Check that the leader has sent a snapshot */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 2);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 2);
+    return MUNIT_OK;
+}

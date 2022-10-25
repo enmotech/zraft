@@ -2206,6 +2206,96 @@ bool raft_fixture_step_rv_mock(struct raft_fixture *f,
 	return mockRV(f, &mock);
 }
 
+struct step_install_snapshot {
+	unsigned src;
+	unsigned dst;
+	struct raft_install_snapshot* snap;
+};
+
+static bool mockInstallSnapshot(struct raft_fixture *f, void *arg)
+{
+	struct step_install_snapshot *mock = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)mock->src);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_INSTALL_SNAPSHOT)
+				continue;
+			if (message->server_id != mock->dst+1)
+				continue;
+		message->install_snapshot.term = mock->snap->term;
+		return true;
+		}
+	}
+
+	return false;
+}
+
+static bool hasSnapForSend(struct raft_fixture *f, void *arg)
+{
+	struct step_install_snapshot *mock = arg;
+	struct raft *raft;
+	struct io *io;
+	struct raft_message *message;
+	queue *head;
+	raft = raft_fixture_get(f, (unsigned)mock->src);
+	io = raft->io->impl;
+	QUEUE_FOREACH(head, &io->requests)
+	{
+		struct ioRequest *r;
+		r = QUEUE_DATA(head, struct ioRequest, queue);
+		message = NULL;
+		if (r->type == SEND) {
+			message = &((struct send *)r)->message;
+			if (!message)
+				continue;
+			if (message->type != RAFT_IO_INSTALL_SNAPSHOT)
+				continue;
+			if (message->server_id != mock->dst+1)
+				continue;
+			if (message->install_snapshot.term != mock->snap->term)
+				continue;
+		return true;
+		}
+	}
+
+	return false;
+}
+
+
+bool raft_fixture_step_until_snapshot_for_send(struct raft_fixture *f,
+					       unsigned i,
+					       unsigned j,
+					       struct raft_install_snapshot *snap,
+					       unsigned max_msecs)
+{
+	struct step_install_snapshot mock = {i, j, snap};
+
+	return raft_fixture_step_until(f, hasSnapForSend, &mock, max_msecs);;
+}
+
+bool raft_fixture_step_snapshot_mock(struct raft_fixture *f,
+				     unsigned i,
+				     unsigned j,
+				     struct raft_install_snapshot *snap)
+{
+	struct step_install_snapshot mock = {i, j, snap};
+
+	return mockInstallSnapshot(f, &mock);
+}
+
+
 void raft_fixture_disconnect(struct raft_fixture *f, unsigned i, unsigned j)
 {
     struct raft_io *io1 = &f->servers[i].io;

@@ -28,36 +28,6 @@ struct set_meta_req
     struct raft_io_set_meta req;
 };
 
-static void recvVoteResultBumpTermIOCb(struct raft_io_set_meta *req, int status)
-{
-    struct set_meta_req *request = req->data;
-    struct raft *r = request->raft;
-
-    if (r->state == RAFT_UNAVAILABLE) {
-        evtErrf("raft(%llx) recv rv result set meta cb, state is unavailable",
-		r->id);
-        goto err;
-    }
-    r->io->state = RAFT_IO_AVAILABLE;
-    if(status != 0) {
-	evtErrf("raft %x bump term for rvr %x %u failed ", r->id,
-		request->voted_for, request->term, status);
-        convertToUnavailable(r);
-        goto err;
-    }
-    evtNoticef("raft(%llx) set meta succeed %u %16llx",
-	       r->id, request->term, r->voted_for);
-    r->current_term = request->term;
-    r->voted_for = request->voted_for;
-
-    if (r->state != RAFT_FOLLOWER) {
-        /* Also convert to follower. */
-        convertToFollower(r);
-    }
-err:
-    raft_free(request);
-}
-
 int recvRequestVoteResult(struct raft *r,
                           raft_id id,
                           const struct raft_request_vote_result *result)
@@ -68,6 +38,7 @@ int recvRequestVoteResult(struct raft *r,
 
     assert(r != NULL);
     assert(id > 0);
+    assert(r->current_term >= result->term);
 
     votes_index = configurationIndexOfVoter(&r->configuration, id);
     if (votes_index == r->configuration.n) {
@@ -80,26 +51,16 @@ int recvRequestVoteResult(struct raft *r,
         tracef("local server is not candidate -> ignore");
         return 0;
     }
-    if (r->candidate_state.in_pre_vote) {
-        /* If we're in the pre-vote phase, check that the peer's is at most one term
-         * ahead (possibly stepping down). If we're the actual voting phase, we
-         * expect our term must to be the same as the response term (otherwise we
-         * would have either ignored the result bumped our term). */
-        if (result->term > (r->current_term + 1)) {
-            assert(!result->vote_granted);
-            goto update_term;
-        }
-    } else {
+
+    if (!r->candidate_state.in_pre_vote){
         if(result->pre_vote) {
             //because the candidate did not persist the vote,
             tracef("the vote is pre-vote -> ignore");
             return 0;
         }
         recvCheckMatchingTerms(r, result->term, &match);
-        if(match > 0) {
-            assert(!result->vote_granted);
-            goto update_term;
-        } else if (match < 0) {
+        assert(match <= 0);
+	if (match < 0) {
             /* If the term in the result is older than ours, this is an old message
              * we should ignore, because the node who voted for us would have
              * obtained our term.  This happens if the network is pretty choppy. */
@@ -153,11 +114,5 @@ int recvRequestVoteResult(struct raft *r,
     }
 
     return 0;
-update_term:
-    return recvUpdateMeta(r,
-               NULL,
-               result->term,
-               0,
-               recvVoteResultBumpTermIOCb);
 }
 #undef tracef

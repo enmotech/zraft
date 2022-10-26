@@ -503,6 +503,18 @@
     	munit_assert_true(promotable == (EXPECTED)); \
     }
 
+#define CLUSTER_STEP_SNAPSHOT_MOCK(F, I, J, SNAP) \
+    {                                                     \
+    	bool done = raft_fixture_step_snapshot_mock(F, I, J, SNAP); \
+	munit_assert_true(done);\
+    }
+
+#define CLUSTER_STEP_UNTIL_SNAPSHOT(F, I, J, SNAP, MAX_MSECS)										 \
+    {																					 \
+        bool done = raft_fixture_step_until_snapshot_for_send(&f->cluster, I, J, SNAP, MAX_MSECS);		 \
+        munit_assert_true(done);														 \
+    }
+
 void cluster_randomize_init(struct raft_fixture *f);
 void cluster_randomize(struct raft_fixture *f,
                        struct raft_fixture_event *event);

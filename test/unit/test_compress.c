@@ -108,8 +108,8 @@ TEST(Compress, compressDecompressRandomOne, NULL, NULL, 0,
 }
 
 static char* len_nonrandom_one_params[] = {
-/*    4KB     64KB     4MB        1GB           3GB */
-      "4096", "65536", "4194304", "1073741824", "3221225472",
+/*    4KB     64KB     4MB        64M           128M */
+      "4096", "65536", "4194304", "67108864", "134217728",
 /*    Around Blocksize*/
       "65516", "65517", "65518", "65521", "65535",
       "65537", "65551", "65555", "65556",

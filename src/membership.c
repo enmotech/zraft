@@ -2,6 +2,7 @@
 
 #include "../include/raft.h"
 #include "assert.h"
+#include "hook.h"
 #include "configuration.h"
 #include "err.h"
 #include "log.h"
@@ -138,6 +139,7 @@ int membershipUncommittedChange(struct raft *r,
 
     evtNoticef("raft(%llx) conf received at index %lu", r->id, index);
     evtDumpConfiguration(r, &configuration);
+    hookConfChange(r, &configuration);
 
     return 0;
 
@@ -180,7 +182,7 @@ int membershipRollback(struct raft *r)
     r->configuration_uncommitted_index = 0;
     evtNoticef("raft(%llx) conf rollback ", r->id);
     evtDumpConfiguration(r, &r->configuration);
-
+    hookConfChange(r, &r->configuration);
     return 0;
 }
 

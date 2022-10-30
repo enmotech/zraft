@@ -12,4 +12,6 @@ void hookRequestCommit(struct raft *r, raft_index index, size_t n);
 void hookRequestApply(struct raft *r, raft_index index);
 void hookRequestApplyDone(struct raft *r, raft_index index);
 
+void hookConfChange(struct raft *r, const struct raft_configuration *c);
+
 #endif //HOOK_H

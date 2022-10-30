@@ -322,6 +322,7 @@ RAFT_API int raft_replace_configuration(struct raft *r,
 
 	evtNoticef("raft(%llx) conf replace", r->id);
 	evtDumpConfiguration(r, &conf);
+    hookConfChange(r, &conf);
 	return 0;
 }
 

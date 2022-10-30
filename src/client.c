@@ -172,6 +172,7 @@ static int clientChangeConfiguration(
     assert(entry);
     assert(entry->type == RAFT_CHANGE);
     r->hook->entry_after_append_fn(r->hook, index, entry);
+    hookConfChange(r, configuration);
 
     if (configuration->n != r->configuration.n) {
         rv = progressRebuildArray(r, configuration);

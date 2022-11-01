@@ -41,11 +41,19 @@ static void defaultRequestMatch(struct raft_hook *h, struct request *req,
 	(void)id;
 }
 
+static void defaultConfChange(struct raft_hook *h, 
+							  const struct raft_configuration *c)
+{
+	(void)h;
+	(void)c;
+}
+
 struct raft_hook defaultHook = {
 	.data = NULL,
 	.entry_after_append_fn = defaultEntryAfterAppend,
 	.entry_match_change_cb = defaultEntryMatchChange,
 	.entry_after_apply_fn  = defaultEntryAfterApply,
+	.conf_change = defaultConfChange,
 	.request_accept =  defaultRequestDummy,
 	.request_append = defaultRequestDummy,
 	.request_append_done = defaultRequestDummy,
@@ -148,4 +156,11 @@ void hookRequestApplyDone(struct raft *r, raft_index index)
 	if (req == NULL)
 		return;
 	r->hook->request_apply_done(r->hook, req);
+}
+
+void hookConfChange(struct raft *r, const struct raft_configuration *c)
+{
+	if (!r->hook->conf_change)
+		return;
+	r->hook->conf_change(r->hook, c);
 }

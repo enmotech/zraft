@@ -1,5 +1,6 @@
 #include "../include/raft.h"
 #include "assert.h"
+#include "hook.h"
 #include "configuration.h"
 #include "convert.h"
 #include "entry.h"
@@ -324,6 +325,7 @@ static void loadCb(struct raft_io_load *req,
     evtNoticef("raft(%llx) conf start %lu/%lu", r->id, r->configuration_index,
 	       r->configuration_uncommitted_index);
     evtDumpConfiguration(r, &r->configuration);
+    hookConfChange(r, &r->configuration);
 
     /* By default we start as followers. */
     convertToFollower(r);

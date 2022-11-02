@@ -218,6 +218,8 @@ int raft_start(struct raft *r)
     /* By default we start as followers. */
     convertToFollower(r);
 
+    if (!r->enable_election_at_start)
+        goto err_skip_self_elect;
     /* If there's only one voting server, and that is us, it's safe to convert
      * to leader right away. If that is not us, we're either joining the cluster
      * or we're simply configured as non-voter, and we'll stay follower. */
@@ -227,6 +229,7 @@ int raft_start(struct raft *r)
         return rv;
     }
 
+err_skip_self_elect:
     r->io->state = RAFT_IO_AVAILABLE;
 
     return 0;
@@ -330,6 +333,9 @@ static void loadCb(struct raft_io_load *req,
     /* By default we start as followers. */
     convertToFollower(r);
 
+    if (!r->enable_election_at_start)
+        goto err_skip_self_elect;
+
     /* If there's only one voting server, and that is us, it's safe to convert
      * to leader right away. If that is not us, we're either joining the cluster
      * or we're simply configured as non-voter, and we'll stay follower. */
@@ -339,6 +345,7 @@ static void loadCb(struct raft_io_load *req,
         goto err;
     }
 
+err_skip_self_elect:
     r->io->state = RAFT_IO_AVAILABLE;
 err:
     start->cb(start, status);

@@ -837,6 +837,8 @@ struct raft
     bool non_voter_grant_vote;
     /* Flag for enable hook for request */
     bool enable_request_hook;
+
+    bool enable_election_at_start;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1301,6 +1303,11 @@ RAFT_API void raft_set_non_voter_grant_vote(struct raft *r, bool grant);
  * Set request hook flag @enable
  */
 RAFT_API void raft_enable_request_hook(struct raft *r, bool enable);
+
+/*
+* Set the only voter elect as leader at start
+*/
+RAFT_API void raft_enable_election_at_start(struct raft *r, bool enable);
 
 #undef RAFT__REQUEST
 

@@ -11,12 +11,18 @@ int raft_state(struct raft *r)
 
 void raft_leader(struct raft *r, raft_id *id)
 {
+    raft_time tm = r->io->time(r->io);
+
     switch (r->state) {
         case RAFT_UNAVAILABLE:
         case RAFT_CANDIDATE:
             *id = 0;
             return;
         case RAFT_FOLLOWER:
+            if (tm > r->election_timer_start + r->election_timeout * 2) {
+                *id = 0;
+                return;
+            }
             *id = r->follower_state.current_leader.id;
             return;
         case RAFT_LEADER:

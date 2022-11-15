@@ -300,7 +300,8 @@ int recvUpdateLeader(struct raft *r, const raft_id id)
     assert(r->state == RAFT_FOLLOWER);
 
     if (r->follower_state.current_leader.id != id) {
-	r->follower_state.current_leader.id = id;
+        r->follower_aux.match_leader = false;
+        r->follower_state.current_leader.id = id;
 	    if (r->state_change_cb)
 		    r->state_change_cb(r, RAFT_FOLLOWER);
     }

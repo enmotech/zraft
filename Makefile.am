@@ -55,6 +55,7 @@ libtest_la_SOURCES = \
   test/lib/fsm.c \
   test/lib/heap.c \
   test/lib/munit.c \
+  test/lib/munit_mock.c \
   test/lib/tracer.c \
   test/lib/tcp.c
 
@@ -74,12 +75,13 @@ test_unit_core_SOURCES = \
   test/unit/test_log.c \
   test/unit/test_queue.c \
   test/unit/test_request.c
-test_unit_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
+test_unit_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion -std=gnu11
 test_unit_core_LDADD = libtest.la ./.libs/libraft.a
 
 if LZ4_AVAILABLE
 test_unit_core_CFLAGS += -DLZ4_AVAILABLE
 test_unit_core_LDFLAGS = $(LZ4_LIBS)
+test_unit_core_LDFLAGS += -Wl,--wrap=LZ4F_createCompressionContext,--wrap=raft_malloc,--wrap=LZ4F_compressBegin
 libraft_la_CFLAGS += -DLZ4_AVAILABLE
 libraft_la_LDFLAGS += $(LZ4_LIBS)
 endif # LZ4_AVAILABLE
@@ -121,11 +123,14 @@ test_integration_core_SOURCES = \
   test/integration/test_paper.c \
   test/integration/test_etcd_migrate_1.c \
   test/integration/test_etcd_migrate_2.c \
-  test/integration/test_etcd_migrate_3.c
+  test/integration/test_etcd_migrate_3.c \
+  test/integration/mocks.c
 
-test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion
+test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion -std=gnu11
 test_integration_core_LDFLAGS = -no-install
 test_integration_core_LDADD = libtest.la ./.libs/libraft.a
+test_integration_core_LDFLAGS += -Wl,--wrap=logAppendCommands,--wrap=requestRegEnqueue,--wrap=replicationTrigger
+test_integration_core_LDFLAGS += -Wl,--wrap=logAppend,--wrap=configurationCopy,--wrap=logAcquire
 
 test_fuzzy_core_SOURCES = \
   test/fuzzy/main_core.c \

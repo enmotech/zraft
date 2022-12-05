@@ -4,6 +4,7 @@
 *.trs
 *.dirstamp
 *.gcno
+*.gcda
 test/unit/core
 test/unit/uv
 test/fuzzy/core

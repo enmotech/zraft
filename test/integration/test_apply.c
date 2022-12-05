@@ -1,5 +1,6 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
+#include "../lib/munit_mock.h"
 
 /******************************************************************************
  *
@@ -95,6 +96,18 @@ static bool applyCbHasFired(struct raft_fixture *f, void *arg)
         raft_free(_buf.base);                                     \
     } while (0)
 
+/* Submit an apply request. */
+#define APPLY_SUBMIT_ERROR(I, RV)                                                \
+    struct raft_buffer _buf;                                                 \
+    struct raft_apply _req;                                                  \
+    struct result _result = {RV, false};                                      \
+    int _rv;                                                                 \
+    FsmEncodeSetX(123, &_buf);                                               \
+    _req.data = &_result;                                                    \
+    _rv = raft_apply(CLUSTER_RAFT(I), &_req, &_buf, 1, applyCbAssertResult); \
+    munit_assert_int(_rv, ==, 0);
+
+
 /******************************************************************************
  *
  * Success scenarios
@@ -135,5 +148,76 @@ TEST(raft_apply, leadershipLost, setUp, tearDown, 0, NULL)
     APPLY_EXPECT(RAFT_LEADERSHIPLOST);
     CLUSTER_DEPOSE;
     APPLY_WAIT;
+    return MUNIT_OK;
+}
+
+TEST(raft_apply, logAppendCommandsFail, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+
+    will_return(logAppendCommands, RAFT_NOMEM);
+    APPLY_ERROR(0, RAFT_NOMEM, "");
+    return MUNIT_OK;
+}
+
+TEST(raft_apply, requestRegEnqueueFail, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+
+    will_return(requestRegEnqueue, RAFT_NOMEM);
+    APPLY_ERROR(0, RAFT_NOMEM, "");
+    return MUNIT_OK;
+}
+
+TEST(raft_apply, replicationTriggerFail, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+
+    will_return(replicationTrigger, RAFT_NOMEM);
+    APPLY_ERROR(0, RAFT_NOMEM, "");
+    return MUNIT_OK;
+}
+
+static int fakeAppend(struct raft_io *io, struct raft_io_append *req,
+                      const struct raft_entry entries[], unsigned n,
+                      raft_io_append_cb cb)
+{
+    (void)io;
+    (void)req;
+    (void)entries;
+    (void)n;
+    (void)cb;
+
+    return RAFT_NOMEM;
+}
+
+static int fakeAppendCb(struct raft_io *io, struct raft_io_append *req,
+                      const struct raft_entry entries[], unsigned n,
+                      raft_io_append_cb cb)
+{
+    (void)io;
+    (void)entries;
+    (void)n;
+
+    cb(req, RAFT_NOMEM);
+    return 0;
+}
+
+TEST(raft_apply, appendLeaderFail, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    typeof(fakeAppend)* append;
+
+    CLUSTER_RAFT(0)->prev_append_status = RAFT_NOMEM;
+    APPLY_ERROR(0, RAFT_NOMEM, "");
+    CLUSTER_RAFT(0)->prev_append_status = 0;
+    will_return(logAcquire, RAFT_NOMEM);
+    APPLY_ERROR(0, RAFT_NOMEM, "");
+    append = CLUSTER_RAFT(0)->io->append;
+    CLUSTER_RAFT(0)->io->append = fakeAppend;
+    APPLY_ERROR(0, RAFT_NOMEM, "io: ");
+    CLUSTER_RAFT(0)->io->append = fakeAppendCb;
+    APPLY_SUBMIT_ERROR(0, RAFT_NOMEM);
+    CLUSTER_RAFT(0)->io->append = append;
     return MUNIT_OK;
 }

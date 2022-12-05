@@ -1,5 +1,6 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
+#include "../lib/munit_mock.h"
 
 /******************************************************************************
  *
@@ -78,6 +79,18 @@ static bool barrierCbHasFired(struct raft_fixture *f, void *arg)
         BARRIER_WAIT;      \
     } while (0)
 
+#define BARRIER_ERROR(I, RV, ERRMSG)                                       \
+    do {                                                                   \
+        struct raft_barrier _req;                                          \
+        struct result _result = {0, false};                                \
+        int _rv;                                                           \
+        _req.data = &_result;                                              \
+        _rv = raft_barrier(CLUSTER_RAFT(I), &_req, barrierCbAssertResult); \
+        munit_assert_int(_rv, ==, RV);                                     \
+        munit_assert_string_equal(CLUSTER_ERRMSG(I), ERRMSG);              \
+    } while (0)
+
+
 /******************************************************************************
  *
  * Success scenarios
@@ -90,5 +103,32 @@ TEST(raft_barrier, cb, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     BARRIER(0);
+    return MUNIT_OK;
+}
+
+TEST(raft_barrier, logAppendFail, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+
+    will_return(logAppend, RAFT_NOMEM);
+    BARRIER_ERROR(0, RAFT_NOMEM, "");
+    return MUNIT_OK;
+}
+
+TEST(raft_barrier, requestRegEnqueueFail, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+
+    will_return(requestRegEnqueue, RAFT_NOMEM);
+    BARRIER_ERROR(0, RAFT_NOMEM, "");
+    return MUNIT_OK;
+}
+
+TEST(raft_barrier, replicationTriggerFail, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+
+    will_return(replicationTrigger, RAFT_NOMEM);
+    BARRIER_ERROR(0, RAFT_NOMEM, "");
     return MUNIT_OK;
 }

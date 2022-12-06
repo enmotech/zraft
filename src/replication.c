@@ -633,13 +633,14 @@ static int appendLeader(struct raft *r, raft_index index)
     request->n = n;
     request->req.data = request;
 
+    r->nr_appending_requests += 1;
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
+        r->nr_appending_requests -= 1;
         evtErrf("raft(%llx) append failed %d", r->id, rv);
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_request_alloc;
     }
-    r->nr_appending_requests += 1;
 
     return 0;
 
@@ -661,6 +662,9 @@ int replicationTrigger(struct raft *r, raft_index index)
         evtErrf("raft(%llx) append leader failed %d", r->id, rv);
         return rv;
     }
+
+    if (r->state != RAFT_LEADER)
+        return 0;
 
     return triggerAll(r);
 }
@@ -1279,15 +1283,16 @@ int replicationAppend(struct raft *r,
 	    rv = RAFT_SHUTDOWN;
 	    goto err_after_acquire_entries;
     }
+    r->nr_appending_requests += 1;
     request->req.data = request;
     rv = r->io->append(r->io, &request->req, request->args.entries,
                        request->args.n_entries, appendFollowerCb);
     if (rv != 0) {
+        r->nr_appending_requests -= 1;
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         evtErrf("raft(%llx) append failed %d", r->id, rv);
         goto err_after_acquire_entries;
     }
-    r->nr_appending_requests += 1;
 
     entryNonBatchDestroyPrefix(args->entries, args->n_entries, i);
     raft_free(args->entries);
@@ -1736,6 +1741,7 @@ abort_after_config_copy:
     raft_configuration_close(&snapshot->configuration);
 abort:
     r->snapshot.pending.term = 0;
+    r->snapshot.put.data = NULL;
     return rv;
 }
 

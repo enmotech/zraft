@@ -1,11 +1,13 @@
 #include "../../src/byte.h"
 #include "../../src/compress.h"
 #include "../lib/munit.h"
+#include "../lib/munit_mock.h"
 #include "../lib/runner.h"
 
 #include <sys/random.h>
 #ifdef LZ4_AVAILABLE
 #include <lz4frame.h>
+#include <lz4frame_static.h>
 #endif
 
 SUITE(Compress)
@@ -222,6 +224,77 @@ TEST(Compress, compressDecompressCorruption, NULL, NULL, 0, NULL)
     return MUNIT_OK;
 }
 
+extern LZ4F_errorCode_t __real_LZ4F_createCompressionContext(LZ4F_cctx **cctxPtr,
+                                                      unsigned version);
+LZ4F_errorCode_t __wrap_LZ4F_createCompressionContext(LZ4F_cctx **cctxPtr,
+                                                      unsigned version)
+{
+    return mock_type_args(LZ4F_errorCode_t, LZ4F_createCompressionContext, cctxPtr, version);
+}	
+
+TEST(Compress, compressCreateCompressionContextFailed, NULL, NULL, 0, NULL)
+{
+    char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
+    struct raft_buffer compressed = {0};
+
+    /* Fill a buffer with random data */
+    size_t len = 2048;
+    struct raft_buffer buf = getBufWithRandom(len);
+
+    will_return(LZ4F_createCompressionContext, -LZ4F_ERROR_GENERIC);
+    munit_assert_int(Compress(&buf, 1, &compressed, errmsg), ==, RAFT_NOMEM);
+
+    free(buf.base);
+    return MUNIT_OK;
+}
+
+extern void *__real_raft_malloc(size_t size);
+void *__wrap_raft_malloc(size_t size)
+{
+    return (void *)(uintptr_t)(mock_type_args(uintptr_t, raft_malloc, size));
+}
+
+TEST(Compress, compressMallocDestFailed, NULL, NULL, 0, NULL)
+{
+    char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
+    struct raft_buffer compressed = {0};
+
+    /* Fill a buffer with random data */
+    size_t len = 2048;
+    struct raft_buffer buf = getBufWithRandom(len);
+
+    will_return_ptr(raft_malloc, NULL);
+    munit_assert_int(Compress(&buf, 1, &compressed, errmsg), ==, RAFT_NOMEM);
+
+    free(buf.base);
+    return MUNIT_OK;
+}
+extern size_t __real_LZ4F_compressBegin(LZ4F_cctx* cctxPtr, void* dstBuffer, 
+                                        size_t dstCapacity, 
+                                        const LZ4F_preferences_t* preferencesPtr);
+size_t __wrap_LZ4F_compressBegin(LZ4F_cctx* cctxPtr, void* dstBuffer, 
+                                 size_t dstCapacity, 
+                                 const LZ4F_preferences_t* preferencesPtr)
+{
+    return mock_type_args(LZ4F_errorCode_t, LZ4F_compressBegin, cctxPtr, 
+                          dstBuffer, dstCapacity, preferencesPtr);
+}
+
+TEST(Compress, compressBeginFailed, NULL, NULL, 0, NULL)
+{
+    char errmsg[RAFT_ERRMSG_BUF_SIZE] = {0};
+    struct raft_buffer compressed = {0};
+
+    /* Fill a buffer with random data */
+    size_t len = 2048;
+    struct raft_buffer buf = getBufWithRandom(len);
+
+    will_return_ptr(LZ4F_compressBegin, -LZ4F_ERROR_GENERIC);
+    munit_assert_int(Compress(&buf, 1, &compressed, errmsg), ==, RAFT_IOERR);
+
+    free(buf.base);
+    return MUNIT_OK;
+}
 #else
 
 TEST(Compress, lz4Disabled, NULL, NULL, 0, NULL)

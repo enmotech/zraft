@@ -74,6 +74,7 @@ TEST(raft_start, oneSnapshotAndNoEntries, setUp, tearDown, 0, NULL)
     CLUSTER_SET_TERM(0, 2);
     BOOTSTRAP(1);
     CLUSTER_START;
+    munit_assert_uint64(raft_last_index(CLUSTER_RAFT(1)), ==, 1);
     CLUSTER_MAKE_PROGRESS;
     return MUNIT_OK;
 }

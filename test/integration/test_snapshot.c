@@ -1,5 +1,7 @@
 #include "../lib/cluster.h"
 #include "../lib/runner.h"
+#include "../lib/munit_mock.h"
+#include "../../src/snapshot.h"
 
 /******************************************************************************
  *
@@ -546,3 +548,119 @@ TEST(snapshot, reInstallAfterRejected, setUp, tearDown, 0, NULL)
     munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 2);
     return MUNIT_OK;
 }
+
+static int fakeSnapshot(struct raft_fsm *fsm, struct raft_buffer *bufs[],
+                        unsigned *n_bufs)
+{
+    (void)fsm;
+    (void)bufs;
+    (void)n_bufs;
+
+    return RAFT_BUSY;
+}
+
+static int fakeSnapshotPut(struct raft_io *io, unsigned trailing,
+                           struct raft_io_snapshot_put *req,
+                           const struct raft_snapshot *snapshot,
+                           raft_io_snapshot_put_cb cb)
+{
+    (void)io;
+    (void)trailing;
+    (void)req;
+    (void)snapshot;
+    (void)cb;
+
+    return RAFT_NOMEM;
+}
+
+/* Install a snapshot on a follower that has fallen behind. */
+TEST(snapshot, configurationCopyFail, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    struct raft_install_snapshot snap = {.term = 2};
+    typeof(fakeSnapshot) *snapshot;
+    typeof(fakeSnapshotPut) *put;
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
+
+    will_return(configurationCopy, RAFT_NOMEM);
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    snapshot = CLUSTER_RAFT(0)->fsm->snapshot;
+    CLUSTER_RAFT(0)->fsm->snapshot = fakeSnapshot;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_RAFT(0)->fsm->snapshot = snapshot;
+    put = CLUSTER_RAFT(0)->io->snapshot_put;
+    CLUSTER_RAFT(0)->io->snapshot_put = fakeSnapshotPut;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_RAFT(0)->io->snapshot_put = put;
+    CLUSTER_MAKE_PROGRESS;
+
+    /* Reconnect the follower and wait for it to catch up */
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+    CLUSTER_STEP_UNTIL_SNAPSHOT(&f->cluster, 0, 2, &snap, 3000);
+
+    return MUNIT_OK;
+}
+
+static struct raft_snapshot *createSnapshot(struct raft *r)
+{
+    struct raft_snapshot *snapshot;
+
+    snapshot = raft_malloc(sizeof(*snapshot));
+    munit_assert_ptr_not_null(snapshot);
+    snapshot->n_bufs = 1;
+    snapshot->bufs = raft_calloc(snapshot->n_bufs, sizeof(struct raft_buffer));
+    munit_assert_ptr_not_null(snapshot->bufs);
+    configurationCopy(&r->configuration, &snapshot->configuration);
+    snapshot->configuration_index = r->configuration_index;
+    snapshot->index = r->last_applied;
+
+    return snapshot;
+}
+
+static int fakeRestore(struct raft_fsm *fsm, struct raft_buffer *buf)
+{
+    (void)fsm;
+    (void)buf;
+
+    return 0;
+}
+
+TEST(snapshot, restoreSnapshot, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    int rv;
+    struct raft_snapshot *snapshot;
+    typeof(fakeRestore) *restore;
+
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
+
+    CLUSTER_STEP_UNTIL_APPLIED(0, 1, 1000);
+
+    restore = CLUSTER_RAFT(0)->fsm->restore;
+    CLUSTER_RAFT(0)->fsm->restore = fakeRestore;
+    snapshot = createSnapshot(CLUSTER_RAFT(0));
+    munit_assert_ptr_not_null(snapshot);
+    will_return(configurationCopy, RAFT_NOMEM);
+    rv = snapshotRestore(CLUSTER_RAFT(0), snapshot);
+    munit_assert_int(rv, ==, RAFT_NOMEM);
+    snapshotDestroy(snapshot);
+
+    snapshot = createSnapshot(CLUSTER_RAFT(0));
+    munit_assert_ptr_not_null(snapshot);
+    snapshotRestore(CLUSTER_RAFT(0), snapshot);
+    CLUSTER_RAFT(0)->fsm->restore = restore;
+    raft_free(snapshot);
+
+    return MUNIT_OK;
+}
+

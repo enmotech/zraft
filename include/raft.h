@@ -1309,6 +1309,11 @@ RAFT_API void raft_enable_request_hook(struct raft *r, bool enable);
 */
 RAFT_API void raft_enable_election_at_start(struct raft *r, bool enable);
 
+/**
+ * Check candidate is distruptive
+ */
+RAFT_API bool raft_is_distruptive_candidate(struct raft *r);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

@@ -351,3 +351,10 @@ void raft_enable_election_at_start(struct raft *r, bool enable)
 {
     r->enable_election_at_start = enable;
 }
+
+bool raft_is_distruptive_candidate(struct raft *r)
+{
+    assert(r->state == RAFT_CANDIDATE);
+
+    return r->candidate_state.disrupt_leader;
+}

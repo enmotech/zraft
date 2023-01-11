@@ -474,7 +474,7 @@ TEST(logAppend, two, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     APPEND(1 /* term */);
     APPEND(1 /* term */);
-    ASSERT(6 /* size                                                    */,
+    ASSERT(4 /* size                                                    */,
            0 /* front                                                   */,
            2 /* back                                                    */,
            0 /* offset                                                  */,
@@ -500,7 +500,7 @@ TEST(logAppend, three, setUp, tearDown, 0, NULL)
     /* Three -> [e1, e2, e3, NULL, NULL, NULL] */
     APPEND(1 /* term */);
 
-    ASSERT(6 /* size                                                    */,
+    ASSERT(4 /* size                                                    */,
            0 /* front                                                   */,
            3 /* back                                                    */,
            0 /* offset                                                  */,
@@ -536,7 +536,7 @@ TEST(logAppend, wrap, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 5 /* n */);
 
     /* Now the log is [e1, e2, e3, e4, e5, NULL] */
-    ASSERT(6 /* size                                                    */,
+    ASSERT(8 /* size                                                    */,
            0 /* front                                                   */,
            5 /* back                                                    */,
            0 /* offset                                                  */,
@@ -546,7 +546,7 @@ TEST(logAppend, wrap, setUp, tearDown, 0, NULL)
     SNAPSHOT(4 /* last entry */, 0 /* trailing */);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    ASSERT(6 /* size                                                    */,
+    ASSERT(8 /* size                                                    */,
            4 /* front                                                   */,
            5 /* back                                                    */,
            4 /* offset                                                  */,
@@ -556,9 +556,9 @@ TEST(logAppend, wrap, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 3 /* n */);
 
     /* Now the log is [e7, e8, NULL, NULL, e5, e6] */
-    ASSERT(6 /* size                                                    */,
+    ASSERT(8 /* size                                                    */,
            4 /* front                                                   */,
-           2 /* back                                                    */,
+           0 /* back                                                    */,
            4 /* offset                                                  */,
            4 /* n */);
 
@@ -566,9 +566,9 @@ TEST(logAppend, wrap, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 3 /* n */);
 
     /* Now the log is [e5, ..., e11, NULL, ..., NULL] */
-    ASSERT(14 /* size                                                 */,
-           0 /* front                                                 */,
-           7 /* back                                                  */,
+    ASSERT(8 /* size                                                 */,
+           4 /* front                                                 */,
+           3 /* back                                                  */,
            4 /* offset                                                */,
            7 /* n */);
 
@@ -580,7 +580,7 @@ TEST(logAppend, batch, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     APPEND_BATCH(3);
-    ASSERT(6 /* size                                                 */,
+    ASSERT(4 /* size                                                 */,
            0 /* front                                                 */,
            3 /* back                                                  */,
            0 /* offset                                                */,
@@ -717,7 +717,7 @@ TEST(logAcquire, wrap, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 5 /* n */);
 
     /* Now the log is [e1, e2, e3, e4, e5, NULL] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            0 /* front                                                */,
            5 /* back                                                 */,
            0 /* offset                                               */,
@@ -727,7 +727,7 @@ TEST(logAcquire, wrap, setUp, tearDown, 0, NULL)
     SNAPSHOT(4 /* last index */, 0 /* trailing */);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            4 /* front                                                */,
            5 /* back                                                 */,
            4 /* offset                                               */,
@@ -737,9 +737,9 @@ TEST(logAcquire, wrap, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 3 /* n */);
 
     /* Now the log is [e7, e8, NULL, NULL, e5, e6] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            4 /* front                                                */,
-           2 /* back                                                 */,
+           0 /* back                                                 */,
            4 /* offset                                               */,
            4 /* n */);
 
@@ -851,7 +851,7 @@ TEST(logTruncate, lastOfTwo, setUp, tearDown, 0, NULL)
 
     TRUNCATE(2 /* index */);
 
-    ASSERT(6 /* size                                                 */,
+    ASSERT(4 /* size                                                 */,
            0 /* front                                                */,
            1 /* back                                                 */,
            0 /* offset                                               */,
@@ -869,7 +869,7 @@ TEST(logTruncate, wrap, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 5 /* n entries */);
 
     /* Now the log is [e1, e2, e3, e4, e5, NULL] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            0 /* front                                                */,
            5 /* back                                                 */,
            0 /* offset                                               */,
@@ -879,7 +879,7 @@ TEST(logTruncate, wrap, setUp, tearDown, 0, NULL)
     SNAPSHOT(4 /* last index */, 0 /* trailing */);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            4 /* front                                                */,
            5 /* back                                                 */,
            4 /* offset                                               */,
@@ -889,9 +889,9 @@ TEST(logTruncate, wrap, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 3 /* n entries */);
 
     /* Now the log is [e7, e8, NULL, NULL, e5, e6] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            4 /* front                                                */,
-           2 /* back                                                 */,
+           0 /* back                                                 */,
            4 /* offset                                               */,
            4 /* n */);
 
@@ -899,7 +899,7 @@ TEST(logTruncate, wrap, setUp, tearDown, 0, NULL)
     TRUNCATE(6 /* index */);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            4 /* front                                                */,
            5 /* back                                                 */,
            4 /* offset                                               */,
@@ -1057,7 +1057,7 @@ TEST(logSnapshot, trailing, setUp, tearDown, 0, NULL)
 
     SNAPSHOT(3 /* last index */, 2 /* trailing */);
 
-    ASSERT(6 /* size                                                 */,
+    ASSERT(4 /* size                                                 */,
            1 /* front                                                */,
            3 /* back                                                 */,
            1 /* offset                                               */,
@@ -1087,9 +1087,9 @@ TEST(logSnapshot, trailingHigherThanNumEntries, setUp, tearDown, 0, NULL)
 
     SNAPSHOT(4 /* last index */, 3 /* trailing */);
 
-    ASSERT(6 /* size                                                 */,
+    ASSERT(4 /* size                                                 */,
            2 /* front                                                */,
-           4 /* back                                                 */,
+           0 /* back                                                 */,
            2 /* offset                                               */,
            2 /* n */);
 
@@ -1116,9 +1116,9 @@ TEST(logSnapshot, trailingMatchesOutstanding, setUp, tearDown, 0, NULL)
 
     SNAPSHOT(4 /* last index */, 2 /* trailing */);
 
-    ASSERT(6 /* size                                                 */,
+    ASSERT(4 /* size                                                 */,
            2 /* front                                                */,
-           4 /* back                                                 */,
+           0 /* back                                                 */,
            2 /* offset                                               */,
            2 /* n */);
 
@@ -1139,7 +1139,7 @@ TEST(logSnapshot, lessThanHighestIndex, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 5 /* n entries */);
     SNAPSHOT(4 /* last index */, 2 /* trailing */);
 
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            2 /* front                                                */,
            5 /* back                                                 */,
            2 /* offset                                               */,
@@ -1161,7 +1161,7 @@ TEST(logSnapshot, wrap, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 5 /* n entries */);
 
     /* Now the log is [e1, e2, e3, e4, e5, NULL] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            0 /* front                                                */,
            5 /* back                                                 */,
            0 /* offset                                               */,
@@ -1171,7 +1171,7 @@ TEST(logSnapshot, wrap, setUp, tearDown, 0, NULL)
     SNAPSHOT(5 /* last index */, 1 /* trailing */);
 
     /* Now the log is [NULL, NULL, NULL, NULL, e5, NULL] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            4 /* front                                                */,
            5 /* back                                                 */,
            4 /* offset                                               */,
@@ -1183,9 +1183,9 @@ TEST(logSnapshot, wrap, setUp, tearDown, 0, NULL)
     APPEND_MANY(1 /* term */, 4 /* n */);
 
     /* Now the log is [e7, e8, e9, NULL, e5, e6] */
-    ASSERT(6 /* size                                                 */,
+    ASSERT(8 /* size                                                 */,
            4 /* front                                                */,
-           3 /* back                                                 */,
+           1 /* back                                                 */,
            4 /* offset                                               */,
            5 /* n */);
 
@@ -1193,9 +1193,9 @@ TEST(logSnapshot, wrap, setUp, tearDown, 0, NULL)
     SNAPSHOT(8 /* last index */, 1 /* trailing */);
 
     /* Now the log is [NULL, e8, e9, NULL, NULL, NULL] */
-    ASSERT(6 /* size                                                 */,
-           1 /* front                                                */,
-           3 /* back                                                 */,
+    ASSERT(8 /* size                                                 */,
+           7 /* front                                                */,
+           1 /* back                                                 */,
            7 /* offset                                               */,
            2 /* n */);
 

@@ -1602,7 +1602,7 @@ static raft_index nextSnapshotIndex(struct raft *r)
 {
 	raft_index snapshot_index = r->last_applied;
 	raft_index hook_snapshot_index = 0;
-	
+
 	if (r->hook->get_next_snapshot_index)
 		hook_snapshot_index = r->hook->get_next_snapshot_index(r->hook);
 
@@ -1617,7 +1617,7 @@ static raft_index nextSnapshotIndex(struct raft *r)
 			min(r->follower_state.current_leader.snapshot_index,
 			    r->last_applied);
 	}
-	
+
 	if (hook_snapshot_index != 0)
 		snapshot_index = min(hook_snapshot_index, snapshot_index);
 
@@ -1755,10 +1755,11 @@ int replicationApply(struct raft *r)
 
     if (r->last_applied == r->commit_index) {
         /* Nothing to do. */
-	goto err_take_snapshot;
+        goto err_take_snapshot;
     }
 
-    for (index = r->last_applying + 1; index <= r->commit_index; index++) {
+    while(r->last_applying < r->commit_index) {
+        index = r->last_applying + 1;
         const struct raft_entry *entry = logGet(&r->log, index);
         if (entry == NULL) {
             /* This can happen while installing a snapshot */
@@ -1771,32 +1772,35 @@ int replicationApply(struct raft *r)
 
         switch (entry->type) {
             case RAFT_COMMAND:
+                r->last_applying = index;
                 rv = applyCommand(r, index, &entry->buf);
+                if (rv != 0)
+                    r->last_applying -= 1;
                 break;
             case RAFT_BARRIER:
                 if (r->last_applying > r->last_applied)
                     return 0;
-		r->hook->entry_after_apply_fn(r->hook, index, entry);
+                r->hook->entry_after_apply_fn(r->hook, index, entry);
                 applyBarrier(r, index);
                 r->last_applied = index;
+                r->last_applying = index;
                 break;
             case RAFT_CHANGE:
                 if (r->last_applying > r->last_applied)
                     return 0;
-		r->hook->entry_after_apply_fn(r->hook, index, entry);
+                r->hook->entry_after_apply_fn(r->hook, index, entry);
                 applyChange(r, index);
                 r->last_applied = index;
+                r->last_applying = index;
                 break;
             default:/* For coverity. This case can't be taken. */
                 break;
         }
 
         if (rv != 0) {
-            evtErrf("raft(%llx) apply failed %d", r->id, rv);
+            evtErrf("raft(%llx) apply failed %d %lu", r->id, rv, index);
             break;
         }
-
-        r->last_applying = index;
     }
 
 err_take_snapshot:

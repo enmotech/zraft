@@ -1232,8 +1232,6 @@ struct raft_hook
 				      raft_index index, raft_term term);
 	void (*entry_after_apply_fn)(struct raft_hook *h, raft_index index,
 				     const struct raft_entry *entry);
-	bool (*should_take_snapshot_fn)(struct raft_hook* h,
-					raft_index snapshot_index);
 	void (*request_accept)(struct raft_hook *h, struct request *req);
 	void (*request_append)(struct raft_hook *h, struct request *req);
 	void (*request_append_done)(struct raft_hook *h, struct request *req);

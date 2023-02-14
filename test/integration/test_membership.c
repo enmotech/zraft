@@ -37,6 +37,25 @@ static void tear_down(void *data)
  * Helper macros
  *
  *****************************************************************************/
+/* Set the snapshot threshold on all servers of the cluster */
+#define SET_SNAPSHOT_THRESHOLD(VALUE)                            \
+    {                                                            \
+        unsigned i;                                              \
+        for (i = 0; i < CLUSTER_N; i++)                          \
+        {                                                        \
+            raft_set_snapshot_threshold(CLUSTER_RAFT(i), VALUE); \
+        }                                                        \
+    }
+
+/* Set the snapshot trailing logs number on all servers of the cluster */
+#define SET_SNAPSHOT_TRAILING(VALUE)                            \
+    {                                                           \
+        unsigned i;                                             \
+        for (i = 0; i < CLUSTER_N; i++)                         \
+        {                                                       \
+            raft_set_snapshot_trailing(CLUSTER_RAFT(i), VALUE); \
+        }                                                       \
+    }
 
 /* Add a an empty server to the cluster and start it. */
 #define GROW                                \
@@ -44,6 +63,15 @@ static void tear_down(void *data)
         int rv__;                           \
         CLUSTER_GROW;                       \
         rv__ = raft_start(CLUSTER_RAFT(2)); \
+        munit_assert_int(rv__, ==, 0);      \
+    }
+
+/* Add a an empty server to the cluster and start it. */
+#define GROW_3TO4                           \
+    {                                       \
+        int rv__;                           \
+        CLUSTER_GROW_3TO4;                  \
+        rv__ = raft_start(CLUSTER_RAFT(3)); \
         munit_assert_int(rv__, ==, 0);      \
     }
 
@@ -137,6 +165,78 @@ static bool barrierCbHasFired(struct raft_fixture *f, void *arg)
  * raft_add
  *
  *****************************************************************************/
+SUITE(raft_add_logger)
+
+
+TEST(raft_add_logger, add_logger, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft *raft;
+    struct raft *raft_logger;
+    struct raft *raft_follower;
+    const struct raft_server *server;
+    GROW;
+    ADD(0, 3, 0);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(0, 5, 2000);
+    ASSIGN(0, 3, RAFT_LOGGER);
+    CLUSTER_STEP_UNTIL_APPLIED(0, 6, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 6, 2000);
+    raft = CLUSTER_RAFT(0);
+    raft_logger = CLUSTER_RAFT(2);
+    server = &raft->configuration.servers[2];
+    munit_assert_int(server->role, ==, RAFT_LOGGER);
+    munit_assert_int(raft_logger->configuration.servers[2].role, ==, RAFT_LOGGER);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(2,7,1000);
+    CLUSTER_KILL_LEADER;
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(20000);
+    raft_follower = CLUSTER_RAFT(1);
+    munit_assert_int(raft_follower->state, ==, RAFT_LEADER);
+    return MUNIT_OK;
+}
+
+TEST(raft_add_logger, add_logger_kill_leader, setup, tear_down, 0, NULL)
+{
+    struct fixture *f = data;
+    struct raft *raft;
+    struct raft *raft_logger;
+    struct raft *raft_follower;
+    const struct raft_server *server;
+    GROW;
+    ADD(0, 3, 0);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    ASSIGN(0, 3, RAFT_LOGGER);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 6, 2000);
+    raft = CLUSTER_RAFT(0);
+    raft_logger = CLUSTER_RAFT(2);
+    server = &raft->configuration.servers[2];
+    munit_assert_int(server->role, ==, RAFT_LOGGER);
+    munit_assert_int(raft_logger->configuration.servers[2].role, ==, RAFT_LOGGER);
+    CLUSTER_STEP_UNTIL_APPLIED(2,6,2000);
+    CLUSTER_SATURATE(0, 1);
+    CLUSTER_SATURATE(1, 0);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(2,8,2000);
+    CLUSTER_SATURATE(0, 2);
+    CLUSTER_SATURATE(2, 0);
+    CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_LEADER, 5000);
+    munit_assert_int(raft_logger->state, ==, RAFT_LEADER);
+    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 5000);
+    munit_assert_int(CLUSTER_N_SEND(2, RAFT_IO_APPEND_ENTRIES), >=, 1);
+    munit_assert_int(CLUSTER_N_RECV(1, RAFT_IO_APPEND_ENTRIES), >=, 1);
+    raft_follower = CLUSTER_RAFT(1);
+    munit_assert_int(raft_follower->state, ==, RAFT_LEADER);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(2,9,1000);
+    return MUNIT_OK;
+}
 
 SUITE(raft_add)
 

@@ -5,6 +5,8 @@
 #include "recv.h"
 #include "replication.h"
 #include "event.h"
+#include "log.h"
+#include "convert.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -63,6 +65,15 @@ int recvAppendEntriesResult(struct raft *r,
     rv = replicationUpdate(r, server->id, result);
     if (rv != 0) {
         evtErrf("raft(%llx) replication update failed %d", r->id, rv);
+        return rv;
+    }
+
+    //如果logger收到了voter的AER且result->last_log_index >= logLastIndex(&r->log), logger就让权给该voter
+    if (getRaftRole(r, r->id) == RAFT_LOGGER && getRaftRole(r, id) == RAFT_VOTER && result->last_log_index >= logLastIndex(&r->log))
+    {
+        tracef("other server have caught up, logger convert to follower");
+        convertToFollower(r);
+        r->follower_state.randomized_election_timeout *= 2;
         return rv;
     }
 

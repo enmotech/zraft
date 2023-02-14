@@ -5,6 +5,9 @@
 
 #include "../include/raft.h"
 
+/* 从r的configuration中获取id对应的raft_server的role */
+int getRaftRole(struct raft *r, raft_id id);
+
 /* Initialize an empty configuration. */
 void configurationInit(struct raft_configuration *c);
 

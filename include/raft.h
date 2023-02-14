@@ -78,6 +78,7 @@ struct raft_buffer
 #define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
 #define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
 #define RAFT_SPARE 2   /* Does not replicate log, or participate in quorum. */
+#define RAFT_LOGGER 3  /* Replicate log, does participate in quorum, no fsm */
 
 /**
  * Hold information about a single server in the cluster configuration.
@@ -754,6 +755,7 @@ struct raft
             struct raft_progress *progress; /* Per-server replication state. */
             struct raft_change *change;     /* Pending membership change. */
             raft_id promotee_id;            /* ID of server being promoted. */
+            int promotee_role;
             unsigned short round_number;    /* Current sync round. */
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */

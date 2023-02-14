@@ -7,6 +7,17 @@
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
 
+int getRaftRole(struct raft *r, raft_id id)
+{
+    unsigned i;
+    for ( i = 0; i < r->configuration.n; i++) {
+        if (id == r->configuration.servers[i].id) {
+            return r->configuration.servers[i].role;
+        }
+    }
+    return -1;
+}
+
 void configurationInit(struct raft_configuration *c)
 {
     c->servers = NULL;
@@ -46,12 +57,12 @@ unsigned configurationIndexOfVoter(const struct raft_configuration *c,
 
     for (i = 0; i < c->n; i++) {
         if (c->servers[i].id == id) {
-            if (c->servers[i].role == RAFT_VOTER) {
+            if (c->servers[i].role == RAFT_VOTER || c->servers[i].role == RAFT_LOGGER) {
                 return j;
             }
             return c->n;
         }
-        if (c->servers[i].role == RAFT_VOTER) {
+        if (c->servers[i].role == RAFT_VOTER || c->servers[i].role == RAFT_LOGGER) {
             j++;
         }
     }
@@ -85,7 +96,7 @@ unsigned configurationVoterCount(const struct raft_configuration *c)
     unsigned n = 0;
     assert(c != NULL);
     for (i = 0; i < c->n; i++) {
-        if (c->servers[i].role == RAFT_VOTER) {
+        if (c->servers[i].role == RAFT_VOTER || c->servers[i].role == RAFT_LOGGER) {
             n++;
         }
     }
@@ -119,7 +130,7 @@ int configurationAdd(struct raft_configuration *c,
     assert(c != NULL);
     assert(id != 0);
 
-    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
+    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE && role != RAFT_LOGGER) {
         evtErrf("conf add bad role %d", role);
         return RAFT_BADROLE;
     }

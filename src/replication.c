@@ -698,7 +698,7 @@ static int triggerActualPromotion(struct raft *r)
 
     /* Update our current configuration. */
     old_role = server->role;
-    server->role = RAFT_VOTER;
+    server->role = r->leader_state.promotee_role;
 
     /* Index of the entry being appended. */
     index = logLastIndex(&r->log) + 1;
@@ -726,6 +726,7 @@ static int triggerActualPromotion(struct raft *r)
     }
 
     r->leader_state.promotee_id = 0;
+    r->leader_state.promotee_role = -1;
     r->configuration_uncommitted_index = logLastIndex(&r->log);
 
     return 0;
@@ -1839,7 +1840,7 @@ void replicationQuorum(struct raft *r, const raft_index index)
 
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
-        if (server->role != RAFT_VOTER) {
+        if (server->role != RAFT_VOTER && server->role != RAFT_LOGGER) {
             continue;
         }
         if (r->leader_state.progress[i].match_index >= index) {

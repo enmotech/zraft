@@ -46,7 +46,7 @@ static int tickFollower(struct raft *r)
      *   If election timeout elapses without receiving AppendEntries RPC from
      *   current leader or granting vote to candidate, convert to candidate.
      */
-    if (electionTimerExpired(r) && server->role == RAFT_VOTER) {
+    if (electionTimerExpired(r) && (server->role == RAFT_VOTER || server->role == RAFT_LOGGER)) {
         tracef("convert to candidate and start new election");
         evtInfof("raft(%llx) convert to candidate", r->id);
         rv = convertToCandidate(r, false /* disrupt leader */);
@@ -104,7 +104,7 @@ static bool checkContactQuorum(struct raft *r)
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
         bool recent_recv = progressResetRecentRecv(r, i);
-        if ((server->role == RAFT_VOTER && recent_recv) ||
+        if (((server->role == RAFT_VOTER || server->role == RAFT_LOGGER) && recent_recv) ||
             server->id == r->id) {
             contacts++;
         }
@@ -199,7 +199,7 @@ static int tickLeader(struct raft *r)
             struct raft_change *change;
 
             r->leader_state.promotee_id = 0;
-
+            r->leader_state.promotee_role = -1;
             r->leader_state.round_index = 0;
             r->leader_state.round_number = 0;
             r->leader_state.round_start = 0;

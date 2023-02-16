@@ -14,6 +14,12 @@
 #define tracef(...)
 #endif
 
+static void loggerLeadershipTransferCb(struct raft_transfer *req)
+{
+    if (req != NULL)
+        raft_free(req);
+}
+
 int recvAppendEntriesResult(struct raft *r,
                             const raft_id id,
                             const struct raft_append_entries_result *result)
@@ -74,10 +80,8 @@ int recvAppendEntriesResult(struct raft *r,
         tracef("other server have caught up, logger convert to follower");
         // convertToFollower(r);
         // r->follower_state.randomized_election_timeout *= 2;
-        struct raft_transfer req;
-        bool done = false; 
-        req.data = &done;
-        rv = raft_transfer(r, &req, id, NULL);
+        struct raft_transfer *req = raft_malloc(sizeof(struct raft_transfer));
+        rv = raft_transfer(r, req, id, loggerLeadershipTransferCb);
         return rv;
     }
 

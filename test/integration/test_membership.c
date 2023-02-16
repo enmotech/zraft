@@ -218,7 +218,6 @@ TEST(raft_add_logger, add_logger_kill_leader, setup, tear_down, 0, NULL)
     server = &raft->configuration.servers[2];
     munit_assert_int(server->role, ==, RAFT_LOGGER);
     munit_assert_int(raft_logger->configuration.servers[2].role, ==, RAFT_LOGGER);
-    CLUSTER_STEP_UNTIL_APPLIED(2,6,2000);
     CLUSTER_SATURATE(0, 1);
     CLUSTER_SATURATE(1, 0);
     CLUSTER_MAKE_PROGRESS;

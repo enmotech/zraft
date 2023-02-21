@@ -6,7 +6,6 @@
 #include "replication.h"
 #include "event.h"
 #include "log.h"
-#include "convert.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -78,8 +77,6 @@ int recvAppendEntriesResult(struct raft *r,
     if (getRaftRole(r, r->id) == RAFT_LOGGER && getRaftRole(r, id) == RAFT_VOTER && result->last_log_index >= logLastIndex(&r->log))
     {
         tracef("other server have caught up, logger convert to follower");
-        // convertToFollower(r);
-        // r->follower_state.randomized_election_timeout *= 2;
         struct raft_transfer *req = raft_malloc(sizeof(struct raft_transfer));
         rv = raft_transfer(r, req, id, loggerLeadershipTransferCb);
         return rv;

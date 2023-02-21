@@ -110,4 +110,9 @@ void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing);
  * values, and the offset adjusted accordingly. */
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term);
 
+/* 
+ * 返回盘上最早的日志条目的索引和任期
+ */
+raft_index logStartIndex(struct raft *r);
+raft_term logStartTerm(struct raft *r);
 #endif /* RAFT_LOG_H_ */

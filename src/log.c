@@ -943,3 +943,13 @@ void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
     l->snapshot.last_term = last_term;
     l->offset = last_index;
 }
+
+raft_index logStartIndex(struct raft *r)
+{
+    return indexAt(&r->log, r->log.front);
+}
+
+raft_term logStartTerm(struct raft *r)
+{
+    return r->log.entries[r->log.front].term;
+}

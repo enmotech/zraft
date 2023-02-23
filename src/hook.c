@@ -3,6 +3,11 @@
 #include "assert.h"
 
 #define HOOK_MAX_BATCH_SIZE 128
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+
 
 static void defaultEntryAfterAppend(struct raft_hook *h, raft_index index,
 				    const struct raft_entry *entry)
@@ -110,10 +115,9 @@ void hookRequestMatch(struct raft *r, raft_index index, size_t n, raft_id id)
 	assert(r->state == RAFT_LEADER);
 	if (!r->enable_request_hook)
 		return;
-	if (index <= r->last_applying)
+	if (index + n - 1 <= r->last_applying)
 		return;
-	if (n > HOOK_MAX_BATCH_SIZE)
-		n = HOOK_MAX_BATCH_SIZE;
+	n = min(n, HOOK_MAX_BATCH_SIZE);
 	for (i = 0; i < n; ++i) {
 		req = requestRegFind(&r->leader_state.reg, index + i);
 		if (req == NULL)
@@ -130,8 +134,9 @@ void hookRequestCommit(struct raft *r, raft_index index, size_t n)
 	assert(r->state == RAFT_LEADER);
 	if (!r->enable_request_hook)
 		return;
-	if (n > HOOK_MAX_BATCH_SIZE)
-		n = HOOK_MAX_BATCH_SIZE;
+	if (index + n - 1 <= r->commit_index)
+		return;
+	n = min(n, HOOK_MAX_BATCH_SIZE);
 	for (i = 0; i < n; ++i) {
 		req = requestRegFind(&r->leader_state.reg, index + i);
 		if (req == NULL)

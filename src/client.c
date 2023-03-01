@@ -11,12 +11,71 @@
 #include "tracing.h"
 #include "event.h"
 #include "hook.h"
+#include "joint_consensus.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 #else
 #define tracef(...)
 #endif
+
+int raft_receive_new_configuration(struct raft *r,
+             struct raft_change *req,
+             struct raft_server *servers,
+             unsigned int n,
+             raft_change_cb cb)
+{
+    struct raft_configuration configuration;
+    int rv;
+
+    rv = membershipCanChangeConfiguration(r);
+    if (rv != 0) {
+        evtWarnf("raft(%llx) can not change configuration.", r->id);
+        goto err;
+    }
+
+    assert(r->configuration.phase == RAFT_CONF_NORMAL);
+
+    rv = jointDecodeNewConf(r, &configuration, servers, n);
+    if (rv != 0) {
+        evtWarnf("raft(%llx) joint decode new configuration error.", r->id);
+        goto err_after_configuration_copy; 
+    }
+
+    req->cb = cb;
+    r->leader_state.change = req;
+    jointChangePhase(r, &configuration, RAFT_CONF_CATCHUP);
+    
+    return 0;
+
+err_after_configuration_copy:
+    raft_configuration_close(&configuration);
+err:
+    assert(rv != 0);
+    return rv;
+}
+
+int raft_change(struct raft *r,
+    struct raft_change *req,
+    raft_change_cb cb)
+{
+    int rv;
+
+    if (r->configuration.phase != RAFT_CONF_CATCHUP) {
+        evtNoticef("raft(%llx) should switch in catchup first %d.",
+            r->id, r->configuration.phase);
+        return RAFT_CANTCHANGE;
+    }
+
+    r->leader_state.change = req;
+    req->cb = cb;
+    rv = jointChangePhase(r, NULL, RAFT_CONF_JOINT);
+    if (rv) {
+        cb(req, RAFT_CANTCHANGE);
+    }
+
+    return 0;
+}
 
 int raft_apply(struct raft *r,
                struct raft_apply *req,
@@ -237,7 +296,7 @@ int raft_add(struct raft *r,
         evtErrf("raft(%llx) add conf failed %d", r->id, rv);
         goto err_after_configuration_copy;
     }
-
+    configurationSetAllNew(&configuration);
     req->cb = cb;
 
     rv = clientChangeConfiguration(r, req, &configuration);

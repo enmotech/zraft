@@ -45,7 +45,7 @@ static void tearDown(void *data)
 
 /* Add a server to the fixture's configuration. */
 #define ADD_RV(ID, ROLE) \
-    configurationAdd(&f->configuration, ID, ROLE)
+    configurationAdd(&f->configuration, ID, ROLE, true, false)
 #define ADD(...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, 0)
 #define ADD_ERROR(RV, ...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, RV)
 
@@ -416,7 +416,7 @@ TEST(configurationEncode, one_server, setUp, tearDown, 0, NULL)
     ADD(1, RAFT_VOTER);
     ENCODE(&buf);
 
-    len = 1 + 8 +                  /* Version and n of servers */
+    len = 1 + 8 + 8 +                 /* Version and n of servers */
           8; /* Server */
     len = bytePad64(len);
 
@@ -425,6 +425,7 @@ TEST(configurationEncode, one_server, setUp, tearDown, 0, NULL)
     cursor = buf.base;
 
     munit_assert_int(byteGet8(&cursor), ==, 1);
+    munit_assert_int(byteGet64Unaligned(&cursor), ==, 0);
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
 
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
@@ -447,9 +448,9 @@ TEST(configurationEncode, two_servers, setUp, tearDown, 0, NULL)
     ADD(2, RAFT_VOTER);
     ENCODE(&buf);
 
-    len = 1 + 8 +                        /* Version and n of servers */
-          8 + 1 + /* Server 1 */
-          8 + 1;  /* Server 2 */
+    len = 1 + 8 + 8 +                       /* Version and n of servers */
+          8 + 1 + 1 + 1 + /* Server 1 */
+          8 + 1 + 1 + 1;  /* Server 2 */
     len = bytePad64(len);
 
     munit_assert_int(buf.len, ==, len);
@@ -457,13 +458,18 @@ TEST(configurationEncode, two_servers, setUp, tearDown, 0, NULL)
     cursor = buf.base;
 
     munit_assert_int(byteGet8(&cursor), ==, 1);
+    munit_assert_int(byteGet64Unaligned(&cursor), ==, 0);
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 2);
 
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
     munit_assert_int(byteGet8(&cursor), ==, RAFT_STANDBY);
+    munit_assert_int(byteGet8(&cursor), ==, 1);
+    munit_assert_int(byteGet8(&cursor), ==, 0);
 
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 2);
     munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
+    munit_assert_int(byteGet8(&cursor), ==, 1);
+    munit_assert_int(byteGet8(&cursor), ==, 0);
 
     raft_free(buf.base);
 
@@ -495,9 +501,10 @@ TEST(configurationDecode, one_server, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t bytes[] = {1,                            /* Version */
+                       0,   0,  0,  0,  0,  0,  0,  0,
                        1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
                        5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
-                       1};                           /* Role code */
+                       1, 1, 0};                           /* Role code */
     struct raft_buffer buf;
     int rv;
 
@@ -519,11 +526,14 @@ TEST(configurationDecode, two_servers, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t bytes[] = {1,                                /* Version */
+                       0,0,0,0,0,0,0,0,
                        2,   0,   0,   0,   0,   0, 0, 0, /* Number of servers */
                        5,   0,   0,   0,   0,   0, 0, 0, /* Server ID */
                        1,                                /* Role code */
+                       1, 0,
                        3,   0,   0,   0,   0,   0, 0, 0, /* Server ID */
-                       0};                               /* Role code */
+                       0,
+                       1, 0};                               /* Role code */
     struct raft_buffer buf;
     buf.base = bytes;
     buf.len = sizeof bytes;
@@ -539,9 +549,10 @@ TEST(configurationDecode, oom, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t bytes[] = {1,                            /* Version */
+                       0,0,0,0,0,0,0,0,
                        1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
                        5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
-                       1};                           /* Voting flag */
+                       1, 1, 0};                           /* Voting flag */
     struct raft_buffer buf;
     HeapFaultConfig(&f->heap, 0, 1);
     HeapFaultEnable(&f->heap);

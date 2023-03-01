@@ -63,7 +63,7 @@ int recvAppendEntries(struct raft *r,
     assert(r != NULL);
     assert(id > 0);
     assert(args != NULL);
-
+    tracef("recv %u entry. my commit index: %llu. apply index: %llu", args->n_entries, r->commit_index, r->last_applied);
     if (r->prev_append_status) {
         evtErrf("raft(%llx) reject append with prev append status %d",
 		r->id, r->prev_append_status);

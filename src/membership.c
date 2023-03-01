@@ -8,6 +8,7 @@
 #include "log.h"
 #include "progress.h"
 #include "event.h"
+#include "joint_consensus.h"
 
 int membershipCanChangeConfiguration(struct raft *r)
 {
@@ -31,6 +32,13 @@ int membershipCanChangeConfiguration(struct raft *r)
         rv = RAFT_CANTCHANGE;
         evtNoticef("raft(%llx) has promotee server(%16llx)",
 		r->id, r->leader_state.promotee_id);
+        goto err;
+    }
+
+    if (r->configuration.phase != RAFT_CONF_NORMAL) {
+        rv = RAFT_CANTCHANGE;
+        evtNoticef("raft(%llx) is changing",
+		r->id);
         goto err;
     }
 

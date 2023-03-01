@@ -647,7 +647,7 @@ TEST(logAppendConfiguration, oom, setUp, tearDown, 0, logAppendConfigurationOom)
     int rv;
 
     configurationInit(&configuration);
-    rv = configurationAdd(&configuration, 1, RAFT_VOTER);
+    rv = configurationAdd(&configuration, 1, RAFT_VOTER, true, false);
     munit_assert_int(rv, ==, 0);
 
     HeapFaultEnable(&f->heap);

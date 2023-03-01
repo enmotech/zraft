@@ -6,6 +6,7 @@
 #include "log.h"
 #include "tracing.h"
 #include "event.h"
+#include "joint_consensus.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -357,6 +358,10 @@ bool electionTally(struct raft *r, size_t voter_index)
     assert(r->candidate_state.votes != NULL);
 
     r->candidate_state.votes[voter_index] = true;
+
+    if (r->configuration.phase == RAFT_CONF_JOINT) {
+        return jointElectionTally(r);
+    }
 
     for (i = 0; i < n_voters; i++) {
         if (r->candidate_state.votes[i]) {

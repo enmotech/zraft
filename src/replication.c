@@ -19,6 +19,7 @@
 #include "tracing.h"
 #include "event.h"
 #include "hook.h"
+#include "joint_consensus.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -626,7 +627,8 @@ static int appendLeader(struct raft *r, raft_index index)
         evtErrf("%s", "malloc");
         goto err_after_entries_acquired;
     }
-
+    evtNoticef("raft(%llx) append index %lld n %d req:%p",
+		r->id, index, n, request->req);
     request->raft = r;
     request->index = index;
     request->entries = entries;
@@ -1121,15 +1123,14 @@ static int deleteConflictingEntries(struct raft *r,
 
             tracef("log mismatch -> truncate (%llu)", entry_index);
 
-            /* Possibly discard uncommitted configuration changes. */
-            if (r->configuration_uncommitted_index >= entry_index) {
+            if (r->configuration_uncommitted_index >= entry_index ) {
                 rv = membershipRollback(r);
                 if (rv != 0) {
                     evtErrf("raft(%llx) rollback failed %d", r->id, rv);
                     return rv;
                 }
             }
-
+            
             /* Delete all entries from this index on because they don't
              * match. */
             rv = r->io->truncate(r->io, entry_index);
@@ -1836,6 +1837,11 @@ void replicationQuorum(struct raft *r, const raft_index index)
     if (logTermOf(&r->log, index) < r->current_term) {
         return;
     }
+    
+    if (r->configuration.phase == RAFT_CONF_JOINT) {
+        jointReplicationQuorum(r, index);
+        return;
+    }
 
     for (i = 0; i < r->configuration.n; i++) {
         struct raft_server *server = &r->configuration.servers[i];
@@ -1855,7 +1861,6 @@ void replicationQuorum(struct raft *r, const raft_index index)
 
     r->commit_index = index;
     tracef("new commit index %llu", r->commit_index);
-
     assert(r->commit_index > prev_commit_index);
     hookRequestCommit(r, prev_commit_index + 1,
 		      r->commit_index - prev_commit_index);

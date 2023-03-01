@@ -86,6 +86,14 @@ struct raft_server
 {
     raft_id id;    /* Server ID, must be greater than zero. */
     int role;      /* Server role. */
+    bool c_old;
+    bool c_new;
+};
+
+enum configuration_phase {
+    RAFT_CONF_NORMAL = 0,
+    RAFT_CONF_JOINT,
+    RAFT_CONF_CATCHUP
 };
 
 /**
@@ -95,6 +103,7 @@ struct raft_configuration
 {
     struct raft_server *servers; /* Array of servers member of the cluster. */
     unsigned n;                  /* Number of servers in the array. */
+    enum configuration_phase phase;
 };
 
 /**
@@ -1075,6 +1084,15 @@ RAFT_API int raft_add(struct raft *r,
                       raft_id id,
                       raft_change_cb cb);
 
+RAFT_API int raft_receive_new_configuration(struct raft *r,
+             struct raft_change *req,
+             struct raft_server *servers,
+             unsigned int n,
+             raft_change_cb cb);
+
+RAFT_API int raft_change(struct raft *r,
+             struct raft_change *req,
+             raft_change_cb cb);
 /**
  * Assign a new role to the given server.
  *

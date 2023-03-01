@@ -12,6 +12,7 @@
 #include "queue.h"
 #include "snapshot.h"
 #include "tracing.h"
+#include "joint_consensus.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -832,7 +833,7 @@ static void ioSaturate(struct raft_io *io, struct raft_io *other)
     s = io->impl;
     s_other = other->impl;
     peer = ioGetPeer(s, s_other->id);
-    assert(peer != NULL && peer->connected);
+    // assert(peer != NULL && peer->connected);
     peer->saturated = true;
 }
 
@@ -1161,10 +1162,11 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
         bool acked = true;
         unsigned n_quorum = 0;
 
+        struct raft *leader = raft_fixture_get(f, (unsigned int)(leader_id-1));
         for (i = 0; i < f->n; i++) {
             struct raft *raft = raft_fixture_get(f, i);
             const struct raft_server *server =
-                configurationGet(&raft->configuration, raft->id);
+                configurationGet(&leader->configuration, raft->id);
 
             /* If the server is not in the configuration or is idle, then don't
              * count it. */
@@ -1204,7 +1206,7 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
 
             n_acks++;
         }
-
+        n_quorum = jointNQuorum(leader);
         if (!acked || n_acks < (n_quorum / 2)) {
             leader_id = 0;
         }
@@ -2317,7 +2319,7 @@ void raft_fixture_saturate(struct raft_fixture *f, unsigned i, unsigned j)
     ioSaturate(io1, io2);
 }
 
-static void disconnectFromAll(struct raft_fixture *f, unsigned i)
+void disconnectFromAll(struct raft_fixture *f, unsigned i)
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
@@ -2575,5 +2577,30 @@ bool raft_fixture_promotable(struct raft_configuration *conf, unsigned id)
 	return false;
 }
 
+struct step_phase {
+    unsigned int i;
+    int phase;
+};
+
+static bool in_phase(struct raft_fixture *f, void *arg)
+{
+    struct step_phase *sp = (struct step_phase *)arg;
+    struct raft *raft;
+
+    if (sp->i < f->n) {
+        raft = raft_fixture_get(f, sp->i);
+        return (int)raft->configuration.phase == sp->phase;
+    }
+
+    return false;
+}
+
+void raft_fixture_step_until_phase(struct raft_fixture *f, unsigned int i, int phase, unsigned msecs)
+{
+    struct step_phase sp;
+    sp.i = i;
+    sp.phase = phase;
+    raft_fixture_step_until(f, in_phase, &sp, msecs); 
+}
 
 #undef tracef

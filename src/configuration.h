@@ -10,11 +10,12 @@ void configurationInit(struct raft_configuration *c);
 
 /* Release all memory used by the given configuration. */
 void configurationClose(struct raft_configuration *c);
-
+/* assign all servers in new configuration */
+void configurationSetAllNew(struct raft_configuration *conf);
 /* Add a server to the given configuration. */
 int configurationAdd(struct raft_configuration *c,
                      raft_id id,
-                     int role);
+                     int role, bool cold, bool cnew);
 
 /* Return the number of servers with the RAFT_VOTER role. */
 unsigned configurationVoterCount(const struct raft_configuration *c);

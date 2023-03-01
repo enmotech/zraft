@@ -244,7 +244,7 @@ int raft_configuration_add(struct raft_configuration *c,
                            const raft_id id,
                            const int role)
 {
-    return configurationAdd(c, id, role);
+    return configurationAdd(c, id, role, true, true);
 }
 
 int raft_configuration_encode(const struct raft_configuration *c,

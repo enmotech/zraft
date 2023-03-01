@@ -208,6 +208,13 @@
         munit_assert_true(done);                                               \
     }
 
+#define CLUSTER_STEP_UNTIL_ALL_APPLIED(INDEX, MAX_MSECS)                       \
+    { \
+        for (unsigned i = 0; i < f->cluster.n; i++) { \
+            CLUSTER_STEP_UNTIL_APPLIED(i, INDEX, MAX_MSECS); \
+        } \
+    }
+
 /* Step the cluster until the given index was appended by the given server (or
  * all if N) or #MAX_MSECS have elapsed. */
 #define CLUSTER_STEP_UNTIL_APPENDED(I, INDEX, MAX_MSECS)                        \
@@ -519,4 +526,22 @@ void cluster_randomize_init(struct raft_fixture *f);
 void cluster_randomize(struct raft_fixture *f,
                        struct raft_fixture_event *event);
 
+
+#define CLUSTER_NEW_CONFIGURATION(SERVERS, N) \
+    { \
+        raft_receive_new_configuration(CLUSTER_RAFT(CLUSTER_LEADER), &f->req, SERVERS, N, NULL); \
+    }
+
+#define CLUSTER_CHANGE\
+    { \
+       raft_change(CLUSTER_RAFT(CLUSTER_LEADER), &f->req, NULL); \
+    }
+#define CLUSTER_SET_POLICY(p) \
+    { \
+        raft_fixture_set_policy(&f->cluster, p);\
+    }
+#define CLUSTER_STEP_UNTIL_PHASE(i, p, msecs) \
+    { \
+        raft_fixture_step_until_phase(&f->cluster, i, p, msecs); \
+    }
 #endif /* TEST_CLUSTER_H */

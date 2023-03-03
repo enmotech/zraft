@@ -146,7 +146,8 @@ void convertToFollower(struct raft *r)
 int convertToCandidate(struct raft *r, bool disrupt_leader)
 {
     const struct raft_server *server;
-    size_t n_voters = configurationVoterCount(&r->configuration);
+    size_t n_voters = configurationVoterCount(&r->configuration,
+                                              RAFT_GROUP_NEW | RAFT_GROUP_OLD);
     int rv;
 
     (void)server; /* Only used for assertions. */
@@ -176,7 +177,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
         if (rv != 0) {
             evtErrf("raft(%llx) convert to leader failed %d", r->id, rv);
             return rv;
-	}
+        }
         /* Check if we can commit some new entries. */
         replicationQuorum(r, r->last_stored);
 

@@ -12,7 +12,6 @@
 #include "queue.h"
 #include "snapshot.h"
 #include "tracing.h"
-#include "joint_consensus.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -1206,7 +1205,6 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
 
             n_acks++;
         }
-        n_quorum = jointNQuorum(leader);
         if (!acked || n_acks < (n_quorum / 2)) {
             leader_id = 0;
         }
@@ -2600,7 +2598,7 @@ void raft_fixture_step_until_phase(struct raft_fixture *f, unsigned int i, int p
     struct step_phase sp;
     sp.i = i;
     sp.phase = phase;
-    raft_fixture_step_until(f, in_phase, &sp, msecs); 
+    raft_fixture_step_until(f, in_phase, &sp, msecs);
 }
 
 #undef tracef

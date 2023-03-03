@@ -39,8 +39,7 @@ libraft_la_SOURCES = \
   src/tracing.c \
   src/hook.c \
   src/event.c \
-  src/request.c \
-  src/joint_consensus.c
+  src/request.c
 
 bin_PROGRAMS =
 

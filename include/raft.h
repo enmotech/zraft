@@ -80,14 +80,19 @@ struct raft_buffer
 #define RAFT_SPARE 2   /* Does not replicate log, or participate in quorum. */
 
 /**
+ * Server group types.
+ */
+#define RAFT_GROUP_OLD 0x01
+#define RAFT_GROUP_NEW 0x10
+/**
  * Hold information about a single server in the cluster configuration.
  */
 struct raft_server
 {
     raft_id id;    /* Server ID, must be greater than zero. */
     int role;      /* Server role. */
-    bool c_old;
-    bool c_new;
+    int role_new;  /* Server role in new group. */
+    int group;     /* Server group. */
 };
 
 enum configuration_phase {

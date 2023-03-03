@@ -1,5 +1,4 @@
 #include "membership.h"
-
 #include "../include/raft.h"
 #include "assert.h"
 #include "hook.h"
@@ -8,7 +7,6 @@
 #include "log.h"
 #include "progress.h"
 #include "event.h"
-#include "joint_consensus.h"
 
 int membershipCanChangeConfiguration(struct raft *r)
 {

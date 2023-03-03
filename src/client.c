@@ -11,71 +11,12 @@
 #include "tracing.h"
 #include "event.h"
 #include "hook.h"
-#include "joint_consensus.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 #else
 #define tracef(...)
 #endif
-
-int raft_receive_new_configuration(struct raft *r,
-             struct raft_change *req,
-             struct raft_server *servers,
-             unsigned int n,
-             raft_change_cb cb)
-{
-    struct raft_configuration configuration;
-    int rv;
-
-    rv = membershipCanChangeConfiguration(r);
-    if (rv != 0) {
-        evtWarnf("raft(%llx) can not change configuration.", r->id);
-        goto err;
-    }
-
-    assert(r->configuration.phase == RAFT_CONF_NORMAL);
-
-    rv = jointDecodeNewConf(r, &configuration, servers, n);
-    if (rv != 0) {
-        evtWarnf("raft(%llx) joint decode new configuration error.", r->id);
-        goto err_after_configuration_copy; 
-    }
-
-    req->cb = cb;
-    r->leader_state.change = req;
-    jointChangePhase(r, &configuration, RAFT_CONF_CATCHUP);
-    
-    return 0;
-
-err_after_configuration_copy:
-    raft_configuration_close(&configuration);
-err:
-    assert(rv != 0);
-    return rv;
-}
-
-int raft_change(struct raft *r,
-    struct raft_change *req,
-    raft_change_cb cb)
-{
-    int rv;
-
-    if (r->configuration.phase != RAFT_CONF_CATCHUP) {
-        evtNoticef("raft(%llx) should switch in catchup first %d.",
-            r->id, r->configuration.phase);
-        return RAFT_CANTCHANGE;
-    }
-
-    r->leader_state.change = req;
-    req->cb = cb;
-    rv = jointChangePhase(r, NULL, RAFT_CONF_JOINT);
-    if (rv) {
-        cb(req, RAFT_CANTCHANGE);
-    }
-
-    return 0;
-}
 
 int raft_apply(struct raft *r,
                struct raft_apply *req,
@@ -296,7 +237,6 @@ int raft_add(struct raft *r,
         evtErrf("raft(%llx) add conf failed %d", r->id, rv);
         goto err_after_configuration_copy;
     }
-    configurationSetAllNew(&configuration);
     req->cb = cb;
 
     rv = clientChangeConfiguration(r, req, &configuration);
@@ -312,6 +252,118 @@ int raft_add(struct raft *r,
 
 err_after_configuration_copy:
     raft_configuration_close(&configuration);
+err:
+    assert(rv != 0);
+    return rv;
+}
+
+int raft_joint_promote(struct raft *r,
+                       struct raft_change *req,
+                       raft_id id,
+                       int role,
+				       raft_id remove,
+                       raft_change_cb cb)
+{
+    const struct raft_server *server;
+    unsigned server_index;
+    raft_index last_index;
+    int rv;
+
+    if (role != RAFT_VOTER) {
+        rv = RAFT_BADROLE;
+        ErrMsgFromCode(r->errmsg, rv);
+        evtErrf("raft(%llx) promote role %d failed", r->id, role, rv);
+        return rv;
+    }
+
+    server = configurationGet(&r->configuration, remove);
+    if (server == NULL) {
+        rv = RAFT_NOTFOUND;
+        ErrMsgPrintf(r->errmsg, "no server has ID %llu", remove);
+        evtErrf("raft(%llx) has no server id %llx failed", r->id, remove, rv);
+        goto err;
+    }
+
+    rv = membershipCanChangeConfiguration(r);
+    if (rv != 0) {
+        evtNoticef("raft(%llx) change conf failed %d", r->id, rv);
+        return rv;
+    }
+
+    server = configurationGet(&r->configuration, id);
+    if (server == NULL) {
+        rv = RAFT_NOTFOUND;
+        ErrMsgPrintf(r->errmsg, "no server has ID %llu", id);
+        evtErrf("raft(%llx) has no server id %llx failed", r->id, id, rv);
+        goto err;
+    }
+
+    /* Check if we have already the desired role. */
+    if (server->role == role) {
+        const char *name;
+        rv = RAFT_BADROLE;
+        switch (role) {
+            case RAFT_VOTER:
+                name = "voter";
+                break;
+            default:
+                name = NULL;
+                assert(0);
+                break;
+        }
+        ErrMsgPrintf(r->errmsg, "server is already %s", name);
+        evtWarnf("raft(%llx) server %llx is already %s", r->id, server->id, name);
+        goto err;
+    }
+
+    server_index = configurationIndexOf(&r->configuration, id);
+    assert(server_index < r->configuration.n);
+
+    last_index = logLastIndex(&r->log);
+
+    req->cb = cb;
+
+    assert(r->leader_state.change == NULL);
+    r->leader_state.change = req;
+
+    /* If we are not promoting to the voter role or if the log of this server is
+     * already up-to-date, we can submit the configuration change
+     * immediately. */
+    if (role != RAFT_VOTER ||
+        progressMatchIndex(r, server_index) == last_index) {
+        configurationJointRemove(&r->configuration, remove);
+        r->configuration.servers[server_index].role_new = role;
+
+        rv = clientChangeConfiguration(r, req, &r->configuration);
+        if (rv != 0) {
+            configurationJointReset(&r->configuration);
+            evtErrf("raft(%llx) change conf failed %d", r->id, rv);
+            return rv;
+        }
+
+        return 0;
+    }
+
+    r->leader_state.promotee_id = server->id;
+
+
+    /* Initialize the first catch-up round. */
+    r->leader_state.round_number = 1;
+    r->leader_state.round_index = last_index;
+    r->leader_state.round_start = r->io->time(r->io);
+    evtNoticef("raft(%llx) promotee %llx round %u round_index %llu", r->id,
+	       r->leader_state.promotee_id, r->leader_state.round_number,
+	       r->leader_state.round_index);
+
+    /* Immediately initiate an AppendEntries request. */
+    rv = replicationProgress(r, server_index);
+    if (rv != 0 && rv != RAFT_NOCONNECTION) {
+        /* This error is not fatal. */
+        tracef("failed to send append entries to server %llu: %s (%d)",
+               server->id, raft_strerror(rv), rv);
+        evtErrf("raft(%llx) replication progress failed %d", r->id, rv);
+    }
+    return 0;
 err:
     assert(rv != 0);
     return rv;

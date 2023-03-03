@@ -1,9 +1,7 @@
 #include "configuration.h"
-
 #include "assert.h"
 #include "byte.h"
 #include "event.h"
-#include "joint_consensus.h"
 
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
@@ -38,6 +36,24 @@ unsigned configurationIndexOf(const struct raft_configuration *c,
     return c->n;
 }
 
+bool serverIsGroupVoter(const struct raft_server *s, int group)
+{
+    bool ret = false;
+
+    if (s->group & RAFT_GROUP_OLD & group)
+        ret = s->role == RAFT_VOTER;
+    if (s->group & RAFT_GROUP_NEW & group)
+        ret = ret || (s->role_new == RAFT_VOTER);
+
+    return ret;
+}
+
+bool serverIsVoter(const struct raft_server *s)
+{
+    return serverIsGroupVoter(s, RAFT_GROUP_OLD)
+        || serverIsGroupVoter(s, RAFT_GROUP_NEW);
+}
+
 unsigned configurationIndexOfVoter(const struct raft_configuration *c,
                                    const raft_id id)
 {
@@ -48,12 +64,13 @@ unsigned configurationIndexOfVoter(const struct raft_configuration *c,
 
     for (i = 0; i < c->n; i++) {
         if (c->servers[i].id == id) {
-            if (c->servers[i].role == RAFT_VOTER) {
+            if (serverIsVoter(&c->servers[i])) {
                 return j;
             }
             return c->n;
         }
-        if (c->servers[i].role == RAFT_VOTER) {
+
+        if (serverIsVoter(&c->servers[i])) {
             j++;
         }
     }
@@ -81,30 +98,20 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
     return &c->servers[i];
 }
 
-unsigned configurationVoterCount(const struct raft_configuration *c)
+unsigned configurationVoterCount(const struct raft_configuration *c, int group)
 {
     unsigned i;
     unsigned n = 0;
     assert(c != NULL);
 
-    if (c->phase == RAFT_CONF_JOINT) {
-        jointConfigurationVoterCount(c);
-    }
-
     for (i = 0; i < c->n; i++) {
-        if (c->servers[i].role == RAFT_VOTER) {
+        if (serverIsGroupVoter(&c->servers[i], group)) {
             n++;
         }
     }
     return n;
 }
-void configurationSetAllNew(struct raft_configuration *conf)
-{
-    size_t i;
-    for (i = 0; i < conf->n; i++) {
-        conf->servers[i].c_new = true;
-    }
-}
+
 int configurationCopy(const struct raft_configuration *src,
                       struct raft_configuration *dst)
 {
@@ -113,7 +120,7 @@ int configurationCopy(const struct raft_configuration *src,
     configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
-        rv = configurationAdd(dst, server->id, server->role, server->c_old, server->c_new);
+        rv = configurationAdd(dst, server->id, server->role, server->group);
         if (rv != 0) {
             evtErrf("add conf failed id %d role %d", server->id, server->role);
             return rv;
@@ -125,7 +132,8 @@ int configurationCopy(const struct raft_configuration *src,
 
 int configurationAdd(struct raft_configuration *c,
                      raft_id id,
-                     int role, bool cold, bool cnew)
+                     int role,
+                     int group)
 {
     struct raft_server *servers;
     struct raft_server *server;
@@ -167,8 +175,7 @@ int configurationAdd(struct raft_configuration *c,
     server = &servers[i];
     server->id = id;
     server->role = role;
-    server->c_old = cold;
-    server->c_new = cnew;
+    server->group = group;
     c->n++;
 
     return 0;
@@ -224,6 +231,33 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     return 0;
 }
 
+void configurationJointRemove(struct raft_configuration *c, raft_id id)
+{
+    assert(c->phase == RAFT_CONF_NORMAL);
+    size_t i;
+
+    for (i = 0; i < c->n; ++i) {
+        if (c->servers[i].id == id) {
+            c->servers[i].group = RAFT_GROUP_OLD;
+            continue;
+        }
+        c->servers[i].group = RAFT_GROUP_OLD | RAFT_GROUP_NEW;
+        c->servers[i].role_new = c->servers[i].role;
+    }
+    c->phase = RAFT_CONF_JOINT;
+}
+
+void configurationJointReset(struct raft_configuration *c)
+{
+    assert(c->phase == RAFT_CONF_JOINT);
+    size_t i;
+
+    for (i = 0; i < c->n; ++i) {
+        c->servers[i].group = RAFT_GROUP_OLD;
+    }
+    c->phase = RAFT_CONF_NORMAL;
+}
+
 size_t configurationEncodedSize(const struct raft_configuration *c)
 {
     size_t n = 0;
@@ -240,7 +274,7 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
     for (i = 0; i < c->n; i++) {
         n += sizeof(uint64_t);            /* Server ID */
         n++;                              /* Voting flag */
-        n += sizeof(uint16_t);            /* Configuration sign: Cold Cnew */
+        n += sizeof(uint16_t);            /* New group role and group */
     };
 
     return bytePad64(n);
@@ -263,8 +297,8 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
         bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
         assert(server->role < 255);
         bytePut8(&cursor, (uint8_t)server->role);
-        bytePut8(&cursor, (uint8_t)server->c_old);
-        bytePut8(&cursor, (uint8_t)server->c_new);
+        bytePut8(&cursor, (uint8_t)server->role_new);
+        bytePut8(&cursor, (uint8_t)server->group);
     };
 }
 
@@ -272,7 +306,7 @@ int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c)
 {
     size_t i;
     size_t n;
-    bool cold, cnew;
+    struct raft_server *s;
 
     /* Check the encoding format version */
     if (byteGet8(&buf) != ENCODING_FORMAT) {
@@ -286,21 +320,24 @@ int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c)
 
     /* Decode the individual servers. */
     for (i = 0; i < n; i++) {
-	raft_id id;
-	int role;
-	int rv;
-
-	/* Server ID. */
-	id = byteGet64Unaligned(&buf);
-	/* Role code. */
-	role = byteGet8(&buf);
-    cold = byteGet8(&buf);
-    cnew = byteGet8(&buf);
-	rv = configurationAdd(c, id, role, cold, cnew);
-	if (rv != 0) {
+        raft_id id;
+        int role;
+        int role_new;
+        int group;
+        int rv;
+        /* Server ID. */
+        id = byteGet64Unaligned(&buf);
+        /* Role code. */
+        role = byteGet8(&buf);
+        role_new = byteGet8(&buf);
+        group = byteGet8(&buf);
+        rv = configurationAdd(c, id, role, group);
+        if (rv != 0) {
             evtErrf("conf add %llx failed", id, rv);
-	    return rv;
-	}
+            return rv;
+        }
+        s = (struct raft_server *)configurationGet(c, id);
+        s->role_new = role_new;
     }
 
     return 0;

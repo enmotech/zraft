@@ -87,6 +87,37 @@ static int tickCandidate(struct raft *r)
     return 0;
 }
 
+static size_t contactQuorumForGroup(struct raft *r, int group)
+{
+    unsigned i;
+    unsigned contacts = 0;
+    assert(r->state == RAFT_LEADER);
+
+    for (i = 0; i < r->configuration.n; i++) {
+        struct raft_server *server = &r->configuration.servers[i];
+        if (!serverIsGroupVoter(server, group))
+            continue;
+        bool recent_recv = progressGetRecentRecv(r, i);
+        if (recent_recv || server->id == r->id) {
+            contacts++;
+        }
+    }
+    return contacts;
+}
+
+static bool checkContactQuorumForGroup(struct raft *r, int group)
+{
+    size_t n_voters = configurationVoterCount(&r->configuration, group);
+    size_t contacts = contactQuorumForGroup(r, group);
+    assert(r->state == RAFT_LEADER);
+
+    if (r->quorum == RAFT_MAJORITY && contacts <= n_voters / 2)
+	    return false;
+    if (r->quorum == RAFT_FULL && contacts < n_voters)
+	    return false;
+    return true;
+}
+
 /* Return true if we received an AppendEntries RPC result from a majority of
  * voting servers since we became leaders or since the last time this function
  * was called.
@@ -96,26 +127,13 @@ static int tickCandidate(struct raft *r)
  * majority of voting server had the flag set to true. */
 static bool checkContactQuorum(struct raft *r)
 {
-    unsigned i;
-    unsigned contacts = 0;
-    size_t n_voters;
     assert(r->state == RAFT_LEADER);
 
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        bool recent_recv = progressResetRecentRecv(r, i);
-        if ((server->role == RAFT_VOTER && recent_recv) ||
-            server->id == r->id) {
-            contacts++;
-        }
+    if (r->configuration.phase == RAFT_CONF_JOINT) {
+        if (!checkContactQuorumForGroup(r, RAFT_GROUP_NEW))
+            return false;
     }
-
-    n_voters = configurationVoterCount(&r->configuration);
-    if (r->quorum == RAFT_MAJORITY && contacts <= n_voters / 2)
-	    return false;
-    if (r->quorum == RAFT_FULL && contacts < n_voters)
-	    return false;
-    return true;
+    return checkContactQuorumForGroup(r, RAFT_GROUP_OLD);
 }
 
 /* Apply time-dependent rules for leaders (Figure 3.1). */

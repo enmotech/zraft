@@ -19,7 +19,6 @@
 #include "tracing.h"
 #include "event.h"
 #include "hook.h"
-#include "joint_consensus.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -1130,7 +1129,7 @@ static int deleteConflictingEntries(struct raft *r,
                     return rv;
                 }
             }
-            
+
             /* Delete all entries from this index on because they don't
              * match. */
             rv = r->io->truncate(r->io, entry_index);
@@ -1814,15 +1813,40 @@ err_take_snapshot:
     return rv;
 }
 
+static size_t replicationVotesForGroup(struct raft *r, raft_index index, int group)
+{
+    size_t i;
+    size_t n = 0;
+
+    assert(r->state == RAFT_LEADER);
+    for (i = 0; i < r->configuration.n; ++i) {
+        if (!serverIsGroupVoter(&r->configuration.servers[i], group))
+            continue;
+        if (r->leader_state.progress[i].match_index >= index) {
+            n++;
+        }
+    }
+    return n;
+}
+
+static bool replicationQuorumGroup(struct raft *r, raft_index index, int group)
+{
+    size_t n_voters = configurationVoterCount(&r->configuration, group);
+    size_t votes = replicationVotesForGroup(r, index, group);
+    size_t half = n_voters / 2;
+
+    assert(r->state == RAFT_LEADER);
+    if (r->quorum == RAFT_MAJORITY && votes <= n_voters / 2)
+        return votes >= half + 1;
+    assert(r->quorum == RAFT_FULL);
+    return votes >= n_voters;
+}
+
 void replicationQuorum(struct raft *r, const raft_index index)
 {
-    size_t votes = 0;
-    size_t i;
-    size_t n_voters;
     raft_index prev_commit_index = r->commit_index;
 
     assert(r->state == RAFT_LEADER);
-
     if (index <= r->commit_index) {
         return;
     }
@@ -1837,27 +1861,14 @@ void replicationQuorum(struct raft *r, const raft_index index)
     if (logTermOf(&r->log, index) < r->current_term) {
         return;
     }
-    
+
     if (r->configuration.phase == RAFT_CONF_JOINT) {
-        jointReplicationQuorum(r, index);
+        if (!replicationQuorumGroup(r, index, RAFT_GROUP_NEW))
+            return;
+    }
+
+    if (!replicationQuorumGroup(r, index, RAFT_GROUP_OLD))
         return;
-    }
-
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        if (server->role != RAFT_VOTER) {
-            continue;
-        }
-        if (r->leader_state.progress[i].match_index >= index) {
-            votes++;
-        }
-    }
-
-    n_voters = configurationVoterCount(&r->configuration);
-    if (r->quorum == RAFT_MAJORITY && votes <= n_voters / 2)
-	    return;
-    if (r->quorum == RAFT_FULL && votes < n_voters)
-	    return;
 
     r->commit_index = index;
     tracef("new commit index %llu", r->commit_index);

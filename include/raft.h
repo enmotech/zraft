@@ -98,7 +98,6 @@ struct raft_server
 enum configuration_phase {
     RAFT_CONF_NORMAL = 0,
     RAFT_CONF_JOINT,
-    RAFT_CONF_CATCHUP
 };
 
 /**
@@ -1089,15 +1088,16 @@ RAFT_API int raft_add(struct raft *r,
                       raft_id id,
                       raft_change_cb cb);
 
-RAFT_API int raft_receive_new_configuration(struct raft *r,
-             struct raft_change *req,
-             struct raft_server *servers,
-             unsigned int n,
-             raft_change_cb cb);
+/**
+ * Promote server @id as voter and remove another one.
+ */
+RAFT_API int raft_joint_promote(struct raft *r,
+                                struct raft_change *req,
+                                raft_id id,
+                                int role,
+				                raft_id remove,
+                                raft_change_cb cb);
 
-RAFT_API int raft_change(struct raft *r,
-             struct raft_change *req,
-             raft_change_cb cb);
 /**
  * Assign a new role to the given server.
  *

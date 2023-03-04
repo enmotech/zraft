@@ -128,13 +128,20 @@ static bool checkContactQuorumForGroup(struct raft *r, int group)
  * majority of voting server had the flag set to true. */
 static bool checkContactQuorum(struct raft *r)
 {
+    unsigned i;
+    bool ret;
     assert(r->state == RAFT_LEADER);
 
     if (r->configuration.phase == RAFT_CONF_JOINT) {
         if (!checkContactQuorumForGroup(r, RAFT_GROUP_NEW))
             return false;
     }
-    return checkContactQuorumForGroup(r, RAFT_GROUP_OLD);
+    ret = checkContactQuorumForGroup(r, RAFT_GROUP_OLD);
+
+    for (i = 0; i < r->configuration.n; i++) {
+        (void)progressResetRecentRecv(r, i);
+    }
+    return ret;
 }
 
 /* Apply time-dependent rules for leaders (Figure 3.1). */

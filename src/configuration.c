@@ -39,15 +39,15 @@ unsigned configurationIndexOf(const struct raft_configuration *c,
 bool configurationIsVoter(const struct raft_configuration *c,
                           const struct raft_server *s, int group)
 {
-    (void)c;
     bool voter = false;
 
-    assert((group & RAFT_GROUP_NEW) && c->phase == RAFT_CONF_JOINT);
     if (s->group & RAFT_GROUP_OLD & group)
         voter = s->role == RAFT_VOTER;
 
-    if (s->group & RAFT_GROUP_NEW & group)
+    if (s->group & RAFT_GROUP_NEW & group) {
+        assert(c->phase == RAFT_CONF_JOINT);
         voter = voter || (s->role_new == RAFT_VOTER);
+    }
 
     return voter;
 }

@@ -926,8 +926,10 @@ static void emit(struct raft_tracer *t,
                  int line,
                  const char *message)
 {
-    unsigned id = *(unsigned *)t->impl;
-    fprintf(stderr, "%d: %30s:%*d - %s\n", id, file, 3, line, message);
+    struct raft_fixture_server *s = t->impl;
+
+    fprintf(stderr, "[%6llu] %30s:%*d - server %lld : %s\n", s->f->time,
+        file, 3, line, s->id, message);
 }
 
 static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
@@ -947,7 +949,8 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
     raft_set_install_snapshot_timeout(&s->raft, INSTALL_SNAPSHOT_TIMEOUT);
-    s->tracer.impl = (void *)&s->id;
+    s->f = f;
+    s->tracer.impl = (void *)s;
     s->tracer.emit = emit;
     s->raft.tracer = &s->tracer;
     return 0;

@@ -38,14 +38,14 @@ static void tearDown(void *data)
  *****************************************************************************/
 
 /* Accessors */
-#define VOTER_COUNT configurationVoterCount(&f->configuration)
+#define VOTER_COUNT configurationVoterCount(&f->configuration, RAFT_GROUP_ANY)
 #define INDEX_OF(ID) configurationIndexOf(&f->configuration, ID)
 #define INDEX_OF_VOTER(ID) configurationIndexOfVoter(&f->configuration, ID)
 #define GET(ID) configurationGet(&f->configuration, ID)
 
 /* Add a server to the fixture's configuration. */
 #define ADD_RV(ID, ROLE) \
-    configurationAdd(&f->configuration, ID, ROLE, true, false)
+    configurationAdd(&f->configuration, ID, ROLE, ROLE, RAFT_GROUP_OLD)
 #define ADD(...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, 0)
 #define ADD_ERROR(RV, ...) munit_assert_int(ADD_RV(__VA_ARGS__), ==, RV)
 
@@ -463,13 +463,13 @@ TEST(configurationEncode, two_servers, setUp, tearDown, 0, NULL)
 
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
     munit_assert_int(byteGet8(&cursor), ==, RAFT_STANDBY);
-    munit_assert_int(byteGet8(&cursor), ==, 1);
-    munit_assert_int(byteGet8(&cursor), ==, 0);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_STANDBY);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_GROUP_OLD);
 
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 2);
     munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
-    munit_assert_int(byteGet8(&cursor), ==, 1);
-    munit_assert_int(byteGet8(&cursor), ==, 0);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_GROUP_OLD);
 
     raft_free(buf.base);
 

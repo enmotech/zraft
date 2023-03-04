@@ -1846,7 +1846,7 @@ static bool replicationQuorumGroup(struct raft *r, raft_index index, int group)
     size_t half = n_voters / 2;
 
     assert(r->state == RAFT_LEADER);
-    if (r->quorum == RAFT_MAJORITY && votes <= n_voters / 2)
+    if (r->quorum == RAFT_MAJORITY)
         return votes >= half + 1;
     assert(r->quorum == RAFT_FULL);
     return votes >= n_voters;

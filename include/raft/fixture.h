@@ -29,6 +29,7 @@ struct raft_fixture_server
     struct raft_tracer tracer; /* Tracer. */
     struct raft_io io;         /* In-memory raft_io implementation. */
     struct raft raft;          /* Raft instance. */
+    struct raft_fixture *f;    /* Raft fixture. */
 };
 
 /**

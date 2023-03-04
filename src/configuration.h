@@ -15,6 +15,7 @@ void configurationClose(struct raft_configuration *c);
 int configurationAdd(struct raft_configuration *c,
                      raft_id id,
                      int role,
+                     int role_new,
                      int group);
 
 /* Return the number of servers with the RAFT_VOTER role. */
@@ -67,8 +68,7 @@ void configurationJointRemove(struct raft_configuration *c, raft_id id);
 
 void configurationJointReset(struct raft_configuration *c);
 
-bool serverIsGroupVoter(const struct raft_server *s, int group);
-
-bool serverIsVoter(const struct raft_server *s);
+bool configurationIsVoter(const struct raft_configuration *c,
+                          const struct raft_server *s, int group);
 
 #endif /* CONFIGURATION_H_ */

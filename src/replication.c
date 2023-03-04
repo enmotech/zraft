@@ -699,7 +699,12 @@ static int triggerActualPromotion(struct raft *r)
 
     /* Update our current configuration. */
     old_role = server->role;
-    server->role = RAFT_VOTER;
+    if (r->leader_state.remove_id == 0) {
+        server->role = RAFT_VOTER;
+    } else {
+        configurationJointRemove(&r->configuration, r->leader_state.remove_id);
+        server->role_new = RAFT_VOTER;
+    }
 
     /* Index of the entry being appended. */
     index = logLastIndex(&r->log) + 1;
@@ -727,6 +732,7 @@ static int triggerActualPromotion(struct raft *r)
     }
 
     r->leader_state.promotee_id = 0;
+    r->leader_state.remove_id   = 0;
     r->configuration_uncommitted_index = logLastIndex(&r->log);
 
     return 0;
@@ -735,7 +741,10 @@ err_after_log_append:
     logTruncate(&r->log, index);
 
 err:
-    server->role = old_role;
+    if (r->leader_state.remove_id == 0)
+        server->role = old_role;
+    else
+        configurationJointReset(&r->configuration);
 
     assert(rv != 0);
     return rv;
@@ -1820,7 +1829,8 @@ static size_t replicationVotesForGroup(struct raft *r, raft_index index, int gro
 
     assert(r->state == RAFT_LEADER);
     for (i = 0; i < r->configuration.n; ++i) {
-        if (!serverIsGroupVoter(&r->configuration.servers[i], group))
+        if (!configurationIsVoter(&r->configuration,
+            &r->configuration.servers[i], group))
             continue;
         if (r->leader_state.progress[i].match_index >= index) {
             n++;

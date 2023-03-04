@@ -345,6 +345,7 @@ int raft_joint_promote(struct raft *r,
     }
 
     r->leader_state.promotee_id = server->id;
+    r->leader_state.remove_id   = remove;
 
 
     /* Initialize the first catch-up round. */
@@ -489,6 +490,7 @@ int raft_assign(struct raft *r,
         return 0;
     }
 
+    assert(r->leader_state.remove_id == 0);
     r->leader_state.promotee_id = server->id;
 
 

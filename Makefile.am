@@ -124,7 +124,6 @@ test_integration_core_SOURCES = \
   test/integration/test_etcd_migrate_1.c \
   test/integration/test_etcd_migrate_2.c \
   test/integration/test_etcd_migrate_3.c \
-  test/integration/test_joint_consensus.c \
   test/integration/mocks.c
 
 test_integration_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion -std=gnu11

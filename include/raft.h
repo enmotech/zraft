@@ -82,8 +82,11 @@ struct raft_buffer
 /**
  * Server group types.
  */
-#define RAFT_GROUP_OLD 0x01
-#define RAFT_GROUP_NEW 0x10
+enum raft_group {
+    RAFT_GROUP_OLD = 0x01,
+    RAFT_GROUP_NEW = 0x10,
+    RAFT_GROUP_ANY = 0x11,
+};
 /**
  * Hold information about a single server in the cluster configuration.
  */
@@ -95,7 +98,7 @@ struct raft_server
     int group;     /* Server group. */
 };
 
-enum configuration_phase {
+enum raft_conf_phase {
     RAFT_CONF_NORMAL = 0,
     RAFT_CONF_JOINT,
 };
@@ -107,7 +110,7 @@ struct raft_configuration
 {
     struct raft_server *servers; /* Array of servers member of the cluster. */
     unsigned n;                  /* Number of servers in the array. */
-    enum configuration_phase phase;
+    enum raft_conf_phase phase;
 };
 
 /**
@@ -767,6 +770,7 @@ struct raft
             struct raft_progress *progress; /* Per-server replication state. */
             struct raft_change *change;     /* Pending membership change. */
             raft_id promotee_id;            /* ID of server being promoted. */
+            raft_id remove_id;              /* ID of server being removed. */
             unsigned short round_number;    /* Current sync round. */
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */

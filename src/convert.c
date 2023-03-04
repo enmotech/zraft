@@ -147,7 +147,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
 {
     const struct raft_server *server;
     size_t n_voters = configurationVoterCount(&r->configuration,
-                                              RAFT_GROUP_NEW | RAFT_GROUP_OLD);
+                                              RAFT_GROUP_ANY);
     int rv;
 
     (void)server; /* Only used for assertions. */

@@ -626,8 +626,6 @@ static int appendLeader(struct raft *r, raft_index index)
         evtErrf("%s", "malloc");
         goto err_after_entries_acquired;
     }
-    evtNoticef("raft(%llx) append index %lld n %d req:%p",
-		r->id, index, n, request->req);
     request->raft = r;
     request->index = index;
     request->entries = entries;

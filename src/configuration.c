@@ -1,4 +1,5 @@
 #include "configuration.h"
+
 #include "assert.h"
 #include "byte.h"
 #include "event.h"

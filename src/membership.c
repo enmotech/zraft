@@ -1,4 +1,5 @@
 #include "membership.h"
+
 #include "../include/raft.h"
 #include "assert.h"
 #include "hook.h"

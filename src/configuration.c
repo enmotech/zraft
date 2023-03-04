@@ -52,6 +52,32 @@ bool configurationIsVoter(const struct raft_configuration *c,
     return voter;
 }
 
+int configurationJointToNormalCopy(const struct raft_configuration *src,
+                                   struct raft_configuration *dst)
+{
+    size_t i;
+    int rv;
+
+    assert(src->phase == RAFT_CONF_JOINT);
+    configurationInit(dst);
+    for (i = 0; i < src->n; i++) {
+        struct raft_server *server = &src->servers[i];
+        if (!(server->group | RAFT_GROUP_NEW))
+            continue;
+        rv = configurationAdd(dst, server->id, server->role_new,
+                              server->role_new,
+                              RAFT_GROUP_OLD);
+        if (rv != 0) {
+            evtErrf("add conf failed id %d role %d", server->id, server->role);
+            return rv;
+        }
+    }
+    dst->phase = RAFT_CONF_NORMAL;
+    return 0;
+}
+
+
+
 unsigned configurationIndexOfVoter(const struct raft_configuration *c,
                                    const raft_id id)
 {
@@ -242,7 +268,7 @@ void configurationJointRemove(struct raft_configuration *c, raft_id id)
             c->servers[i].group = RAFT_GROUP_OLD;
             continue;
         }
-        c->servers[i].group = RAFT_GROUP_ANY;
+        c->servers[i].group = RAFT_GROUP_OLD | RAFT_GROUP_NEW;
         c->servers[i].role_new = c->servers[i].role;
     }
     c->phase = RAFT_CONF_JOINT;

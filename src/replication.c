@@ -1596,7 +1596,7 @@ static void applyChange(struct raft *r, const raft_index index)
             server = configurationGet(&r->configuration, r->id);
             if (server == NULL) {
 	        evtNoticef("raft(%llx) not in configuration", r->id);
-		evtDumpConfiguration(r, &r->configuration);
+                evtDumpConfiguration(r, &r->configuration);
                 convertToFollower(r);
             }
 
@@ -1890,6 +1890,87 @@ void replicationQuorum(struct raft *r, const raft_index index)
 inline bool replicationInstallSnapshotBusy(struct raft *r)
 {
     return r->last_stored == 0 && r->snapshot.put.data != NULL;
+}
+
+static int replicationChangeConfiguration(struct raft *r,
+    const struct raft_configuration *configuration)
+{
+    raft_index index;
+    raft_term term = r->current_term;
+    int rv;
+    const struct raft_entry *entry;
+
+    /* Index of the entry being appended. */
+    index = logLastIndex(&r->log) + 1;
+
+    /* Encode the new configuration and append it to the log. */
+    rv = logAppendConfiguration(&r->log, term, configuration);
+    if (rv != 0) {
+        evtErrf("raft(%llx) append conf failed %d", r->id, rv);
+        goto err;
+    }
+
+    evtNoticef("raft(%llx) conf append at index %lu", r->id, index);
+    evtDumpConfiguration(r, configuration);
+
+    entry = logGet(&r->log, index);
+    assert(entry);
+    assert(entry->type == RAFT_CHANGE);
+    r->hook->entry_after_append_fn(r->hook, index, entry);
+    hookConfChange(r, configuration);
+
+    if (configuration->n != r->configuration.n) {
+        rv = progressRebuildArray(r, configuration);
+        if (rv != 0) {
+            evtErrf("raft(%llx) rebuild array failed %d", r->id, rv);
+            goto err;
+        }
+    }
+
+    /* Update the current configuration if we've created a new object. */
+    if (configuration != &r->configuration) {
+        raft_configuration_close(&r->configuration);
+        r->configuration = *configuration;
+    }
+
+    /* Start writing the new log entry to disk and send it to the followers. */
+    rv = replicationTrigger(r, index);
+    if (rv != 0) {
+        evtErrf("raft(%llx) replication trigger failed %d", r->id, rv);
+        /* TODO: restore the old next/match indexes and configuration. */
+        goto err_after_log_append;
+    }
+
+    r->configuration_uncommitted_index = index;
+    return 0;
+err_after_log_append:
+    logTruncate(&r->log, index);
+err:
+    assert(rv != 0);
+    return rv;
+}
+
+int replicationAppendJointNewConf(struct raft *r)
+{
+    int rv;
+    struct raft_configuration c;
+
+    rv = configurationJointToNormalCopy(&r->configuration, &c);
+    if (rv != 0) {
+        evtErrf("raft(%llx) joint copy normal failed %d", r->id, rv);
+        return rv;
+    }
+
+    rv = replicationChangeConfiguration(r, &c);
+    if (rv != 0) {
+        evtErrf("raft(%llx) change configuration failed %d", r->id, rv);
+        goto err_close_configuration;
+    }
+
+    return 0;
+err_close_configuration:
+    configurationClose(&c);
+    return rv;
 }
 
 #undef tracef

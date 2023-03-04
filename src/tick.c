@@ -238,6 +238,14 @@ static int tickLeader(struct raft *r)
         }
     }
 
+    if (r->configuration_uncommitted_index == 0
+        && r->configuration.phase == RAFT_CONF_JOINT) {
+            rv = replicationAppendJointNewConf(r);
+            if (rv != 0) {
+                evtErrf("raft(%llx) append new conf failed %d", r->id, rv);
+            }
+    }
+
     return 0;
 }
 

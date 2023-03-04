@@ -69,6 +69,9 @@ void configurationJointRemove(struct raft_configuration *c, raft_id id);
 void configurationJointReset(struct raft_configuration *c);
 
 bool configurationIsVoter(const struct raft_configuration *c,
-                          const struct raft_server *s, int group);
+                         const struct raft_server *s, int group);
+
+int configurationJointToNormalCopy(const struct raft_configuration *src,
+                                   struct raft_configuration *dst);
 
 #endif /* CONFIGURATION_H_ */

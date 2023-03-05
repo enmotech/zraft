@@ -2604,4 +2604,38 @@ void raft_fixture_step_until_phase(struct raft_fixture *f, unsigned int i, int p
     raft_fixture_step_until(f, in_phase, &sp, msecs);
 }
 
+raft_index raft_fixture_last_index(struct raft_fixture *f, unsigned int i)
+{
+    struct raft *r;
+
+    r = raft_fixture_get(f, i);
+    return logLastIndex(&r->log);
+}
+
+static void raft_fixture_record(void *data, enum raft_event_level level,
+                                const char* fn, const char *file, int line,
+                                const char *fmt, ...)
+{
+    (void)level;
+    (void)fn;
+    struct raft_fixture *f = data;
+    char buf[1024];
+    va_list va;
+
+    va_start(va, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, va);
+    va_end(va);
+    fprintf(stdout, "[event][%6llu] %30s:%*d : %s\n", f->time, file, 3, line,
+            buf);
+}
+
+
+void raft_fixture_enable_recorder(struct raft_fixture *f)
+{
+    f->recorder.data   = f;
+    f->recorder.record = raft_fixture_record;
+
+    raft_set_event_recorder(&f->recorder);
+}
+
 #undef tracef

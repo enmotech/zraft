@@ -63,7 +63,7 @@ int configurationJointToNormalCopy(const struct raft_configuration *src,
     configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
-        if (!(server->group | RAFT_GROUP_NEW))
+        if (!(server->group & RAFT_GROUP_NEW))
             continue;
         rv = configurationAdd(dst, server->id, server->role_new,
                               server->role_new,
@@ -115,7 +115,6 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
 
     if (i == c->n) {
         /* No server with matching ID. */
-        evtNoticef("no server with matching id %llx", id);
         return NULL;
     }
     assert(i < c->n);

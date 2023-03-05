@@ -24,6 +24,7 @@
     do {                                                                     \
         unsigned _n = DEFAULT_N;                                             \
         bool _pre_vote = false;                                              \
+        bool _enable_recorder = false;                                        \
         unsigned _hb = 0;                                                    \
         unsigned _i;                                                         \
         int _rv;                                                             \
@@ -38,6 +39,12 @@
             _hb =                                                            \
                 atoi(munit_parameters_get(params, CLUSTER_HEARTBEAT_PARAM)); \
         }                                                                    \
+        if (munit_parameters_get(params, CLUSTER_RECORDER_PARAM) != NULL) {  \
+            _enable_recorder =                                               \
+                atoi(munit_parameters_get(params, CLUSTER_RECORDER_PARAM));  \
+        }                                                                    \
+        if (_enable_recorder)                                                \
+            raft_fixture_enable_recorder(&f->cluster);                       \
         munit_assert_int(_n, >, 0);                                          \
         for (_i = 0; _i < _n; _i++) {                                        \
             FsmInit(&f->fsms[_i]);                                           \
@@ -74,6 +81,9 @@
 
 /* Munit parameter for setting HeartBeat timeout */
 #define CLUSTER_HEARTBEAT_PARAM "cluster-heartbeat"
+
+/* Munit parameter for enabling event recorder */
+#define CLUSTER_RECORDER_PARAM "cluster_event_recorder"
 
 /* Get the number of servers in the cluster. */
 #define CLUSTER_N raft_fixture_n(&f->cluster)
@@ -543,5 +553,13 @@ void cluster_randomize(struct raft_fixture *f,
 #define CLUSTER_STEP_UNTIL_PHASE(i, p, msecs) \
     { \
         raft_fixture_step_until_phase(&f->cluster, i, p, msecs); \
+    }
+
+#define CLUSTER_JOINT_PROMOTE(req, id, remove_id) \
+    { \
+        int rv; \
+        rv = raft_joint_promote(CLUSTER_RAFT(CLUSTER_LEADER), req, id, \
+                                RAFT_VOTER, remove_id, NULL); \
+        munit_assert_int(rv, ==, 0); \
     }
 #endif /* TEST_CLUSTER_H */

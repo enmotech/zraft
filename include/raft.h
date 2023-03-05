@@ -84,8 +84,8 @@ struct raft_buffer
  */
 enum raft_group {
     RAFT_GROUP_OLD = 0x01,
-    RAFT_GROUP_NEW = 0x10,
-    RAFT_GROUP_ANY = 0x11,
+    RAFT_GROUP_NEW = 0x02,
+    RAFT_GROUP_ANY = 0x03,
 };
 /**
  * Hold information about a single server in the cluster configuration.

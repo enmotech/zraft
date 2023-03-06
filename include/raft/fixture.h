@@ -572,7 +572,5 @@ RAFT_API raft_index raft_fixture_last_index(struct raft_fixture *f, unsigned int
 /* Enable event recorder at setup */
 RAFT_API void raft_fixture_enable_recorder(struct raft_fixture *f);
 
-
-RAFT_API int raft_fixture_set_policy(struct raft_fixture *f, int policy);
 RAFT_API void raft_fixture_step_until_phase(struct raft_fixture *f, unsigned int i, int phase, unsigned msecs);
 #endif /* RAFT_FIXTURE_H */

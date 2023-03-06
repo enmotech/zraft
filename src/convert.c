@@ -168,7 +168,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
      * configuration. */
     server = configurationGet(&r->configuration, r->id);
     assert(server != NULL);
-    assert(server->role == RAFT_VOTER);
+    assert(server->role == RAFT_VOTER || server->role_new == RAFT_VOTER);
 
     if (n_voters == 1) {
         tracef("self elect and convert to leader");

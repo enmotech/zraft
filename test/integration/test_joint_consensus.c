@@ -127,14 +127,13 @@ static MunitParameterEnum enable_recorder_params[] = {
 
 SUITE(raft_change)
 
-/* 3 replica -> 3 replica, current leader in new configuration */
 TEST(raft_change, replace_non_leader, setUp, tearDown, 0,
      enable_recorder_params)
 {
     struct fixture *f = data;
     raft_index index;
-    // struct raft *r;
-    // struct raft_server servers[3];
+    struct raft *r;
+    struct raft_configuration *c;
 
     CLUSTER_ADD(&f->req);
     munit_assert(CLUSTER_STATE(0) == RAFT_LEADER);
@@ -143,85 +142,112 @@ TEST(raft_change, replace_non_leader, setUp, tearDown, 0,
 
     CLUSTER_JOINT_PROMOTE(&f->req, 4, 2);
     CLUSTER_STEP_UNTIL_COMMITTED(0, index + 1, 1000);
+    r = CLUSTER_RAFT(0);
+    c = &r->configuration;
+    munit_assert(c->phase == RAFT_CONF_JOINT);
+
 
     CLUSTER_STEP_UNTIL_COMMITTED(0, index + 2, 1000);
-
-    // /* get new configuration */
-    // JOINT_NEW_3NODES_WITH_OLD_LEADER(servers);
-
-    // /* current leader receive the new configuration */
-    // CLUSTER_NEW_CONFIGURATION(servers, 3);
-
-    // /* apply log index of entering catchup*/
-    // CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 1000);
-    // JOINT_ASSERT_PHASE(0, RAFT_CONF_CATCHUP);
-
-    // /* enter phase joint */
-    // CLUSTER_CHANGE;
-    // CLUSTER_STEP_UNTIL_APPLIED(3, 4, 1000);
-
-    // /* all servers in cluster should step in new configuration */
-    // CONFIGURATION_EQUALS_ALL(servers, 3);
+    r = CLUSTER_RAFT(0);
+    c = &r->configuration;
+    munit_assert(c->n == 3);
+    munit_assert(c->phase == RAFT_CONF_NORMAL);
+    munit_assert(c->servers[0].id == 1);
+    munit_assert(c->servers[0].role == RAFT_VOTER);
+    munit_assert(c->servers[0].group == RAFT_GROUP_OLD);
+    munit_assert(c->servers[1].id == 3);
+    munit_assert(c->servers[1].role == RAFT_VOTER);
+    munit_assert(c->servers[1].group == RAFT_GROUP_OLD);
+    munit_assert(c->servers[2].id == 4);
+    munit_assert(c->servers[2].role == RAFT_VOTER);
+    munit_assert(c->servers[2].group == RAFT_GROUP_OLD);
 
     return MUNIT_OK;
 }
 
-// /* 3 replica -> 3 replica, current leader not in new configuration */
-// TEST(raft_change, normalFlowWithoutLeader, setUp, tearDown, 0, NULL)
-// {
-//     struct fixture *f = data;
-//     struct raft_server servers[3];
-//     struct raft_apply apply;
-//     /* get new configuration */
-//     JOINT_NEW_3NODES_WITHOUT_OLD_LEADER(servers);
+TEST(raft_change, replace_leader, setUp, tearDown, 0, enable_recorder_params)
+{
+    struct fixture *f = data;
+    raft_index index;
+    struct raft *r;
+    struct raft_configuration *c;
 
-//     /* current leader receive the new configuration */
-//     CLUSTER_NEW_CONFIGURATION(servers, 3);
+    CLUSTER_ADD(&f->req);
+    munit_assert(CLUSTER_STATE(0) == RAFT_LEADER);
+    index = raft_fixture_last_index(&f->cluster, 0);
+    CLUSTER_STEP_UNTIL_COMMITTED(0, index, 1000);
 
-//     /* apply log index of entering catchup*/
-//     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 1000);
-//     JOINT_ASSERT_PHASE(0, RAFT_CONF_CATCHUP);
+    CLUSTER_JOINT_PROMOTE(&f->req, 4, 1);
+    CLUSTER_STEP_UNTIL_COMMITTED(0, index + 1, 1000);
+    r = CLUSTER_RAFT(0);
+    c = &r->configuration;
+    munit_assert(c->phase == RAFT_CONF_JOINT);
 
-//     /* enter phase joint */
-//     CLUSTER_CHANGE;
-//     CLUSTER_STEP_UNTIL_APPLIED(0, 4, 1000);
-//     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
-//     CLUSTER_STEP_UNTIL_HAS_LEADER(20000);
+    CLUSTER_STEP_UNTIL_COMMITTED(0, index + 2, 1000);
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(1000);
+    CLUSTER_ELECT(1);
+    CLUSTER_STEP_UNTIL_HAS_LEADER(1000);
 
-//     CLUSTER_APPLY_ADD_X(1, &apply, 1, NULL);
-//     CLUSTER_STEP_UNTIL_APPLIED(3, 4, 2000);
-//     /* all servers in cluster should step in new configuration */
-//     CONFIGURATION_EQUALS_ALL(servers, 3);
+    r = CLUSTER_RAFT(1);
+    c = &r->configuration;
+    munit_assert(c->n == 3);
+    munit_assert(c->phase == RAFT_CONF_NORMAL);
+    munit_assert(c->servers[0].id == 2);
+    munit_assert(c->servers[0].role == RAFT_VOTER);
+    munit_assert(c->servers[0].group == RAFT_GROUP_OLD);
+    munit_assert(c->servers[1].id == 3);
+    munit_assert(c->servers[1].role == RAFT_VOTER);
+    munit_assert(c->servers[1].group == RAFT_GROUP_OLD);
+    munit_assert(c->servers[2].id == 4);
+    munit_assert(c->servers[2].role == RAFT_VOTER);
+    munit_assert(c->servers[2].group == RAFT_GROUP_OLD);
 
-//     return MUNIT_OK;
-// }
+    return MUNIT_OK;
+}
 
-// /* 3 replica -> 7 replica, current leader in new configuration */
-// TEST(raft_change, threeToSevenReplica, setUp, tearDown, 0, NULL)
-// {
-//     struct fixture *f = data;
-//     struct raft_server servers[7];
+TEST(raft_change, crash_two_replica, setUp, tearDown, 0,
+     enable_recorder_params)
+{
+    struct fixture *f = data;
+    raft_index index;
+    struct raft *r;
+    struct raft_configuration *c;
 
-//     /* get new configuration */
-//     JOINT_NEW_7NODES_WITH_OLD_LEADER(servers);
+    CLUSTER_ADD(&f->req);
+    munit_assert(CLUSTER_STATE(0) == RAFT_LEADER);
+    index = raft_fixture_last_index(&f->cluster, 0);
+    CLUSTER_STEP_UNTIL_COMMITTED(0, index, 1000);
 
-//     /* current leader receive the new configuration */
-//     CLUSTER_NEW_CONFIGURATION(servers, 7);
+    CLUSTER_JOINT_PROMOTE(&f->req, 4, 1);
+    CLUSTER_STEP_UNTIL_COMMITTED(0, index + 1, 1000);
+    r = CLUSTER_RAFT(0);
+    c = &r->configuration;
+    munit_assert(c->phase == RAFT_CONF_JOINT);
+    munit_assert(c->n ==  4);
+    // kill two replica
+    CLUSTER_KILL(0);
+    CLUSTER_KILL(3);
+    CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
+    CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000);
 
-//     /* apply log index of entering catchup*/
-//     CLUSTER_STEP_UNTIL_APPLIED(CLUSTER_LEADER, 2, 1000);
-//     JOINT_ASSERT_PHASE(0, RAFT_CONF_CATCHUP);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_COMMITTED(1, index + 3, 3000);
+    r = CLUSTER_RAFT(CLUSTER_LEADER);
+    c = &r->configuration;
+    munit_assert(c->n == 3);
+    munit_assert(c->phase == RAFT_CONF_NORMAL);
+    munit_assert(c->servers[0].id == 2);
+    munit_assert(c->servers[0].role == RAFT_VOTER);
+    munit_assert(c->servers[0].group == RAFT_GROUP_OLD);
+    munit_assert(c->servers[1].id == 3);
+    munit_assert(c->servers[1].role == RAFT_VOTER);
+    munit_assert(c->servers[1].group == RAFT_GROUP_OLD);
+    munit_assert(c->servers[2].id == 4);
+    munit_assert(c->servers[2].role == RAFT_VOTER);
+    munit_assert(c->servers[2].group == RAFT_GROUP_OLD);
 
-//     /* enter phase joint */
-//     CLUSTER_CHANGE;
-//     for (int i = 3; i < 7; i++)
-//         CLUSTER_STEP_UNTIL_APPLIED(i, 4, 1000);
-
-//     /* all servers in cluster should step in new configuration */
-//     CONFIGURATION_EQUALS_ALL(servers, 7);
-
-//     return MUNIT_OK;
-// }
+    return MUNIT_OK;
+}
 
 // /* 3 replica -> 3 replica, current leader and new replica both fail in joint phase */
 // TEST(raft_change, bothCrash, setUp, tearDown, 0, NULL)

@@ -414,7 +414,7 @@ static int triggerAll(struct raft *r)
             continue;
         }
         /* Skip spare servers, unless they're being promoted. */
-        if (server->role == RAFT_SPARE &&
+        if ((server->role == RAFT_SPARE && server->role_new == RAFT_SPARE) &&
             server->id != r->leader_state.promotee_id) {
             continue;
         }

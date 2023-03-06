@@ -946,7 +946,7 @@ void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
 
 raft_index logStartIndex(struct raft *r)
 {
-    return indexAt(&r->log, r->log.front);
+    return indexAt(&r->log, 0);
 }
 
 raft_term logStartTerm(struct raft *r)

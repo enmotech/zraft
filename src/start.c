@@ -273,7 +273,7 @@ int restoreEntriesAndSnapshotInfo(struct raft *r,
         return rv;
     }
     r->log.offset = snapshot->index;
-    r->snapshot.trailing = n_entries;
+    r->snapshot.trailing = (unsigned int)n_entries;
     //restoreEntries里面有可能更新conf_uncommitted_index和configuration。
     if(r->configuration_uncommitted_index == snapshot->configuration_index){
         r->configuration_uncommitted_index = 0;

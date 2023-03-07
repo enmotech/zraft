@@ -891,6 +891,12 @@ RAFT_API int raft_recover(struct raft *r,
 
 RAFT_API int raft_start(struct raft *r);
 
+RAFT_API int restoreEntriesAndSnapshotInfo(struct raft *r, 
+                                           struct raft_snapshot *snapshot,
+                                           raft_index start_index,
+                                           struct raft_entry *entries,
+                                           size_t n_entries);
+
 struct raft_start;
 typedef void (*raft_start_cb)(struct raft_start *req, int status);
 struct raft_start

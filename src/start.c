@@ -235,6 +235,65 @@ err_skip_self_elect:
     return 0;
 }
 
+int restoreEntriesAndSnapshotInfo(struct raft *r, 
+                                  struct raft_snapshot *snapshot,
+                                  raft_index start_index,
+                                  struct raft_entry *entries,
+                                  size_t n_entries)
+{
+    int rv;
+    unsigned int i;
+    assert(snapshot);
+    assert(snapshot->n_bufs == 0 && snapshot->bufs == NULL);
+    //snapshot->index至少要小于等于发的entires最后一条的index
+    assert(snapshot->index <= (start_index + n_entries -1));
+    
+    configurationClose(&r->snapshot.configuration);
+    rv = configurationCopy(&snapshot->configuration,
+                           &r->snapshot.configuration);
+    if (rv != 0) {
+        evtErrf("raft(%llx) copy snapshot failed %d", r->id, rv);
+        goto err;
+    }
+    configurationClose(&r->configuration);
+    r->configuration = snapshot->configuration;
+    r->configuration_index = snapshot->configuration_index;
+    r->commit_index = snapshot->index;
+    r->last_applying = snapshot->index;
+    r->last_applied = snapshot->index;
+
+    logTruncate(&r->log, start_index);
+    //清空log中从start_index开始的日志项, 不一定是清空！这个操作会用到原来的offset
+
+    rv = restoreEntries(r, snapshot->index, snapshot->term, 
+        start_index, entries, n_entries);
+    if(rv != 0){
+        entryBatchesDestroy(entries, n_entries);
+        raft_free(snapshot);
+        return rv;
+    }
+    r->log.offset = snapshot->index;
+    r->snapshot.trailing = n_entries;
+    //restoreEntries里面有可能更新conf_uncommitted_index和configuration。
+    if(r->configuration_uncommitted_index == snapshot->configuration_index){
+        r->configuration_uncommitted_index = 0;
+        r->configuration_index = snapshot->configuration_index;
+    }
+	
+    r->follower_state.current_leader.id = 0; 
+    
+    i = configurationIndexOf(&r->configuration, r->id);
+	if (i == r->configuration.n) {
+		return 10;//PR_RET_UNEXPECT
+	}
+
+    raft_free(snapshot); 
+    return 0;
+err:
+    snapshotDestroy(snapshot);
+    entryBatchesDestroy(entries, n_entries);
+    return rv;
+}
 struct loadData {
     struct raft *raft;
     struct raft_io_load req;

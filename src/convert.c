@@ -230,6 +230,7 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_number = 0;
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
+    r->leader_state.remove_id = 0;
 
     if (r->state_change_cb)
 		r->state_change_cb(r, RAFT_LEADER);

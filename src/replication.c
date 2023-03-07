@@ -1578,7 +1578,8 @@ static void applyChange(struct raft *r, const raft_index index)
         r->configuration_uncommitted_index = 0;
         r->configuration_index = index;
 
-        if (r->state == RAFT_LEADER) {
+        if (r->state == RAFT_LEADER
+            && r->configuration.phase == RAFT_CONF_NORMAL) {
             const struct raft_server *server;
             req = r->leader_state.change;
             r->leader_state.change = NULL;

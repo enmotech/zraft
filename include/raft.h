@@ -272,6 +272,8 @@ struct raft_append_entries
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n_entries;         /* Size of the log entries array. */
     raft_index snapshot_index;  /* Index of current snapshot */
+    bool entries_reload; 
+    unsigned trailing;
 };
 
 /**
@@ -697,7 +699,7 @@ struct raft
      * attribute.
      */
     unsigned election_timeout;
-
+    unsigned reset_trialing_timeout;
     /*
      * Heartbeat timeout in milliseconds (default 100). This is relevant only
      * for when the raft instance is in leader state: empty AppendEntries RPCs

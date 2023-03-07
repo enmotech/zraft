@@ -82,14 +82,21 @@ static int sendAppendEntries(struct raft *r,
     raft_index next_index = prev_index + 1;
     raft_index optimistic_next_index;
     int rv;
+    unsigned j;
 
     args->term = r->current_term;
     args->prev_log_index = prev_index;
     args->prev_log_term = prev_term;
     args->snapshot_index = r->log.snapshot.last_index;
+    args->entries_reload = false;
 
     rv = logAcquireWithMax(&r->log, next_index, &args->entries,
 			   &args->n_entries, r->message_log_threshold);
+    for(j = 0; j < args->n_entries; j++) {
+        if(args->entries[j].buf.base == NULL){
+            args->entries_reload = true;
+        }
+    }
     if (rv != 0) {
         evtErrf("raft(%llx) log acquire failed %d", r->id, rv);
         goto err;

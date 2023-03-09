@@ -29,6 +29,8 @@
 #define DEFAULT_MAX_CATCH_UP_ROUNDS 10
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
 
+bool modifiable_trailing = false;
+
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
@@ -48,6 +50,7 @@ int raft_init(struct raft *r,
     r->configuration_index = 0;
     r->configuration_uncommitted_index = 0;
     r->election_timeout = DEFAULT_ELECTION_TIMEOUT;
+    r->reset_trailing_timeout = 30 * DEFAULT_ELECTION_TIMEOUT;
     r->heartbeat_timeout = DEFAULT_HEARTBEAT_TIMEOUT;
     r->install_snapshot_timeout = DEFAULT_INSTALL_SNAPSHOT_TIMEOUT;
     r->commit_index = 0;

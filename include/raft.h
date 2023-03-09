@@ -276,6 +276,8 @@ struct raft_append_entries
     unsigned trailing;
 };
 
+extern bool modifiable_trailing;
+
 /**
  * Hold the result of an AppendEntries RPC (figure 3.1).
  */
@@ -699,7 +701,7 @@ struct raft
      * attribute.
      */
     unsigned election_timeout;
-    unsigned reset_trialing_timeout;
+    unsigned reset_trailing_timeout;
     /*
      * Heartbeat timeout in milliseconds (default 100). This is relevant only
      * for when the raft instance is in leader state: empty AppendEntries RPCs

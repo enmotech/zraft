@@ -63,12 +63,12 @@ static int restoreMostRecentConfiguration(struct raft *r,
  * can't be sure a configuration change has been committed and we need to be
  * ready to roll back to the last committed configuration.
  */
-static int restoreEntries(struct raft *r,
-                          raft_index snapshot_index,
-                          raft_term snapshot_term,
-                          raft_index start_index,
-                          struct raft_entry *entries,
-                          size_t n)
+int restoreEntries(struct raft *r,
+                   raft_index snapshot_index,
+                   raft_term snapshot_term,
+                   raft_index start_index,
+                   struct raft_entry *entries,
+                   size_t n)
 {
     struct raft_entry *conf = NULL;
     raft_index conf_index;

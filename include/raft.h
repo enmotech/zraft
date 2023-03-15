@@ -914,6 +914,12 @@ RAFT_API int raft_astart(struct raft *r,
              struct raft_start *req,
              raft_start_cb cb);
 
+RAFT_API int restoreEntries(struct raft *r,
+                   raft_index snapshot_index,
+                   raft_term snapshot_term,
+                   raft_index start_index,
+                   struct raft_entry *entries,
+                   size_t n);
 /**
  * Set the election timeout.
  *

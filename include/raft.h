@@ -229,6 +229,7 @@ struct raft_log
         raft_index last_index; /* Snapshot replaces all entries up to here. */
         raft_term last_term;   /* Term of last index. */
     } snapshot;
+    raft_index need_free;        /* 从这个index开始释放，初始化为1 */
 };
 
 /**
@@ -277,6 +278,7 @@ struct raft_append_entries
 };
 
 extern bool modifiable_trailing;
+extern bool enable_free_trailing;
 
 /**
  * Hold the result of an AppendEntries RPC (figure 3.1).

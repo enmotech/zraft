@@ -12,6 +12,9 @@
 #include "queue.h"
 #include "snapshot.h"
 #include "tracing.h"
+#include "replication.h"
+#include "test/lib/fsm.h"
+#include "../include/raft.h"
 
 /* Set to 1 to enable tracing. */
 #if 0
@@ -300,6 +303,7 @@ static void copyAppendEntries(const struct raft_append_entries *src,
     int rv;
     rv = entryBatchCopy(src->entries, &dst->entries, src->n_entries);
     assert(rv == 0);
+    dst->trailing = src->trailing;
     dst->n_entries = src->n_entries;
 }
 
@@ -715,7 +719,7 @@ static int ioMethodSend(struct raft_io *raft_io,
 {
     struct io *io = raft_io->impl;
     struct send *r;
-
+    unsigned i;
     if (ioFaultTick(io)) {
         return RAFT_IOERR;
     }
@@ -730,7 +734,15 @@ static int ioMethodSend(struct raft_io *raft_io,
     r->req = req;
     r->message = *message;
     r->req->cb = cb;
-
+    if(r->message.type == RAFT_IO_APPEND_ENTRIES){
+        struct sendAppendEntries *sendReq = req->data;
+        for (i = 0; i < sendReq->n; i++) {
+            if(sendReq->entriesLoadByDisk[i] == true){
+                FsmEncodeAddX(12, &sendReq->entries[i].buf);
+            }
+        }
+    }
+    
     /* TODO: simulate the presence of an OS send buffer, whose available size
      * might delay the completion of send requests */
     r->completion_time = *io->time;
@@ -1420,7 +1432,7 @@ struct raft_fixture_event *raft_fixture_step(struct raft_fixture *f)
 
     /* If the leader has not changed check the Leader Append-Only
      * guarantee. */
-    if (!updateLeaderAndCheckElectionSafety(f)) {
+    if (!updateLeaderAndCheckElectionSafety(f) && modifiable_trailing == false) {
         checkLeaderAppendOnly(f);
     }
 

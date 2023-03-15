@@ -30,6 +30,7 @@
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
 
 bool modifiable_trailing = false;
+bool enable_free_trailing = false;
 
 int raft_init(struct raft *r,
               struct raft_io *io,

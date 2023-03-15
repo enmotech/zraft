@@ -19,6 +19,8 @@
 #include "tracing.h"
 #include "event.h"
 #include "hook.h"
+#include "../test/lib/fsm.h"
+#include "byte.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -34,24 +36,13 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-/* Context of a RAFT_IO_APPEND_ENTRIES request that was submitted with
- * raft_io_>send(). */
-struct sendAppendEntries
-{
-    struct raft *raft;          /* Instance sending the entries. */
-    struct raft_io_send send;   /* Underlying I/O send request. */
-    raft_index index;           /* Index of the first entry in the request. */
-    struct raft_entry *entries; /* Entries referenced in the request. */
-    unsigned n;                 /* Length of the entries array. */
-    raft_id server_id;          /* Destination server. */
-};
-
 /* Callback invoked after request to send an AppendEntries RPC has completed. */
 static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 {
     struct sendAppendEntries *req = send->data;
     struct raft *r = req->raft;
     unsigned i = configurationIndexOf(&r->configuration, req->server_id);
+    unsigned j;
 
     if (r->state == RAFT_LEADER && i < r->configuration.n) {
         if (status != 0) {
@@ -63,8 +54,17 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
             progressToProbe(r, i);
         }
     }
+    //对于在zstorage和raft-test里加载的entry.buf，需要在raft内部的sendAppendEntriesCb里释放
+    if (req->n > 0) {
+        for(j = 0; j < req->n; j++){
+            if(req->entriesLoadByDisk[j] == true && req->entries[j].buf.base != NULL){
+                raft_entry_free(req->entries[j].buf.base);
+            }
+        }
+    }
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, req->index, req->entries, req->n);
+    raft_free(req->entriesLoadByDisk);
     raft_free(req);
 }
 
@@ -89,6 +89,7 @@ static int sendAppendEntries(struct raft *r,
     args->prev_log_term = prev_term;
     args->snapshot_index = r->log.snapshot.last_index;
     args->entries_reload = false;
+    args->trailing = r->snapshot.trailing;
 
     rv = logAcquireWithMax(&r->log, next_index, &args->entries,
 			   &args->n_entries, r->message_log_threshold);
@@ -136,9 +137,17 @@ static int sendAppendEntries(struct raft *r,
     req->entries = args->entries;
     req->n = args->n_entries;
     req->server_id = server->id;
-
+    if(req->n > 0) 
+        req->entriesLoadByDisk = raft_calloc((size_t)req->n, sizeof(bool));
     req->send.data = req;
     optimistic_next_index = req->index + req->n;
+    for (j = 0; j < req->n; j++) {
+        if (req->entries[j].buf.len == 0 && req->entries[j].type != RAFT_BARRIER) {
+            req->entriesLoadByDisk[j] = true;
+        } else{
+            req->entriesLoadByDisk[j] = false;
+        }
+    }
     rv = r->io->send(r->io, &req->send, &message, sendAppendEntriesCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
@@ -321,6 +330,8 @@ int replicationProgress(struct raft *r, unsigned i)
     bool progress_state_is_snapshot = progressState(r, i) == PROGRESS__SNAPSHOT;
     raft_index snapshot_index = logSnapshotIndex(&r->log);
     raft_index next_index = progressNextIndex(r, i);
+    raft_index match_index = progressMatchIndex(r, i);
+    raft_index match_term;
     raft_index prev_index;
     raft_term prev_term;
 
@@ -368,7 +379,8 @@ int replicationProgress(struct raft *r, unsigned i)
         prev_term = logTermOf(&r->log, prev_index);
         /* If the entry is not anymore in our log, send the last snapshot if we're
          * not doing so already. */
-        if (prev_term == 0 && !progress_state_is_snapshot) {
+        if ((prev_term == 0 && !progress_state_is_snapshot)
+        || (prev_index < snapshot_index && progressGetRecentRecv(r, i) == false)) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
 	    evtNoticef(
@@ -392,6 +404,10 @@ int replicationProgress(struct raft *r, unsigned i)
 
 send_snapshot:
     if (progressGetRecentRecv(r, i)) {
+        if(r->log.offset <= match_index && r->configuration.servers[i].id !=  r->leader_state.promotee_id) {
+            match_term = match_index == 0 ? 0 : logTermOf(&r->log, match_index);
+            return sendAppendEntries(r, i, match_index, match_term);
+        }
         /* Only send a snapshot when we have heard from the server */
         return sendSnapshot(r, i);
     } else {
@@ -969,6 +985,9 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     }
 
     i = updateLastStored(r, request->index, args->entries, args->n_entries);
+    if(modifiable_trailing){
+        raft_set_snapshot_trailing(r, args->trailing);
+    }  
 
     /* If none of the entries that we persisted is present anymore in our
      * in-memory log, there's nothing to report or to do. We just discard
@@ -1635,6 +1654,11 @@ static raft_index nextSnapshotIndex(struct raft *r)
 static bool shouldTakeSnapshot(struct raft *r)
 {
     raft_index snapshot_index;
+    struct raft_server *s;
+    struct raft_progress *p;
+    raft_index tmp = logLastIndex(&r->log);
+    bool ignoreUpdateTrailing = false;
+    unsigned i;
     /* If we are shutting down, let's not do anything. */
     if (r->state == RAFT_UNAVAILABLE) {
         return false;
@@ -1651,6 +1675,28 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
+    for (i = 0; i<r->configuration.n; i++) {
+        if(r->state != RAFT_LEADER) 
+            break;
+        s = &r->configuration.servers[i];
+        if (s->role == RAFT_SPARE &&
+			s->id != r->leader_state.promotee_id) {
+			continue;
+		}
+        p = &r->leader_state.progress[i];
+        if (p->match_index <= tmp) {
+			tmp = p->match_index;
+            raft_time now = r->io->time(r->io);
+            
+            if(now - p->recent_recv_time > r->reset_trailing_timeout){
+                raft_set_snapshot_trailing(r, r->snapshot.threshold);
+                //超时！直接调用logSnapshot
+                logSnapshot(&r->log, r->log.snapshot.last_index, r->snapshot.trailing);
+                ignoreUpdateTrailing = true;
+            }
+        }
+    }
+
     snapshot_index = nextSnapshotIndex(r);
     if (snapshot_index <= r->log.snapshot.last_index)
 	    return false;
@@ -1659,6 +1705,21 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
+    if (ignoreUpdateTrailing == false && modifiable_trailing) {
+        if (r->state == RAFT_LEADER) {
+            r->snapshot.trailing = 0;
+            do{
+                r->snapshot.trailing += r->snapshot.threshold;
+                tmp += r->snapshot.threshold;
+            }while(tmp < snapshot_index);
+        } else {
+            r->snapshot.trailing += r->snapshot.threshold;
+        }
+    }
+    //因为tmp和ignoreUpdateTrailing都是Leader状态下才会改变的值，Leader通过上面这个修改很正常
+    //那么非Leader的该怎么改呢，主动扩展？非主动扩展？
+    //主动扩展，可以容纳下之前的，但有可能会扩展得很大？非主动扩展有可能Leader还没丢，但是你主动丢了？
+    
     return true;
 }
 
@@ -1693,6 +1754,12 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     evtInfof("raft(%llx) take snapshot at %llu %u", r->id, snapshot->index,
 	     r->snapshot.trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
+    if (enable_free_trailing) {
+        freeEntriesBufForward(&r->log, snapshot->index);
+    }
+    if (modifiable_trailing) {
+        raft_set_snapshot_trailing(r, r->snapshot.threshold + r->snapshot.trailing);
+    }
 out:
     snapshotClose(&r->snapshot.pending);
     r->snapshot.pending.term = 0;

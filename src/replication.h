@@ -5,6 +5,18 @@
 
 #include "../include/raft.h"
 
+/* Context of a RAFT_IO_APPEND_ENTRIES request that was submitted with
+ * raft_io_>send(). */
+struct sendAppendEntries
+{
+    struct raft *raft;          /* Instance sending the entries. */
+    struct raft_io_send send;   /* Underlying I/O send request. */
+    raft_index index;           /* Index of the first entry in the request. */
+    struct raft_entry *entries; /* Entries referenced in the request. */
+    bool *entriesLoadByDisk;      /*  */
+    unsigned n;                 /* Length of the entries array. */
+    raft_id server_id;          /* Destination server. */
+};
 /* Send AppendEntries RPC messages to all followers to which no AppendEntries
  * was sent in the last heartbeat interval. */
 int replicationHeartbeat(struct raft *r);

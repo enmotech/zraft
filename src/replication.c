@@ -64,7 +64,8 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
     }
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, req->index, req->entries, req->n);
-    raft_free(req->entriesLoadByDisk);
+    if (req->n > 0)
+        raft_free(req->entriesLoadByDisk);
     raft_free(req);
 }
 

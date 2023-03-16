@@ -146,7 +146,7 @@ static int tickLeader(struct raft *r)
 
     for (i = 0; i < r->configuration.n; i++) {
         if (r->configuration.servers[i].id != r->id 
-            && now - r->leader_state.progress[i].recent_recv_time > r->reset_trailing_timeout && modifiable_trailing) {
+            && now - r->leader_state.progress[i].recent_recv_time > r->reset_trailing_timeout && r->enable_dynamic_trailing) {
             raft_set_snapshot_trailing(r, r->snapshot.threshold);
             break;
         }

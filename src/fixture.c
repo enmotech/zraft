@@ -1252,6 +1252,9 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
     }
 
     raft = raft_fixture_get(f, (unsigned)f->leader_id - 1);
+
+    if(raft->enable_free_trailing)
+        return;
     last = logLastIndex(&f->log);
 
     for (index = 1; index <= last; index++) {
@@ -1432,7 +1435,7 @@ struct raft_fixture_event *raft_fixture_step(struct raft_fixture *f)
 
     /* If the leader has not changed check the Leader Append-Only
      * guarantee. */
-    if (!updateLeaderAndCheckElectionSafety(f) && modifiable_trailing == false) {
+    if (!updateLeaderAndCheckElectionSafety(f)) {
         checkLeaderAppendOnly(f);
     }
 

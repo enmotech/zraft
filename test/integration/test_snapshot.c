@@ -80,7 +80,14 @@ static bool refsDecrTest(struct raft_log *l,
  * Helper macros
  *
  *****************************************************************************/
-
+#define ENABLE_CHANGE_AND_FREE_TRAILING                          \
+    {                                                            \
+        unsigned i;                                              \
+        for (i = 0; i < CLUSTER_N; i++) {                        \
+            raft_enable_dynamic_trailing(CLUSTER_RAFT(i), true); \
+            raft_enable_free_trailing(CLUSTER_RAFT(i), true);    \
+        }                                                        \
+    }
 /* Set the snapshot threshold on all servers of the cluster */
 #define SET_SNAPSHOT_THRESHOLD(VALUE)                            \
     {                                                            \
@@ -716,8 +723,8 @@ TEST(snapshot, sendAeFromDisk0, setUp, tearDown, 0, NULL)
     /* Set very low threshold and trailing entries number */
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
-    modifiable_trailing = true;
-    enable_free_trailing = true;
+
+    ENABLE_CHANGE_AND_FREE_TRAILING;
 
     // CLUSTER_SATURATE_BOTHWAYS(0, 2);
     CLUSTER_DISCONNECT(0, 2);
@@ -755,8 +762,9 @@ TEST(snapshot, sendAeFromDisk, setUp, tearDown, 0, NULL)
     /* Set very low threshold and trailing entries number */
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
-    modifiable_trailing = true;
-    enable_free_trailing = true;
+
+    ENABLE_CHANGE_AND_FREE_TRAILING;
+
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_MAKE_PROGRESS;
@@ -801,8 +809,8 @@ TEST(snapshot, keepTrailingTimeout, setUp, tearDown, 0, NULL)
     /* Set very low threshold and trailing entries number */
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
-    modifiable_trailing = true;
-    enable_free_trailing = true;
+
+    ENABLE_CHANGE_AND_FREE_TRAILING;
 
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
 
@@ -836,8 +844,8 @@ TEST(snapshot, trailingMockIncrRefs, setUp, tearDown, 0, NULL)
     /* Set very low threshold and trailing entries number */
     SET_SNAPSHOT_THRESHOLD(3);
     SET_SNAPSHOT_TRAILING(1);
-    modifiable_trailing = true;
-    enable_free_trailing = true;
+
+    ENABLE_CHANGE_AND_FREE_TRAILING;
 
     CLUSTER_SATURATE_BOTHWAYS(0, 2);
 

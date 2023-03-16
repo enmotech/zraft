@@ -277,9 +277,6 @@ struct raft_append_entries
     unsigned trailing;
 };
 
-extern bool modifiable_trailing;
-extern bool enable_free_trailing;
-
 /**
  * Hold the result of an AppendEntries RPC (figure 3.1).
  */
@@ -847,6 +844,10 @@ struct raft
     bool enable_request_hook;
 
     bool enable_election_at_start;
+    /* Flag for raft dynamic change log trailing */
+    bool enable_dynamic_trailing;
+    /* Flag for raft free log trailing buffer */
+    bool enable_free_trailing;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1322,6 +1323,15 @@ RAFT_API void raft_set_non_voter_grant_vote(struct raft *r, bool grant);
  */
 RAFT_API void raft_enable_request_hook(struct raft *r, bool enable);
 
+/**
+ * Set enable dynamic trailing @enable
+ */
+RAFT_API void raft_enable_dynamic_trailing(struct raft *r, bool enable);
+
+/**
+ * Set enable free trailing @enable
+ */
+RAFT_API void raft_enable_free_trailing(struct raft *r, bool enable);
 /*
 * Set the only voter elect as leader at start
 */

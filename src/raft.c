@@ -29,9 +29,6 @@
 #define DEFAULT_MAX_CATCH_UP_ROUNDS 10
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
 
-bool modifiable_trailing = false;
-bool enable_free_trailing = false;
-
 int raft_init(struct raft *r,
               struct raft_io *io,
               struct raft_fsm *fsm,
@@ -81,6 +78,8 @@ int raft_init(struct raft *r,
     r->quorum = RAFT_MAJORITY;
     r->non_voter_grant_vote = false;
     r->enable_request_hook = false;
+    r->enable_dynamic_trailing = false;
+    r->enable_free_trailing = false;
     r->enable_election_at_start = true;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
@@ -351,6 +350,12 @@ void raft_enable_request_hook(struct raft *r, bool enable)
 	r->enable_request_hook = enable;
 }
 
+void raft_enable_dynamic_trailing(struct raft *r, bool enable){
+    r->enable_dynamic_trailing = enable;
+}
+void raft_enable_free_trailing(struct raft *r, bool enable){
+    r->enable_free_trailing = enable;
+}
 void raft_enable_election_at_start(struct raft *r, bool enable)
 {
     r->enable_election_at_start = enable;

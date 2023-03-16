@@ -986,7 +986,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     }
 
     i = updateLastStored(r, request->index, args->entries, args->n_entries);
-    if(modifiable_trailing){
+    if(r->enable_dynamic_trailing){
         raft_set_snapshot_trailing(r, args->trailing);
     }  
 
@@ -1691,8 +1691,8 @@ static bool shouldTakeSnapshot(struct raft *r)
             
             if(now - p->recent_recv_time > r->reset_trailing_timeout){
                 raft_set_snapshot_trailing(r, r->snapshot.threshold);
-                //超时！直接调用logSnapshot
-                logSnapshot(&r->log, r->log.snapshot.last_index, r->snapshot.trailing);
+                if(r->log.snapshot.last_index > 0)
+                    logSnapshot(&r->log, r->log.snapshot.last_index, r->snapshot.trailing);
                 ignoreUpdateTrailing = true;
             }
         }
@@ -1706,7 +1706,7 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
-    if (ignoreUpdateTrailing == false && modifiable_trailing) {
+    if (ignoreUpdateTrailing == false && r->enable_dynamic_trailing) {
         if (r->state == RAFT_LEADER) {
             r->snapshot.trailing = 0;
             do{
@@ -1755,10 +1755,10 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     evtInfof("raft(%llx) take snapshot at %llu %u", r->id, snapshot->index,
 	     r->snapshot.trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
-    if (enable_free_trailing) {
+    if (r->enable_free_trailing) {
         freeEntriesBufForward(&r->log, snapshot->index);
     }
-    if (modifiable_trailing) {
+    if (r->enable_dynamic_trailing) {
         raft_set_snapshot_trailing(r, r->snapshot.threshold + r->snapshot.trailing);
     }
 out:

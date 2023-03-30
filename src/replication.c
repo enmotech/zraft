@@ -1705,7 +1705,8 @@ static bool shouldTakeSnapshot(struct raft *r)
     if (snapshot_index - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;
     }
-
+    evtInfof("raft(%llx) ignoreUpdateTrailing %d enable_dynamic_trailing %d", r->id, 
+                ignoreUpdateTrailing, r->enable_dynamic_trailing);
     if (ignoreUpdateTrailing == false && r->enable_dynamic_trailing) {
         if (r->state == RAFT_LEADER) {
             r->snapshot.trailing = 0;
@@ -1753,8 +1754,8 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
         goto out;
     }
 
-    evtInfof("raft(%llx) take snapshot at %llu %u", r->id, snapshot->index,
-	     r->snapshot.trailing);
+    evtInfof("raft(%llx) take snapshot at %llu %u enable %d", r->id, snapshot->index,
+	     r->snapshot.trailing, r->enable_free_trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
     if (r->enable_free_trailing) {
         freeEntriesBufForward(&r->log, snapshot->index);

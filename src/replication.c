@@ -1716,6 +1716,7 @@ static bool shouldTakeSnapshot(struct raft *r)
         } else {
             r->snapshot.trailing += r->snapshot.threshold;
         }
+        evtInfof("raft(%llx) update snapshot trailing to %u", r->id, r->snapshot.trailing);
     }
     //因为tmp和ignoreUpdateTrailing都是Leader状态下才会改变的值，Leader通过上面这个修改很正常
     //那么非Leader的该怎么改呢，主动扩展？非主动扩展？
@@ -1760,6 +1761,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     }
     if (r->enable_dynamic_trailing) {
         raft_set_snapshot_trailing(r, r->snapshot.threshold + r->snapshot.trailing);
+        evtInfof("raft(%llx) update snapshot trailing to %u", r->id, r->snapshot.trailing);
     }
 out:
     snapshotClose(&r->snapshot.pending);

@@ -1001,7 +1001,6 @@ void freeEntriesBufReverse(struct raft_log *l, raft_index last_index){
 
 void freeEntriesBufForward(struct raft_log *l, raft_index last_index)
 {
-    //从first_index开始，释放到last_index
     size_t i;
     bool flag = true;
     if (logNumEntries(l) == 0)

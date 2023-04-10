@@ -1719,9 +1719,7 @@ static bool shouldTakeSnapshot(struct raft *r)
         }
         evtInfof("raft(%llx) update snapshot trailing to %u", r->id, r->snapshot.trailing);
     }
-    //因为tmp和ignoreUpdateTrailing都是Leader状态下才会改变的值，Leader通过上面这个修改很正常
-    //那么非Leader的该怎么改呢，主动扩展？非主动扩展？
-    //主动扩展，可以容纳下之前的，但有可能会扩展得很大？非主动扩展有可能Leader还没丢，但是你主动丢了？
+
     
     return true;
 }

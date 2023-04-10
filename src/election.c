@@ -332,12 +332,6 @@ void electionVote(struct raft *r,
      * of the log. */
     assert(args->last_log_term == local_last_term);
 
-    /* logger参与选举时，其他server收到logger的选票，只有在logger的last_log_index比local_last_index大才投票 */
-    if(getRaftRole(r, args->candidate_id) == RAFT_LOGGER && local_last_index == args->last_log_index){
-        tracef("voter recv logger request vote\n");
-        return;
-    }
-
     if (local_last_index <= args->last_log_index) {
         /* Our log is shorter or equal to the one of the requester. */
         tracef("remote log equal or longer than local -> granting vote");

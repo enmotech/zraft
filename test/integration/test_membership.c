@@ -173,7 +173,6 @@ TEST(raft_add_logger, add_logger, setup, tear_down, 0, NULL)
     struct fixture *f = data;
     struct raft *raft;
     struct raft *raft_logger;
-    struct raft *raft_follower;
     const struct raft_server *server;
     GROW;
     ADD(0, 3, 0);
@@ -194,8 +193,6 @@ TEST(raft_add_logger, add_logger, setup, tear_down, 0, NULL)
     CLUSTER_KILL_LEADER;
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(10000);
     CLUSTER_STEP_UNTIL_HAS_LEADER(20000);
-    raft_follower = CLUSTER_RAFT(1);
-    munit_assert_int(raft_follower->state, ==, RAFT_LEADER);
     return MUNIT_OK;
 }
 

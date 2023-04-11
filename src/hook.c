@@ -134,8 +134,6 @@ void hookRequestCommit(struct raft *r, raft_index index, size_t n)
 	assert(r->state == RAFT_LEADER);
 	if (!r->enable_request_hook)
 		return;
-	if (index + n - 1 <= r->commit_index)
-		return;
 	n = min(n, HOOK_MAX_BATCH_SIZE);
 	for (i = 0; i < n; ++i) {
 		req = requestRegFind(&r->leader_state.reg, index + i);

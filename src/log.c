@@ -7,7 +7,11 @@
 #include "assert.h"
 #include "configuration.h"
 #include "event.h"
+#include "../test/lib/munit.h"
 
+#ifndef max
+#define max(a, b) ((a) < (b) ? (b) : (a))
+#endif
 /* Calculate the reference count hash table key for the given log entry index in
  * an hash table of the given size.
  *
@@ -21,6 +25,36 @@ static size_t refsKey(const raft_index index, const size_t size)
     assert(index > 0);
     assert(size > 0);
     return (size_t)((index - 1) % size);
+}
+
+static unsigned short refsCount(struct raft_log *l,
+                    const raft_term term,
+                    const raft_index index)
+{
+    size_t key;                       /* Hash table key for the given index. */
+    struct raft_entry_ref *slot;      /* Slot for the given term/index */
+
+    assert(l != NULL);
+    assert(term > 0);
+    assert(index > 0);
+    key = refsKey(index, l->refs_size);
+
+    /* Lookup the slot associated with the given term/index, keeping track of
+     * its previous slot in the bucket list. */
+    slot = &l->refs[key];
+    
+    while (1) {
+        if(slot == NULL) {
+            return 0;
+        }
+        assert(slot != NULL);
+        assert(slot->index == index);
+        if (slot->term == term) {
+            break;
+        }
+        slot = slot->next;
+    }
+    return slot->count;
 }
 
 /* Try to insert a new reference count item for the given log entry index into
@@ -354,6 +388,7 @@ void logInit(struct raft_log *l)
     l->refs_size = 0;
     l->snapshot.last_index = 0;
     l->snapshot.last_term = 0;
+    l->need_free = 1;
 }
 
 /* Return the index of the i'th entry in the log. */
@@ -817,10 +852,14 @@ static void destroyEntry(struct raft_log *l, struct raft_entry *entry)
     if (entry->batch == NULL) {
         if (entry->buf.base != NULL) {
             raft_entry_free(entry->buf.base);
+            entry->buf.base = NULL;
+            entry->buf.len = 0;
         }
     } else {
+        if(entry->buf.base != NULL) 
         if (!isBatchReferenced(l, entry->batch)) {
 	    raft_free(entry->batch);
+            entry->batch = NULL;
         }
     }
 }
@@ -930,7 +969,70 @@ void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
 
     removePrefix(l, last_index - trailing);
 }
+void freeEntriesBufReverse(struct raft_log *l, raft_index last_index){
+    size_t i;
+    if (logNumEntries(l) == 0)
+        return;
+    raft_index idx = last_index;
+    for (i = locateEntry(l, last_index); ; i--) {
+        if(i == l->size) 
+            break;
+        struct raft_entry *entry;
+        unsigned short n_refs;
+        entry = &l->entries[i];
+        if(entry->batch == NULL && entry->buf.base == NULL)
+            break;
+        n_refs = refsCount(l, entry->term, idx);
+        if (n_refs == 0)
+            break;
+        destroyEntry(l, entry);
+        if (i == l->front)
+            break;
+        if (i == 0)
+            i = l->size;
+        idx--;
+    }
+    raft_term last_term = logTermOf(l, last_index);
+    /* We must have an entry at this index */
+    assert(last_term != 0);
+    l->snapshot.last_index = last_index;
+    l->snapshot.last_term = last_term;
+}
 
+void freeEntriesBufForward(struct raft_log *l, raft_index last_index)
+{
+    size_t i;
+    bool flag = true;
+    if (logNumEntries(l) == 0)
+        return;
+    l->need_free = max(l->need_free, indexAt(l, 0));
+    raft_index idx = l->need_free;
+    for (i = locateEntry(l, l->need_free); idx <= last_index; i++, idx++) {
+        if(i == l->size)
+            i = 0;
+        struct raft_entry *entry;
+        unsigned short n_refs;
+        entry = &l->entries[i];
+        if(entry->buf.base == NULL)
+            continue;
+        n_refs = refsCount(l, entry->term, idx);
+        if (n_refs != 1) {
+            if (n_refs > 1 && flag) {
+                flag = false;
+                l->need_free = idx;
+            }
+            continue;
+        }
+        destroyEntry(l, entry);        
+    }
+    if (flag) 
+        l->need_free = idx;
+    raft_term last_term = logTermOf(l, last_index);
+    /* We must have an entry at this index */
+    assert(last_term != 0);
+    l->snapshot.last_index = last_index;
+    l->snapshot.last_term = last_term;
+}
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
 {
     size_t n = logNumEntries(l);
@@ -942,4 +1044,14 @@ void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
     l->snapshot.last_index = last_index;
     l->snapshot.last_term = last_term;
     l->offset = last_index;
+}
+
+raft_index logStartIndex(struct raft *r)
+{
+    return indexAt(&r->log, 0);
+}
+
+raft_term logStartTerm(struct raft *r)
+{
+    return r->log.entries[r->log.front].term;
 }

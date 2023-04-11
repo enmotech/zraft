@@ -2,6 +2,7 @@
 #include "../lib/runner.h"
 #include "../lib/munit_mock.h"
 #include "../../src/snapshot.h"
+#include "../../include/raft.h"
 
 /******************************************************************************
  *
@@ -30,13 +31,63 @@ static void tearDown(void *data)
     TEAR_DOWN_CLUSTER;
     free(f);
 }
+static void refsIncrTest(struct raft_log *l,
+                     const raft_term term,
+                     const raft_index index)
+{
+    size_t key;                  /* Hash table key for the given index. */
+    struct raft_entry_ref *slot; /* Slot for the given term/index */
 
+   
+    key = (size_t)((index - 1) % l->refs_size);
+    /* Lookup the slot associated with the given term/index, which must have
+     * been previously inserted. */
+    slot = &l->refs[key];
+    while (1) {
+        if (slot->term == term) {
+            break;
+        }
+        slot = slot->next;
+    }
+
+    slot->count++;
+}
+
+static bool refsDecrTest(struct raft_log *l,
+                     const raft_term term,
+                     const raft_index index)
+{
+    size_t key;                       /* Hash table key for the given index. */
+    struct raft_entry_ref *slot;      /* Slot for the given term/index */
+
+    key = (size_t)((index - 1) % l->refs_size);
+
+    /* Lookup the slot associated with the given term/index, keeping track of
+     * its previous slot in the bucket list. */
+    slot = &l->refs[key];
+    while (1) {
+        if (slot->term == term) {
+            break;
+        }
+        slot = slot->next;
+    }
+
+    slot->count--;
+    return true;
+}
 /******************************************************************************
  *
  * Helper macros
  *
  *****************************************************************************/
-
+#define ENABLE_CHANGE_AND_FREE_TRAILING                          \
+    {                                                            \
+        unsigned i;                                              \
+        for (i = 0; i < CLUSTER_N; i++) {                        \
+            raft_enable_dynamic_trailing(CLUSTER_RAFT(i), true); \
+            raft_enable_free_trailing(CLUSTER_RAFT(i), true);    \
+        }                                                        \
+    }
 /* Set the snapshot threshold on all servers of the cluster */
 #define SET_SNAPSHOT_THRESHOLD(VALUE)                            \
     {                                                            \
@@ -664,3 +715,162 @@ TEST(snapshot, restoreSnapshot, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
+/*send AE form disk to a follower that has fallen behind. */
+TEST(snapshot, sendAeFromDisk0, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    ENABLE_CHANGE_AND_FREE_TRAILING;
+
+    // CLUSTER_SATURATE_BOTHWAYS(0, 2);
+    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_DISCONNECT(2, 0);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(0, 2, 5000);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(0, 3, 5000);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(0, 4, 5000);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(0, 5, 5000);
+    /* Reconnect the follower and wait for it to catch up */
+    // CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+    CLUSTER_RECONNECT(0, 2);
+    CLUSTER_RECONNECT(2, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 5, 5000);
+
+    /* Check that the leader has sent a snapshot */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(2, 6, 2000);
+    return MUNIT_OK;
+}
+
+/*send AE form disk to a follower that has fallen behind. */
+TEST(snapshot, sendAeFromDisk, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    const struct raft *leader = CLUSTER_RAFT(0);
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    ENABLE_CHANGE_AND_FREE_TRAILING;
+
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+
+    CLUSTER_STEP_UNTIL_APPLIED(2,5,2000);
+    // CLUSTER_SATURATE_BOTHWAYS(0, 2);
+    CLUSTER_DISCONNECT(0, 2);
+    CLUSTER_DISCONNECT(2, 0);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(0, 6, 5000);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(0, 7, 5000);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(0, 8, 5000);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(0, 9, 5000);
+    /* Reconnect the follower and wait for it to catch up */
+    munit_assert_uint(leader->snapshot.trailing, ==, 6);
+    // CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+    CLUSTER_RECONNECT(0, 2);
+    CLUSTER_RECONNECT(2, 0);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 9, 5000);
+
+    /* Check that the leader has sent a snapshot */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(2, 10, 2000);
+    return MUNIT_OK;
+}
+
+/*send AE form disk to a follower that has fallen behind. */
+TEST(snapshot, keepTrailingTimeout, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    const struct raft *leader = CLUSTER_RAFT(0);
+    unsigned j;
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    ENABLE_CHANGE_AND_FREE_TRAILING;
+
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+
+    for(j = 0; j < 10; j++)
+        CLUSTER_MAKE_PROGRESS;
+    munit_assert_uint(leader->snapshot.trailing, ==, 12);
+    /* Wait reset_trailing_timeout so leader detects offline node and reset trailing */
+    CLUSTER_STEP_UNTIL_ELAPSED(33000);
+    munit_assert_uint(leader->snapshot.trailing, ==, 3);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 11, 5000);
+
+    /* Check that the leader has sent a snapshot */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 1);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(2, 12, 2000);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 13, 2000);
+    return MUNIT_OK;
+}
+
+/*send AE form disk to a follower that has fallen behind. */
+TEST(snapshot, trailingMockIncrRefs, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    (void)params;
+    struct raft *leader = CLUSTER_RAFT(0);
+    /* Set very low threshold and trailing entries number */
+    SET_SNAPSHOT_THRESHOLD(3);
+    SET_SNAPSHOT_TRAILING(1);
+
+    ENABLE_CHANGE_AND_FREE_TRAILING;
+
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
+
+    /* Apply a few of entries, to force a snapshot to be taken. */
+    CLUSTER_MAKE_PROGRESS;
+    refsIncrTest(&leader->log, leader->log.entries[1].term, 2);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    refsDecrTest(&leader->log, leader->log.entries[1].term, 2);
+    CLUSTER_MAKE_PROGRESS;
+    //leader take snapshot at 3，因为index 2的日志还在被引用，所以只释放了index 1,3
+    //leader take snapshot at 6，从index 2处开始释放，最终释放了index 2,4,5,6
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_MAKE_PROGRESS;
+    /* Reconnect the follower and wait for it to catch up */
+    munit_assert_uint(leader->snapshot.trailing, ==, 9);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+    CLUSTER_STEP_UNTIL_APPLIED(2, 8, 5000);
+
+    /* Check that the leader has sent a snapshot */
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+    munit_assert_int(CLUSTER_N_RECV(2, RAFT_IO_INSTALL_SNAPSHOT), ==, 0);
+    CLUSTER_MAKE_PROGRESS;
+    CLUSTER_STEP_UNTIL_APPLIED(2, 9, 2000);
+
+    return MUNIT_OK;
+}

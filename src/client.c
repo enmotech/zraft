@@ -269,7 +269,7 @@ int raft_joint_promote(struct raft *r,
     raft_index last_index;
     int rv;
 
-    if (role != RAFT_VOTER) {
+    if (role != RAFT_VOTER && role != RAFT_LOGGER) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
         evtErrf("raft(%llx) promote role %d failed", r->id, role, rv);
@@ -305,6 +305,9 @@ int raft_joint_promote(struct raft *r,
         switch (role) {
             case RAFT_VOTER:
                 name = "voter";
+                break;
+            case RAFT_LOGGER:
+                name = "logger";
                 break;
             default:
                 name = NULL;
@@ -346,6 +349,7 @@ int raft_joint_promote(struct raft *r,
 
     r->leader_state.promotee_id = server->id;
     r->leader_state.remove_id   = remove;
+    r->leader_state.promotee_role = role;
 
 
     /* Initialize the first catch-up round. */

@@ -234,7 +234,6 @@ static int tickLeader(struct raft *r)
             struct raft_change *change;
 
             r->leader_state.promotee_id = 0;
-            r->leader_state.promotee_role = -1;
             r->leader_state.round_index = 0;
             r->leader_state.round_number = 0;
             r->leader_state.round_start = 0;

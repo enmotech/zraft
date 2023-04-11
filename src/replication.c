@@ -755,7 +755,6 @@ static int triggerActualPromotion(struct raft *r)
 
     r->leader_state.promotee_id = 0;
     r->leader_state.remove_id   = 0;
-    r->leader_state.promotee_role = -1;
     r->configuration_uncommitted_index = logLastIndex(&r->log);
 
     return 0;

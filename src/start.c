@@ -63,12 +63,12 @@ static int restoreMostRecentConfiguration(struct raft *r,
  * can't be sure a configuration change has been committed and we need to be
  * ready to roll back to the last committed configuration.
  */
-static int restoreEntries(struct raft *r,
-                          raft_index snapshot_index,
-                          raft_term snapshot_term,
-                          raft_index start_index,
-                          struct raft_entry *entries,
-                          size_t n)
+int restoreEntries(struct raft *r,
+                   raft_index snapshot_index,
+                   raft_term snapshot_term,
+                   raft_index start_index,
+                   struct raft_entry *entries,
+                   size_t n)
 {
     struct raft_entry *conf = NULL;
     raft_index conf_index;
@@ -235,6 +235,59 @@ err_skip_self_elect:
     return 0;
 }
 
+int restoreEntriesAndSnapshotInfo(struct raft *r, 
+                                  struct raft_snapshot *s,
+                                  raft_index start_index,
+                                  struct raft_entry *entries,
+                                  size_t n_entries)
+{
+    int rv;
+    struct raft_snapshot *snapshot;
+    assert(s);
+    assert(s->n_bufs == 0 && s->bufs == NULL);
+
+    assert(s->index <= (start_index + n_entries -1));
+    snapshot = raft_malloc(sizeof(*snapshot));
+    assert(snapshot != NULL);
+    configurationClose(&r->snapshot.configuration);
+    snapshotCopy(s, snapshot);
+    rv = configurationCopy(&snapshot->configuration,
+                           &r->snapshot.configuration);
+    if (rv != 0) {
+        evtErrf("raft(%llx) copy snapshot failed %d", r->id, rv);
+        snapshotDestroy(snapshot);
+        return rv;
+    }
+    configurationClose(&r->configuration);
+    r->configuration = snapshot->configuration;
+    r->configuration_index = snapshot->configuration_index;
+    r->commit_index = snapshot->index;
+    r->last_applying = snapshot->index;
+    r->last_applied = snapshot->index;
+
+    logTruncate(&r->log, r->log.offset + 1);
+
+    rv = restoreEntries(r, snapshot->index, snapshot->term, 
+        start_index, entries, n_entries);
+    if(rv != 0){
+        raft_free(snapshot);
+        return rv;
+    }
+
+    r->snapshot.trailing = (unsigned int)n_entries;
+
+    if(r->configuration_uncommitted_index == snapshot->configuration_index){
+        r->configuration_uncommitted_index = 0;
+        r->configuration_index = snapshot->configuration_index;
+    }
+	
+    r->follower_state.current_leader.id = 0; 
+    
+    // i = configurationIndexOf(&r->configuration, r->id);
+
+    raft_free(snapshot); 
+    return 0;
+}
 struct loadData {
     struct raft *raft;
     struct raft_io_load req;

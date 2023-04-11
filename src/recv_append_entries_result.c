@@ -5,12 +5,19 @@
 #include "recv.h"
 #include "replication.h"
 #include "event.h"
+#include "log.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
 #else
 #define tracef(...)
 #endif
+
+static void loggerLeadershipTransferCb(struct raft_transfer *req)
+{
+    if (req != NULL)
+        raft_free(req);
+}
 
 int recvAppendEntriesResult(struct raft *r,
                             const raft_id id,
@@ -63,6 +70,15 @@ int recvAppendEntriesResult(struct raft *r,
     rv = replicationUpdate(r, server->id, result);
     if (rv != 0) {
         evtErrf("raft(%llx) replication update failed %d", r->id, rv);
+        return rv;
+    }
+
+    //如果logger收到了voter的AER且result->last_log_index >= logLastIndex(&r->log), logger就让权给该voter
+    if (getRaftRole(r, r->id) == RAFT_LOGGER && getRaftRole(r, id) == RAFT_VOTER && result->last_log_index >= logLastIndex(&r->log))
+    {
+        tracef("other server have caught up, logger convert to follower");
+        struct raft_transfer *req = raft_malloc(sizeof(struct raft_transfer));
+        rv = raft_transfer(r, req, id, loggerLeadershipTransferCb);
         return rv;
     }
 

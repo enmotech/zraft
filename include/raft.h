@@ -151,6 +151,12 @@ RAFT_API int raft_configuration_encode(const struct raft_configuration *c,
                                        struct raft_buffer *buf);
 
 /**
+ * Return voter number in configuration.
+ */
+RAFT_API unsigned raft_configuration_voter_count(
+                                            const struct raft_configuration *c);
+
+/**
  * Hash function which outputs a 64-bit value based on a text and a number.
  *
  * This can be used to generate a unique ID for a new server being added, for

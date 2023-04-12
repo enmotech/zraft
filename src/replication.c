@@ -1916,7 +1916,7 @@ static size_t replicationVotesForGroup(struct raft *r, raft_index index, int gro
 
 static bool replicationQuorumGroup(struct raft *r, raft_index index, int group)
 {
-    size_t n_voters = configurationVoterCount(&r->configuration, group);
+    size_t n_voters = configuration_voter_count(&r->configuration, group);
     size_t votes = replicationVotesForGroup(r, index, group);
     size_t half = n_voters / 2;
 

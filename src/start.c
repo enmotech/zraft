@@ -126,7 +126,7 @@ static int maybeSelfElect(struct raft *r)
     server = configurationGet(&r->configuration, r->id);
     if (server == NULL || !configurationIsVoter(&r->configuration, server,
         RAFT_GROUP_ANY) ||
-        configurationVoterCount(&r->configuration, RAFT_GROUP_ANY) > 1) {
+        configuration_voter_count(&r->configuration, RAFT_GROUP_ANY) > 1) {
         return 0;
     }
     /* Converting to candidate will notice that we're the only voter and

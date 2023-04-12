@@ -135,6 +135,12 @@ RAFT_API int raft_configuration_encode(const struct raft_configuration *c,
                                        struct raft_buffer *buf);
 
 /**
+ * Return voter number in configuration.
+ */
+RAFT_API unsigned raft_configuration_voter_count(
+                                            const struct raft_configuration *c);
+
+/**
  * Hash function which outputs a 64-bit value based on a text and a number.
  *
  * This can be used to generate a unique ID for a new server being added, for
@@ -273,7 +279,7 @@ struct raft_append_entries
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n_entries;         /* Size of the log entries array. */
     raft_index snapshot_index;  /* Index of current snapshot */
-    bool entries_reload; 
+    bool entries_reload;
     unsigned trailing;
 };
 
@@ -898,7 +904,7 @@ RAFT_API int raft_recover(struct raft *r,
 
 RAFT_API int raft_start(struct raft *r);
 
-RAFT_API int restoreEntriesAndSnapshotInfo(struct raft *r, 
+RAFT_API int restoreEntriesAndSnapshotInfo(struct raft *r,
                                            struct raft_snapshot *snapshot,
                                            raft_index start_index,
                                            struct raft_entry *entries,

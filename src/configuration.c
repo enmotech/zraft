@@ -53,6 +53,22 @@ bool configurationIsVoter(const struct raft_configuration *c,
     return voter;
 }
 
+bool configurationIsSpare(const struct raft_configuration *c,
+                          const struct raft_server *s, int group)
+{
+    bool spare = false;
+
+    if (s->group & RAFT_GROUP_OLD & group)
+        spare = s->role == RAFT_SPARE;
+
+    if (s->group & RAFT_GROUP_NEW & group) {
+        assert(c->phase == RAFT_CONF_JOINT);
+        spare = spare || (s->role_new == RAFT_SPARE);
+    }
+
+    return spare;
+}
+
 int configurationJointToNormalCopy(const struct raft_configuration *src,
                                    struct raft_configuration *dst)
 {

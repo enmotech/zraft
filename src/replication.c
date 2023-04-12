@@ -414,8 +414,9 @@ static int triggerAll(struct raft *r)
             continue;
         }
         /* Skip spare servers, unless they're being promoted. */
-        if ((server->role == RAFT_SPARE && server->role_new == RAFT_SPARE) &&
-            server->id != r->leader_state.promotee_id) {
+        if (((r->configuration.phase == RAFT_CONF_NORMAL && server->role == RAFT_SPARE)
+            || (r->configuration.phase == RAFT_CONF_JOINT && server->role_new == RAFT_SPARE))
+            && server->id != r->leader_state.promotee_id) {
             continue;
         }
         rv = replicationProgress(r, i);

@@ -146,7 +146,7 @@ void convertToFollower(struct raft *r)
 int convertToCandidate(struct raft *r, bool disrupt_leader)
 {
     const struct raft_server *server;
-    size_t n_voters = configuration_voter_count(&r->configuration,
+    size_t n_voters = configurationVoterCount(&r->configuration,
                                               RAFT_GROUP_ANY);
     int rv;
 

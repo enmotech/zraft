@@ -144,7 +144,7 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
 
     assert(r->candidate_state.votes != NULL);
 
-    n_voters = configuration_voter_count(&r->configuration, RAFT_GROUP_ANY);
+    n_voters = configurationVoterCount(&r->configuration, RAFT_GROUP_ANY);
     voting_index = configurationIndexOfVoter(&r->configuration, r->id);
     /* Initialize the votes array and send vote requests. */
     for (i = 0; i < n_voters; i++) {
@@ -219,14 +219,14 @@ int electionStart(struct raft *r)
     int rv;
     assert(r->state == RAFT_CANDIDATE);
 
-    n_voters = configuration_voter_count(&r->configuration, RAFT_GROUP_ANY);
+    n_voters = configurationVoterCount(&r->configuration, RAFT_GROUP_ANY);
     voting_index = configurationIndexOfVoter(&r->configuration, r->id);
 
     /* This function should not be invoked if we are not a voting server, hence
      * voting_index must be lower than the number of servers in the
      * configuration (meaning that we are a voting server). */
     assert(voting_index < r->configuration.n);
-    /* Coherence check that configuration_voter_count and configurationIndexOfVoter
+    /* Coherence check that configurationVoterCount and configurationIndexOfVoter
      * have returned something that makes sense. */
     assert(n_voters <= r->configuration.n);
     assert(voting_index < n_voters);
@@ -368,7 +368,7 @@ static size_t electionVotesForGroup(struct raft *r, int group)
 
 bool electionTallyForGroup(struct raft *r, int group)
 {
-    size_t n_voters = configuration_voter_count(&r->configuration, group);
+    size_t n_voters = configurationVoterCount(&r->configuration, group);
     size_t votes = electionVotesForGroup(r, group);
     size_t half = n_voters / 2;
 

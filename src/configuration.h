@@ -22,9 +22,7 @@ int configurationAdd(struct raft_configuration *c,
                      int group);
 
 /* Return the number of servers with the RAFT_VOTER role. */
-unsigned configurationVoterCount(const struct raft_configuration *c);
-
-unsigned configuration_voter_count(const struct raft_configuration *c, int group);
+unsigned configurationVoterCount(const struct raft_configuration *c, int group);
 
 /* Return the index of the server with the given ID (relative to the c->servers
  * array). If there's no server with the given ID, return the number of

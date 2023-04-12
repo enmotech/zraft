@@ -149,7 +149,8 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
 
     return &c->servers[i];
 }
-unsigned configuration_voter_count(const struct raft_configuration *c, int group)
+
+unsigned configurationVoterCount(const struct raft_configuration *c, int group)
 {
     unsigned i;
     unsigned n = 0;
@@ -161,11 +162,6 @@ unsigned configuration_voter_count(const struct raft_configuration *c, int group
         }
     }
     return n;
-}
-
-unsigned configurationVoterCount(const struct raft_configuration *c)
-{
-    return configuration_voter_count(c, RAFT_GROUP_OLD);
 }
 
 int configurationCopy(const struct raft_configuration *src,

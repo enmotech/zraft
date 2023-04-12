@@ -108,7 +108,7 @@ static size_t contactQuorumForGroup(struct raft *r, int group)
 
 static bool checkContactQuorumForGroup(struct raft *r, int group)
 {
-    size_t n_voters = configuration_voter_count(&r->configuration, group);
+    size_t n_voters = configurationVoterCount(&r->configuration, group);
     size_t contacts = contactQuorumForGroup(r, group);
     assert(r->state == RAFT_LEADER);
 

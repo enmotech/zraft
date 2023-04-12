@@ -38,7 +38,7 @@ static void tearDown(void *data)
  *****************************************************************************/
 
 /* Accessors */
-#define VOTER_COUNT configuration_voter_count(&f->configuration, RAFT_GROUP_ANY)
+#define VOTER_COUNT configurationVoterCount(&f->configuration, RAFT_GROUP_ANY)
 #define INDEX_OF(ID) configurationIndexOf(&f->configuration, ID)
 #define INDEX_OF_VOTER(ID) configurationIndexOfVoter(&f->configuration, ID)
 #define GET(ID) configurationGet(&f->configuration, ID)
@@ -99,14 +99,14 @@ static void tearDown(void *data)
 
 /******************************************************************************
  *
- * configuration_voter_count
+ * configurationVoterCount
  *
  *****************************************************************************/
 
-SUITE(configuration_voter_count)
+SUITE(configurationVoterCount)
 
 /* All servers are voting. */
-TEST(configuration_voter_count, all_voters, setUp, tearDown, 0, NULL)
+TEST(configurationVoterCount, all_voters, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     ADD(1, RAFT_VOTER);
@@ -116,7 +116,7 @@ TEST(configuration_voter_count, all_voters, setUp, tearDown, 0, NULL)
 }
 
 /* Return only voting servers. */
-TEST(configuration_voter_count, filter, setUp, tearDown, 0, NULL)
+TEST(configurationVoterCount, filter, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     ADD(1, RAFT_VOTER);

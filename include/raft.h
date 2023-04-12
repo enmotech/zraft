@@ -78,6 +78,7 @@ struct raft_buffer
 #define RAFT_STANDBY 0 /* Replicate log, does not participate in quorum. */
 #define RAFT_VOTER 1   /* Replicate log, does participate in quorum. */
 #define RAFT_SPARE 2   /* Does not replicate log, or participate in quorum. */
+#define RAFT_LOGGER 3  /* Replicate log, does participate in quorum, no fsm */
 
 /**
  * Server group types.
@@ -244,6 +245,7 @@ struct raft_log
         raft_index last_index; /* Snapshot replaces all entries up to here. */
         raft_term last_term;   /* Term of last index. */
     } snapshot;
+    raft_index need_free;        /* 从这个index开始释放，初始化为1 */
 };
 
 /**
@@ -287,6 +289,8 @@ struct raft_append_entries
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n_entries;         /* Size of the log entries array. */
     raft_index snapshot_index;  /* Index of current snapshot */
+    bool entries_reload;
+    unsigned trailing;
 };
 
 /**
@@ -712,7 +716,7 @@ struct raft
      * attribute.
      */
     unsigned election_timeout;
-
+    unsigned reset_trailing_timeout;
     /*
      * Heartbeat timeout in milliseconds (default 100). This is relevant only
      * for when the raft instance is in leader state: empty AppendEntries RPCs
@@ -771,6 +775,7 @@ struct raft
             struct raft_change *change;     /* Pending membership change. */
             raft_id promotee_id;            /* ID of server being promoted. */
             raft_id remove_id;              /* ID of server being removed. */
+            int promotee_role;
             unsigned short round_number;    /* Current sync round. */
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
@@ -856,6 +861,10 @@ struct raft
     bool enable_request_hook;
 
     bool enable_election_at_start;
+    /* Flag for raft dynamic change log trailing */
+    bool enable_dynamic_trailing;
+    /* Flag for raft free log trailing buffer */
+    bool enable_free_trailing;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -906,6 +915,12 @@ RAFT_API int raft_recover(struct raft *r,
 
 RAFT_API int raft_start(struct raft *r);
 
+RAFT_API int restoreEntriesAndSnapshotInfo(struct raft *r,
+                                           struct raft_snapshot *snapshot,
+                                           raft_index start_index,
+                                           struct raft_entry *entries,
+                                           size_t n_entries);
+
 struct raft_start;
 typedef void (*raft_start_cb)(struct raft_start *req, int status);
 struct raft_start
@@ -917,6 +932,12 @@ RAFT_API int raft_astart(struct raft *r,
              struct raft_start *req,
              raft_start_cb cb);
 
+RAFT_API int restoreEntries(struct raft *r,
+                   raft_index snapshot_index,
+                   raft_term snapshot_term,
+                   raft_index start_index,
+                   struct raft_entry *entries,
+                   size_t n);
 /**
  * Set the election timeout.
  *
@@ -1329,6 +1350,15 @@ RAFT_API void raft_set_non_voter_grant_vote(struct raft *r, bool grant);
  */
 RAFT_API void raft_enable_request_hook(struct raft *r, bool enable);
 
+/**
+ * Set enable dynamic trailing @enable
+ */
+RAFT_API void raft_enable_dynamic_trailing(struct raft *r, bool enable);
+
+/**
+ * Set enable free trailing @enable
+ */
+RAFT_API void raft_enable_free_trailing(struct raft *r, bool enable);
 /*
 * Set the only voter elect as leader at start
 */

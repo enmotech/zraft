@@ -156,7 +156,7 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
     }
     for (i = 0; i < r->configuration.n; i++) {
         const struct raft_server *server = &r->configuration.servers[i];
-        if (server->id == r->id || server->role != RAFT_VOTER) {
+        if (server->id == r->id || (server->role != RAFT_VOTER && server->role != RAFT_LOGGER)) {
             continue;
         }
         rv = electionSend(r, server);
@@ -250,7 +250,7 @@ int electionStart(struct raft *r)
     }
     for (i = 0; i < r->configuration.n; i++) {
         const struct raft_server *server = &r->configuration.servers[i];
-        if (server->id == r->id || server->role != RAFT_VOTER) {
+        if (server->id == r->id || (server->role != RAFT_VOTER && server->role != RAFT_LOGGER)) {
             continue;
         }
         rv = electionSend(r, server);
@@ -284,7 +284,7 @@ void electionVote(struct raft *r,
     *granted = false;
 
     if (local_server == NULL
-    	|| (local_server->role != RAFT_VOTER && !r->non_voter_grant_vote)) {
+    	|| ((local_server->role != RAFT_VOTER && local_server->role != RAFT_LOGGER) && !r->non_voter_grant_vote)) {
         tracef("local server is not voting -> not granting vote");
         return;
     }

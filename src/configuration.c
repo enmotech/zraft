@@ -7,6 +7,17 @@
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
 
+int getRaftRole(struct raft *r, raft_id id)
+{
+    unsigned i;
+    for ( i = 0; i < r->configuration.n; i++) {
+        if (id == r->configuration.servers[i].id) {
+            return r->configuration.servers[i].role;
+        }
+    }
+    return -1;
+}
+
 void configurationInit(struct raft_configuration *c)
 {
     c->servers = NULL;
@@ -43,11 +54,12 @@ bool configurationIsVoter(const struct raft_configuration *c,
     bool voter = false;
 
     if (s->group & RAFT_GROUP_OLD & group)
-        voter = s->role == RAFT_VOTER;
+        voter = (s->role == RAFT_VOTER || s->role == RAFT_LOGGER);
 
     if (s->group & RAFT_GROUP_NEW & group) {
         assert(c->phase == RAFT_CONF_JOINT);
-        voter = voter || (s->role_new == RAFT_VOTER);
+        voter = voter || (s->role_new == RAFT_VOTER
+                            || s->role_new == RAFT_LOGGER);
     }
 
     return voter;
@@ -183,7 +195,7 @@ int configurationAdd(struct raft_configuration *c,
     assert(c != NULL);
     assert(id != 0);
 
-    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
+    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE && role != RAFT_LOGGER) {
         evtErrf("conf add bad role %d", role);
         return RAFT_BADROLE;
     }

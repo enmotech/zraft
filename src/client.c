@@ -269,7 +269,7 @@ int raft_joint_promote(struct raft *r,
     raft_index last_index;
     int rv;
 
-    if (role != RAFT_VOTER) {
+    if (role != RAFT_VOTER && role != RAFT_LOGGER) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
         evtErrf("raft(%llx) promote role %d failed", r->id, role, rv);
@@ -305,6 +305,9 @@ int raft_joint_promote(struct raft *r,
         switch (role) {
             case RAFT_VOTER:
                 name = "voter";
+                break;
+            case RAFT_LOGGER:
+                name = "logger";
                 break;
             default:
                 name = NULL;
@@ -346,6 +349,7 @@ int raft_joint_promote(struct raft *r,
 
     r->leader_state.promotee_id = server->id;
     r->leader_state.remove_id   = remove;
+    r->leader_state.promotee_role = role;
 
 
     /* Initialize the first catch-up round. */
@@ -417,7 +421,7 @@ int raft_assign(struct raft *r,
     raft_index last_index;
     int rv;
 
-    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE) {
+    if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE && role != RAFT_LOGGER) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
         evtErrf("raft(%llx) assign role %d failed", r->id, role, rv);
@@ -452,6 +456,9 @@ int raft_assign(struct raft *r,
             case RAFT_SPARE:
                 name = "spare";
                 break;
+            case RAFT_LOGGER:
+                name = "logger";
+                break;
             default:
                 name = NULL;
                 assert(0);
@@ -475,7 +482,7 @@ int raft_assign(struct raft *r,
     /* If we are not promoting to the voter role or if the log of this server is
      * already up-to-date, we can submit the configuration change
      * immediately. */
-    if (role != RAFT_VOTER ||
+    if ((role != RAFT_VOTER && role != RAFT_LOGGER) ||
         progressMatchIndex(r, server_index) == last_index) {
         int old_role = r->configuration.servers[server_index].role;
         r->configuration.servers[server_index].role = role;
@@ -492,7 +499,7 @@ int raft_assign(struct raft *r,
 
     assert(r->leader_state.remove_id == 0);
     r->leader_state.promotee_id = server->id;
-
+    r->leader_state.promotee_role = role;
 
     /* Initialize the first catch-up round. */
     r->leader_state.round_number = 1;

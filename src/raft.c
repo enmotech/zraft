@@ -259,7 +259,7 @@ int raft_configuration_encode(const struct raft_configuration *c,
 
 unsigned raft_configuration_voter_count(const struct raft_configuration *c)
 {
-    return configurationVoterCount(c);
+    return configurationVoterCount(c, RAFT_GROUP_ANY);
 }
 
 unsigned long long raft_digest(const char *text, unsigned long long n)

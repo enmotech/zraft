@@ -144,7 +144,7 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
 
     assert(r->candidate_state.votes != NULL);
 
-    n_voters = configurationVoterCount(&r->configuration);
+    n_voters = configurationVoterCount(&r->configuration, RAFT_GROUP_ANY);
     voting_index = configurationIndexOfVoter(&r->configuration, r->id);
     /* Initialize the votes array and send vote requests. */
     for (i = 0; i < n_voters; i++) {
@@ -219,7 +219,7 @@ int electionStart(struct raft *r)
     int rv;
     assert(r->state == RAFT_CANDIDATE);
 
-    n_voters = configurationVoterCount(&r->configuration);
+    n_voters = configurationVoterCount(&r->configuration, RAFT_GROUP_ANY);
     voting_index = configurationIndexOfVoter(&r->configuration, r->id);
 
     /* This function should not be invoked if we are not a voting server, hence
@@ -346,29 +346,55 @@ grant_vote:
 
 }
 
-bool electionTally(struct raft *r, size_t voter_index)
+static size_t electionVotesForGroup(struct raft *r, int group)
 {
-    size_t n_voters = configurationVoterCount(&r->configuration);
-    size_t votes = 0;
     size_t i;
+    size_t voter_index;
+    size_t n = 0;
+
+    assert(r->state == RAFT_CANDIDATE);
+    for (i = 0; i < r->configuration.n; ++i) {
+        if (!configurationIsVoter(&r->configuration,
+            &r->configuration.servers[i], group))
+            continue;
+        voter_index = configurationIndexOfVoter(&r->configuration, r->configuration.servers[i].id);
+        assert(voter_index < r->configuration.n);
+
+        if (r->candidate_state.votes[voter_index])
+            n++;
+    }
+    return n;
+}
+
+bool electionTallyForGroup(struct raft *r, int group)
+{
+    size_t n_voters = configurationVoterCount(&r->configuration, group);
+    size_t votes = electionVotesForGroup(r, group);
     size_t half = n_voters / 2;
 
     assert(r->state == RAFT_CANDIDATE);
     assert(r->candidate_state.votes != NULL);
-
-    r->candidate_state.votes[voter_index] = true;
-
-    for (i = 0; i < n_voters; i++) {
-        if (r->candidate_state.votes[i]) {
-            votes++;
-        }
-    }
 
     if (r->quorum == RAFT_MAJORITY)
 	    return votes >= half + 1;
 
     assert(r->quorum == RAFT_FULL);
     return votes >= n_voters;
+
 }
+
+bool electionTally(struct raft *r, size_t voter_index)
+{
+    assert(r->state == RAFT_CANDIDATE);
+    assert(r->candidate_state.votes != NULL);
+
+    r->candidate_state.votes[voter_index] = true;
+    if (r->configuration.phase == RAFT_CONF_JOINT) {
+        if (!electionTallyForGroup(r, RAFT_GROUP_NEW))
+            return false;
+    }
+
+    return electionTallyForGroup(r, RAFT_GROUP_OLD);
+ }
 
 #undef tracef

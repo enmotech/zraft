@@ -46,7 +46,8 @@ static int tickFollower(struct raft *r)
      *   If election timeout elapses without receiving AppendEntries RPC from
      *   current leader or granting vote to candidate, convert to candidate.
      */
-    if (electionTimerExpired(r) && (server->role == RAFT_VOTER || server->role == RAFT_LOGGER)) {
+    if (electionTimerExpired(r)
+        && configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
         tracef("convert to candidate and start new election");
         evtInfof("raft(%llx) convert to candidate", r->id);
         rv = convertToCandidate(r, false /* disrupt leader */);
@@ -87,6 +88,37 @@ static int tickCandidate(struct raft *r)
     return 0;
 }
 
+static size_t contactQuorumForGroup(struct raft *r, int group)
+{
+    unsigned i;
+    unsigned contacts = 0;
+    assert(r->state == RAFT_LEADER);
+
+    for (i = 0; i < r->configuration.n; i++) {
+        struct raft_server *server = &r->configuration.servers[i];
+        if (!configurationIsVoter(&r->configuration, server, group))
+            continue;
+        bool recent_recv = progressGetRecentRecv(r, i);
+        if (recent_recv || server->id == r->id) {
+            contacts++;
+        }
+    }
+    return contacts;
+}
+
+static bool checkContactQuorumForGroup(struct raft *r, int group)
+{
+    size_t n_voters = configurationVoterCount(&r->configuration, group);
+    size_t contacts = contactQuorumForGroup(r, group);
+    assert(r->state == RAFT_LEADER);
+
+    if (r->quorum == RAFT_MAJORITY && contacts <= n_voters / 2)
+	    return false;
+    if (r->quorum == RAFT_FULL && contacts < n_voters)
+	    return false;
+    return true;
+}
+
 /* Return true if we received an AppendEntries RPC result from a majority of
  * voting servers since we became leaders or since the last time this function
  * was called.
@@ -97,25 +129,19 @@ static int tickCandidate(struct raft *r)
 static bool checkContactQuorum(struct raft *r)
 {
     unsigned i;
-    unsigned contacts = 0;
-    size_t n_voters;
+    bool ret;
     assert(r->state == RAFT_LEADER);
 
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        bool recent_recv = progressResetRecentRecv(r, i);
-        if (((server->role == RAFT_VOTER || server->role == RAFT_LOGGER) && recent_recv) ||
-            server->id == r->id) {
-            contacts++;
-        }
+    if (r->configuration.phase == RAFT_CONF_JOINT) {
+        if (!checkContactQuorumForGroup(r, RAFT_GROUP_NEW))
+            return false;
     }
+    ret = checkContactQuorumForGroup(r, RAFT_GROUP_OLD);
 
-    n_voters = configurationVoterCount(&r->configuration);
-    if (r->quorum == RAFT_MAJORITY && contacts <= n_voters / 2)
-	    return false;
-    if (r->quorum == RAFT_FULL && contacts < n_voters)
-	    return false;
-    return true;
+    for (i = 0; i < r->configuration.n; i++) {
+        (void)progressResetRecentRecv(r, i);
+    }
+    return ret;
 }
 
 /* Apply time-dependent rules for leaders (Figure 3.1). */
@@ -145,7 +171,7 @@ static int tickLeader(struct raft *r)
     }
 
     for (i = 0; i < r->configuration.n; i++) {
-        if (r->configuration.servers[i].id != r->id 
+        if (r->configuration.servers[i].id != r->id
             && now - r->leader_state.progress[i].recent_recv_time > r->reset_trailing_timeout && r->enable_dynamic_trailing) {
             raft_set_snapshot_trailing(r, r->snapshot.threshold);
             break;
@@ -208,7 +234,6 @@ static int tickLeader(struct raft *r)
             struct raft_change *change;
 
             r->leader_state.promotee_id = 0;
-            r->leader_state.promotee_role = -1;
             r->leader_state.round_index = 0;
             r->leader_state.round_number = 0;
             r->leader_state.round_start = 0;
@@ -219,6 +244,14 @@ static int tickLeader(struct raft *r)
                 change->cb(change, RAFT_NOCONNECTION);
             }
         }
+    }
+
+    if (r->configuration_uncommitted_index == 0
+        && r->configuration.phase == RAFT_CONF_JOINT) {
+            rv = replicationAppendJointNewConf(r);
+            if (rv != 0) {
+                evtErrf("raft(%llx) append new conf failed %d", r->id, rv);
+            }
     }
 
     return 0;

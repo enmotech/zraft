@@ -247,7 +247,8 @@ int raft_configuration_add(struct raft_configuration *c,
                            const raft_id id,
                            const int role)
 {
-    return configurationAdd(c, id, role);
+    assert(c->phase == RAFT_CONF_NORMAL);
+    return configurationAdd(c, id, role, role, RAFT_GROUP_OLD);
 }
 
 int raft_configuration_encode(const struct raft_configuration *c,
@@ -258,7 +259,7 @@ int raft_configuration_encode(const struct raft_configuration *c,
 
 unsigned raft_configuration_voter_count(const struct raft_configuration *c)
 {
-    return configurationVoterCount(c);
+    return configurationVoterCount(c, RAFT_GROUP_ANY);
 }
 
 unsigned long long raft_digest(const char *text, unsigned long long n)

@@ -22,6 +22,7 @@ void configurationInit(struct raft_configuration *c)
 {
     c->servers = NULL;
     c->n = 0;
+    c->phase = RAFT_CONF_NORMAL;
 }
 
 void configurationClose(struct raft_configuration *c)
@@ -47,6 +48,65 @@ unsigned configurationIndexOf(const struct raft_configuration *c,
     return c->n;
 }
 
+bool configurationIsVoter(const struct raft_configuration *c,
+                          const struct raft_server *s, int group)
+{
+    bool voter = false;
+
+    if (s->group & RAFT_GROUP_OLD & group)
+        voter = (s->role == RAFT_VOTER || s->role == RAFT_LOGGER);
+
+    if (s->group & RAFT_GROUP_NEW & group) {
+        assert(c->phase == RAFT_CONF_JOINT);
+        voter = voter || (s->role_new == RAFT_VOTER
+                            || s->role_new == RAFT_LOGGER);
+    }
+
+    return voter;
+}
+
+bool configurationIsSpare(const struct raft_configuration *c,
+                          const struct raft_server *s, int group)
+{
+    bool spare = false;
+
+    if (s->group & RAFT_GROUP_OLD & group)
+        spare = s->role == RAFT_SPARE;
+
+    if (s->group & RAFT_GROUP_NEW & group) {
+        assert(c->phase == RAFT_CONF_JOINT);
+        spare = spare || (s->role_new == RAFT_SPARE);
+    }
+
+    return spare;
+}
+
+int configurationJointToNormalCopy(const struct raft_configuration *src,
+                                   struct raft_configuration *dst)
+{
+    size_t i;
+    int rv;
+
+    assert(src->phase == RAFT_CONF_JOINT);
+    configurationInit(dst);
+    for (i = 0; i < src->n; i++) {
+        struct raft_server *server = &src->servers[i];
+        if (!(server->group & RAFT_GROUP_NEW))
+            continue;
+        rv = configurationAdd(dst, server->id, server->role_new,
+                              server->role_new,
+                              RAFT_GROUP_OLD);
+        if (rv != 0) {
+            evtErrf("add conf failed id %d role %d", server->id, server->role);
+            return rv;
+        }
+    }
+    dst->phase = RAFT_CONF_NORMAL;
+    return 0;
+}
+
+
+
 unsigned configurationIndexOfVoter(const struct raft_configuration *c,
                                    const raft_id id)
 {
@@ -57,12 +117,13 @@ unsigned configurationIndexOfVoter(const struct raft_configuration *c,
 
     for (i = 0; i < c->n; i++) {
         if (c->servers[i].id == id) {
-            if (c->servers[i].role == RAFT_VOTER || c->servers[i].role == RAFT_LOGGER) {
+            if (configurationIsVoter(c, &c->servers[i], RAFT_GROUP_ANY)) {
                 return j;
             }
             return c->n;
         }
-        if (c->servers[i].role == RAFT_VOTER || c->servers[i].role == RAFT_LOGGER) {
+
+        if (configurationIsVoter(c, &c->servers[i], RAFT_GROUP_ANY)) {
             j++;
         }
     }
@@ -82,7 +143,6 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
 
     if (i == c->n) {
         /* No server with matching ID. */
-        evtNoticef("no server with matching id %llx", id);
         return NULL;
     }
     assert(i < c->n);
@@ -90,13 +150,14 @@ const struct raft_server *configurationGet(const struct raft_configuration *c,
     return &c->servers[i];
 }
 
-unsigned configurationVoterCount(const struct raft_configuration *c)
+unsigned configurationVoterCount(const struct raft_configuration *c, int group)
 {
     unsigned i;
     unsigned n = 0;
     assert(c != NULL);
+
     for (i = 0; i < c->n; i++) {
-        if (c->servers[i].role == RAFT_VOTER || c->servers[i].role == RAFT_LOGGER) {
+        if (configurationIsVoter(c, &c->servers[i], group)) {
             n++;
         }
     }
@@ -111,18 +172,22 @@ int configurationCopy(const struct raft_configuration *src,
     configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
-        rv = configurationAdd(dst, server->id, server->role);
+        rv = configurationAdd(dst, server->id, server->role, server->role_new,
+                              server->group);
         if (rv != 0) {
             evtErrf("add conf failed id %d role %d", server->id, server->role);
             return rv;
         }
     }
+    dst->phase = src->phase;
     return 0;
 }
 
 int configurationAdd(struct raft_configuration *c,
                      raft_id id,
-                     int role)
+                     int role,
+                     int role_new,
+                     int group)
 {
     struct raft_server *servers;
     struct raft_server *server;
@@ -164,7 +229,8 @@ int configurationAdd(struct raft_configuration *c,
     server = &servers[i];
     server->id = id;
     server->role = role;
-
+    server->role_new = role_new;
+    server->group = group;
     c->n++;
 
     return 0;
@@ -220,6 +286,33 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     return 0;
 }
 
+void configurationJointRemove(struct raft_configuration *c, raft_id id)
+{
+    assert(c->phase == RAFT_CONF_NORMAL);
+    size_t i;
+
+    for (i = 0; i < c->n; ++i) {
+        if (c->servers[i].id == id) {
+            c->servers[i].group = RAFT_GROUP_OLD;
+            continue;
+        }
+        c->servers[i].group = RAFT_GROUP_OLD | RAFT_GROUP_NEW;
+        c->servers[i].role_new = c->servers[i].role;
+    }
+    c->phase = RAFT_CONF_JOINT;
+}
+
+void configurationJointReset(struct raft_configuration *c)
+{
+    assert(c->phase == RAFT_CONF_JOINT);
+    size_t i;
+
+    for (i = 0; i < c->n; ++i) {
+        c->servers[i].group = RAFT_GROUP_OLD;
+    }
+    c->phase = RAFT_CONF_NORMAL;
+}
+
 size_t configurationEncodedSize(const struct raft_configuration *c)
 {
     size_t n = 0;
@@ -227,7 +320,8 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
 
     /* We need one byte for the encoding format version */
     n++;
-
+    /* then 8 bytes for phase */
+    n += sizeof(uint64_t);
     /* Then 8 bytes for number of servers. */
     n += sizeof(uint64_t);
 
@@ -235,6 +329,7 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
     for (i = 0; i < c->n; i++) {
         n += sizeof(uint64_t);            /* Server ID */
         n++;                              /* Voting flag */
+        n += sizeof(uint16_t);            /* New group role and group */
     };
 
     return bytePad64(n);
@@ -248,7 +343,7 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 
     /* Encoding format version */
     bytePut8(&cursor, ENCODING_FORMAT);
-
+    bytePut64Unaligned(&cursor, c->phase);
     /* Number of servers. */
     bytePut64Unaligned(&cursor, c->n); /* cursor might not be 8-byte aligned */
 
@@ -257,6 +352,8 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
         bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
         assert(server->role < 255);
         bytePut8(&cursor, (uint8_t)server->role);
+        bytePut8(&cursor, (uint8_t)server->role_new);
+        bytePut8(&cursor, (uint8_t)server->group);
     };
 }
 
@@ -268,28 +365,31 @@ int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c)
     /* Check the encoding format version */
     if (byteGet8(&buf) != ENCODING_FORMAT) {
         evtErrf("%s", "malformed");
-	return RAFT_MALFORMED;
+	    return RAFT_MALFORMED;
     }
-
+    /* then read the phase */
+    c->phase = (size_t)byteGet64Unaligned(&buf);
     /* Read the number of servers. */
     n = (size_t)byteGet64Unaligned(&buf);
 
     /* Decode the individual servers. */
     for (i = 0; i < n; i++) {
-	raft_id id;
-	int role;
-	int rv;
-
-	/* Server ID. */
-	id = byteGet64Unaligned(&buf);
-	/* Role code. */
-	role = byteGet8(&buf);
-
-	rv = configurationAdd(c, id, role);
-	if (rv != 0) {
+        raft_id id;
+        int role;
+        int role_new;
+        int group;
+        int rv;
+        /* Server ID. */
+        id = byteGet64Unaligned(&buf);
+        /* Role code. */
+        role = byteGet8(&buf);
+        role_new = byteGet8(&buf);
+        group = byteGet8(&buf);
+        rv = configurationAdd(c, id, role, role_new, group);
+        if (rv != 0) {
             evtErrf("conf add %llx failed", id, rv);
-	    return rv;
-	}
+            return rv;
+        }
     }
 
     return 0;

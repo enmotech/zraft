@@ -29,6 +29,7 @@ struct raft_fixture_server
     struct raft_tracer tracer; /* Tracer. */
     struct raft_io io;         /* In-memory raft_io implementation. */
     struct raft raft;          /* Raft instance. */
+    struct raft_fixture *f;    /* Raft fixture. */
 };
 
 /**
@@ -70,6 +71,7 @@ struct raft_fixture
     struct raft_fixture_event event; /* Last event occurred. */
     raft_fixture_event_cb hook;      /* Event callback. */
     struct raft_fixture_server servers[RAFT_FIXTURE_MAX_SERVERS];
+    struct raft_event_recorder recorder; /* Raft event recorder */
 };
 
 /**
@@ -550,7 +552,7 @@ RAFT_API void raft_fixture_mock_errno(int errno);
 RAFT_API int raft_fixture_construct_configuration_log_buf(unsigned n_server,
 														unsigned n_voter,
 														struct raft_entry *et);
-
+RAFT_API void disconnectFromAll(struct raft_fixture *f, unsigned i);
 /**
  *	Construct a n_server, n_voter configuration
  */
@@ -562,4 +564,13 @@ RAFT_API int raft_fixture_construct_configuration(unsigned n_server,
  */
 RAFT_API bool raft_fixture_promotable(struct raft_configuration *conf, unsigned id);
 
+/**
+ * get last index
+ */
+RAFT_API raft_index raft_fixture_last_index(struct raft_fixture *f, unsigned int i);
+
+/* Enable event recorder at setup */
+RAFT_API void raft_fixture_enable_recorder(struct raft_fixture *f);
+
+RAFT_API void raft_fixture_step_until_phase(struct raft_fixture *f, unsigned int i, int phase, unsigned msecs);
 #endif /* RAFT_FIXTURE_H */

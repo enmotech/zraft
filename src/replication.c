@@ -138,7 +138,7 @@ static int sendAppendEntries(struct raft *r,
     req->entries = args->entries;
     req->n = args->n_entries;
     req->server_id = server->id;
-    if(req->n > 0) 
+    if(req->n > 0)
         req->entriesLoadByDisk = raft_calloc((size_t)req->n, sizeof(bool));
     req->send.data = req;
     optimistic_next_index = req->index + req->n;
@@ -438,8 +438,8 @@ static int triggerAll(struct raft *r)
             continue;
         }
         /* Skip spare servers, unless they're being promoted. */
-        if (server->role == RAFT_SPARE &&
-            server->id != r->leader_state.promotee_id) {
+        if (configurationIsSpare(&r->configuration, server, server->group)
+            && server->id != r->leader_state.promotee_id) {
             continue;
         }
         rv = replicationProgress(r, i);
@@ -650,7 +650,6 @@ static int appendLeader(struct raft *r, raft_index index)
         evtErrf("%s", "malloc");
         goto err_after_entries_acquired;
     }
-
     request->raft = r;
     request->index = index;
     request->entries = entries;
@@ -722,7 +721,12 @@ static int triggerActualPromotion(struct raft *r)
 
     /* Update our current configuration. */
     old_role = server->role;
-    server->role = r->leader_state.promotee_role;
+    if (r->leader_state.remove_id == 0) {
+        server->role = r->leader_state.promotee_role;
+    } else {
+        configurationJointRemove(&r->configuration, r->leader_state.remove_id);
+        server->role_new = r->leader_state.promotee_role;
+    }
 
     /* Index of the entry being appended. */
     index = logLastIndex(&r->log) + 1;
@@ -750,7 +754,7 @@ static int triggerActualPromotion(struct raft *r)
     }
 
     r->leader_state.promotee_id = 0;
-    r->leader_state.promotee_role = -1;
+    r->leader_state.remove_id   = 0;
     r->configuration_uncommitted_index = logLastIndex(&r->log);
 
     return 0;
@@ -759,7 +763,10 @@ err_after_log_append:
     logTruncate(&r->log, index);
 
 err:
-    server->role = old_role;
+    if (r->leader_state.remove_id == 0)
+        server->role = old_role;
+    else
+        configurationJointReset(&r->configuration);
 
     assert(rv != 0);
     return rv;
@@ -988,7 +995,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     i = updateLastStored(r, request->index, args->entries, args->n_entries);
     if(r->enable_dynamic_trailing){
         raft_set_snapshot_trailing(r, args->trailing);
-    }  
+    }
 
     /* If none of the entries that we persisted is present anymore in our
      * in-memory log, there's nothing to report or to do. We just discard
@@ -1149,8 +1156,7 @@ static int deleteConflictingEntries(struct raft *r,
 
             tracef("log mismatch -> truncate (%llu)", entry_index);
 
-            /* Possibly discard uncommitted configuration changes. */
-            if (r->configuration_uncommitted_index >= entry_index) {
+            if (r->configuration_uncommitted_index >= entry_index ) {
                 rv = membershipRollback(r);
                 if (rv != 0) {
                     evtErrf("raft(%llx) rollback failed %d", r->id, rv);
@@ -1599,7 +1605,8 @@ static void applyChange(struct raft *r, const raft_index index)
         r->configuration_uncommitted_index = 0;
         r->configuration_index = index;
 
-        if (r->state == RAFT_LEADER) {
+        if (r->state == RAFT_LEADER
+            && r->configuration.phase == RAFT_CONF_NORMAL) {
             const struct raft_server *server;
             req = r->leader_state.change;
             r->leader_state.change = NULL;
@@ -1615,7 +1622,7 @@ static void applyChange(struct raft *r, const raft_index index)
             server = configurationGet(&r->configuration, r->id);
             if (server == NULL) {
 	        evtNoticef("raft(%llx) not in configuration", r->id);
-		evtDumpConfiguration(r, &r->configuration);
+                evtDumpConfiguration(r, &r->configuration);
                 convertToFollower(r);
             }
 
@@ -1677,7 +1684,7 @@ static bool shouldTakeSnapshot(struct raft *r)
     }
 
     for (i = 0; i<r->configuration.n; i++) {
-        if(r->state != RAFT_LEADER) 
+        if(r->state != RAFT_LEADER)
             break;
         s = &r->configuration.servers[i];
         if (s->role == RAFT_SPARE &&
@@ -1688,7 +1695,7 @@ static bool shouldTakeSnapshot(struct raft *r)
         if (p->match_index <= tmp) {
 			tmp = p->match_index;
             raft_time now = r->io->time(r->io);
-            
+
             if(now - p->recent_recv_time > r->reset_trailing_timeout){
                 raft_set_snapshot_trailing(r, r->snapshot.threshold);
                 if(r->log.snapshot.last_index > 0)
@@ -1705,7 +1712,7 @@ static bool shouldTakeSnapshot(struct raft *r)
     if (snapshot_index - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;
     }
-    evtInfof("raft(%llx) ignoreUpdateTrailing %d enable_dynamic_trailing %d", r->id, 
+    evtInfof("raft(%llx) ignoreUpdateTrailing %d enable_dynamic_trailing %d", r->id,
                 ignoreUpdateTrailing, r->enable_dynamic_trailing);
     if (ignoreUpdateTrailing == false && r->enable_dynamic_trailing) {
         if (r->state == RAFT_LEADER) {
@@ -1720,7 +1727,7 @@ static bool shouldTakeSnapshot(struct raft *r)
         evtInfof("raft(%llx) update snapshot trailing to %u", r->id, r->snapshot.trailing);
     }
 
-    
+
     return true;
 }
 
@@ -1890,15 +1897,41 @@ err_take_snapshot:
     return rv;
 }
 
+static size_t replicationVotesForGroup(struct raft *r, raft_index index, int group)
+{
+    size_t i;
+    size_t n = 0;
+
+    assert(r->state == RAFT_LEADER);
+    for (i = 0; i < r->configuration.n; ++i) {
+        if (!configurationIsVoter(&r->configuration,
+            &r->configuration.servers[i], group))
+            continue;
+        if (r->leader_state.progress[i].match_index >= index) {
+            n++;
+        }
+    }
+    return n;
+}
+
+static bool replicationQuorumGroup(struct raft *r, raft_index index, int group)
+{
+    size_t n_voters = configurationVoterCount(&r->configuration, group);
+    size_t votes = replicationVotesForGroup(r, index, group);
+    size_t half = n_voters / 2;
+
+    assert(r->state == RAFT_LEADER);
+    if (r->quorum == RAFT_MAJORITY)
+        return votes >= half + 1;
+    assert(r->quorum == RAFT_FULL);
+    return votes >= n_voters;
+}
+
 void replicationQuorum(struct raft *r, const raft_index index)
 {
-    size_t votes = 0;
-    size_t i;
-    size_t n_voters;
     raft_index prev_commit_index = r->commit_index;
 
     assert(r->state == RAFT_LEADER);
-
     if (index <= r->commit_index) {
         return;
     }
@@ -1914,25 +1947,16 @@ void replicationQuorum(struct raft *r, const raft_index index)
         return;
     }
 
-    for (i = 0; i < r->configuration.n; i++) {
-        struct raft_server *server = &r->configuration.servers[i];
-        if (server->role != RAFT_VOTER && server->role != RAFT_LOGGER) {
-            continue;
-        }
-        if (r->leader_state.progress[i].match_index >= index) {
-            votes++;
-        }
+    if (r->configuration.phase == RAFT_CONF_JOINT) {
+        if (!replicationQuorumGroup(r, index, RAFT_GROUP_NEW))
+            return;
     }
 
-    n_voters = configurationVoterCount(&r->configuration);
-    if (r->quorum == RAFT_MAJORITY && votes <= n_voters / 2)
-	    return;
-    if (r->quorum == RAFT_FULL && votes < n_voters)
-	    return;
+    if (!replicationQuorumGroup(r, index, RAFT_GROUP_OLD))
+        return;
 
     r->commit_index = index;
     tracef("new commit index %llu", r->commit_index);
-
     assert(r->commit_index > prev_commit_index);
     hookRequestCommit(r, prev_commit_index + 1,
 		      r->commit_index - prev_commit_index);
@@ -1941,6 +1965,87 @@ void replicationQuorum(struct raft *r, const raft_index index)
 inline bool replicationInstallSnapshotBusy(struct raft *r)
 {
     return r->last_stored == 0 && r->snapshot.put.data != NULL;
+}
+
+static int replicationChangeConfiguration(struct raft *r,
+    const struct raft_configuration *configuration)
+{
+    raft_index index;
+    raft_term term = r->current_term;
+    int rv;
+    const struct raft_entry *entry;
+
+    /* Index of the entry being appended. */
+    index = logLastIndex(&r->log) + 1;
+
+    /* Encode the new configuration and append it to the log. */
+    rv = logAppendConfiguration(&r->log, term, configuration);
+    if (rv != 0) {
+        evtErrf("raft(%llx) append conf failed %d", r->id, rv);
+        goto err;
+    }
+
+    evtNoticef("raft(%llx) conf append at index %lu", r->id, index);
+    evtDumpConfiguration(r, configuration);
+
+    entry = logGet(&r->log, index);
+    assert(entry);
+    assert(entry->type == RAFT_CHANGE);
+    r->hook->entry_after_append_fn(r->hook, index, entry);
+    hookConfChange(r, configuration);
+
+    if (configuration->n != r->configuration.n) {
+        rv = progressRebuildArray(r, configuration);
+        if (rv != 0) {
+            evtErrf("raft(%llx) rebuild array failed %d", r->id, rv);
+            goto err;
+        }
+    }
+
+    /* Update the current configuration if we've created a new object. */
+    if (configuration != &r->configuration) {
+        raft_configuration_close(&r->configuration);
+        r->configuration = *configuration;
+    }
+
+    /* Start writing the new log entry to disk and send it to the followers. */
+    rv = replicationTrigger(r, index);
+    if (rv != 0) {
+        evtErrf("raft(%llx) replication trigger failed %d", r->id, rv);
+        /* TODO: restore the old next/match indexes and configuration. */
+        goto err_after_log_append;
+    }
+
+    r->configuration_uncommitted_index = index;
+    return 0;
+err_after_log_append:
+    logTruncate(&r->log, index);
+err:
+    assert(rv != 0);
+    return rv;
+}
+
+int replicationAppendJointNewConf(struct raft *r)
+{
+    int rv;
+    struct raft_configuration c;
+
+    rv = configurationJointToNormalCopy(&r->configuration, &c);
+    if (rv != 0) {
+        evtErrf("raft(%llx) joint copy normal failed %d", r->id, rv);
+        return rv;
+    }
+
+    rv = replicationChangeConfiguration(r, &c);
+    if (rv != 0) {
+        evtErrf("raft(%llx) change configuration failed %d", r->id, rv);
+        goto err_close_configuration;
+    }
+
+    return 0;
+err_close_configuration:
+    configurationClose(&c);
+    return rv;
 }
 
 #undef tracef

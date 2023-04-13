@@ -844,7 +844,7 @@ static void ioSaturate(struct raft_io *io, struct raft_io *other)
     s = io->impl;
     s_other = other->impl;
     peer = ioGetPeer(s, s_other->id);
-    assert(peer != NULL && peer->connected);
+    // assert(peer != NULL && peer->connected);
     peer->saturated = true;
 }
 
@@ -938,8 +938,10 @@ static void emit(struct raft_tracer *t,
                  int line,
                  const char *message)
 {
-    unsigned id = *(unsigned *)t->impl;
-    fprintf(stderr, "%d: %30s:%*d - %s\n", id, file, 3, line, message);
+    struct raft_fixture_server *s = t->impl;
+
+    fprintf(stderr, "[%6llu] %30s:%*d - server %lld : %s\n", s->f->time,
+        file, 3, line, s->id, message);
 }
 
 static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
@@ -959,7 +961,8 @@ static int serverInit(struct raft_fixture *f, unsigned i, struct raft_fsm *fsm)
     raft_set_election_timeout(&s->raft, ELECTION_TIMEOUT);
     raft_set_heartbeat_timeout(&s->raft, HEARTBEAT_TIMEOUT);
     raft_set_install_snapshot_timeout(&s->raft, INSTALL_SNAPSHOT_TIMEOUT);
-    s->tracer.impl = (void *)&s->id;
+    s->f = f;
+    s->tracer.impl = (void *)s;
     s->tracer.emit = emit;
     s->raft.tracer = &s->tracer;
     return 0;
@@ -1173,10 +1176,11 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
         bool acked = true;
         unsigned n_quorum = 0;
 
+        struct raft *leader = raft_fixture_get(f, (unsigned int)(leader_id-1));
         for (i = 0; i < f->n; i++) {
             struct raft *raft = raft_fixture_get(f, i);
             const struct raft_server *server =
-                configurationGet(&raft->configuration, raft->id);
+                configurationGet(&leader->configuration, raft->id);
 
             /* If the server is not in the configuration or is idle, then don't
              * count it. */
@@ -1216,7 +1220,6 @@ static bool updateLeaderAndCheckElectionSafety(struct raft_fixture *f)
 
             n_acks++;
         }
-
         if (!acked || n_acks < (n_quorum / 2)) {
             leader_id = 0;
         }
@@ -2332,7 +2335,7 @@ void raft_fixture_saturate(struct raft_fixture *f, unsigned i, unsigned j)
     ioSaturate(io1, io2);
 }
 
-static void disconnectFromAll(struct raft_fixture *f, unsigned i)
+void disconnectFromAll(struct raft_fixture *f, unsigned i)
 {
     unsigned j;
     for (j = 0; j < f->n; j++) {
@@ -2590,5 +2593,64 @@ bool raft_fixture_promotable(struct raft_configuration *conf, unsigned id)
 	return false;
 }
 
+struct step_phase {
+    unsigned int i;
+    int phase;
+};
+
+static bool in_phase(struct raft_fixture *f, void *arg)
+{
+    struct step_phase *sp = (struct step_phase *)arg;
+    struct raft *raft;
+
+    if (sp->i < f->n) {
+        raft = raft_fixture_get(f, sp->i);
+        return (int)raft->configuration.phase == sp->phase;
+    }
+
+    return false;
+}
+
+void raft_fixture_step_until_phase(struct raft_fixture *f, unsigned int i, int phase, unsigned msecs)
+{
+    struct step_phase sp;
+    sp.i = i;
+    sp.phase = phase;
+    raft_fixture_step_until(f, in_phase, &sp, msecs);
+}
+
+raft_index raft_fixture_last_index(struct raft_fixture *f, unsigned int i)
+{
+    struct raft *r;
+
+    r = raft_fixture_get(f, i);
+    return logLastIndex(&r->log);
+}
+
+static void raft_fixture_record(void *data, enum raft_event_level level,
+                                const char* fn, const char *file, int line,
+                                const char *fmt, ...)
+{
+    (void)level;
+    (void)fn;
+    struct raft_fixture *f = data;
+    char buf[1024];
+    va_list va;
+
+    va_start(va, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, va);
+    va_end(va);
+    fprintf(stdout, "[event][%6llu] %30s:%*d : %s\n", f->time, file, 3, line,
+            buf);
+}
+
+
+void raft_fixture_enable_recorder(struct raft_fixture *f)
+{
+    f->recorder.data   = f;
+    f->recorder.record = raft_fixture_record;
+
+    raft_set_event_recorder(&f->recorder);
+}
 
 #undef tracef

@@ -81,12 +81,27 @@ struct raft_buffer
 #define RAFT_LOGGER 3  /* Replicate log, does participate in quorum, no fsm */
 
 /**
+ * Server group types.
+ */
+enum raft_group {
+    RAFT_GROUP_OLD = 0x01,
+    RAFT_GROUP_NEW = 0x02,
+    RAFT_GROUP_ANY = 0x03,
+};
+/**
  * Hold information about a single server in the cluster configuration.
  */
 struct raft_server
 {
     raft_id id;    /* Server ID, must be greater than zero. */
     int role;      /* Server role. */
+    int role_new;  /* Server role in new group. */
+    int group;     /* Server group. */
+};
+
+enum raft_conf_phase {
+    RAFT_CONF_NORMAL = 0,
+    RAFT_CONF_JOINT,
 };
 
 /**
@@ -96,6 +111,7 @@ struct raft_configuration
 {
     struct raft_server *servers; /* Array of servers member of the cluster. */
     unsigned n;                  /* Number of servers in the array. */
+    enum raft_conf_phase phase;
 };
 
 /**
@@ -764,6 +780,7 @@ struct raft
             struct raft_progress *progress; /* Per-server replication state. */
             struct raft_change *change;     /* Pending membership change. */
             raft_id promotee_id;            /* ID of server being promoted. */
+            raft_id remove_id;              /* ID of server being removed. */
             int promotee_role;
             unsigned short round_number;    /* Current sync round. */
             raft_index round_index;         /* Target of the current round. */
@@ -1101,6 +1118,16 @@ RAFT_API int raft_add(struct raft *r,
                       struct raft_change *req,
                       raft_id id,
                       raft_change_cb cb);
+
+/**
+ * Promote server @id as voter and remove another one.
+ */
+RAFT_API int raft_joint_promote(struct raft *r,
+                                struct raft_change *req,
+                                raft_id id,
+                                int role,
+				                raft_id remove,
+                                raft_change_cb cb);
 
 /**
  * Assign a new role to the given server.

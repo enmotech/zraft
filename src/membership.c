@@ -34,6 +34,13 @@ int membershipCanChangeConfiguration(struct raft *r)
         goto err;
     }
 
+    if (r->configuration.phase != RAFT_CONF_NORMAL) {
+        rv = RAFT_CANTCHANGE;
+        evtNoticef("raft(%llx) is changing",
+		r->id);
+        goto err;
+    }
+
     /* In order to become leader at all we are supposed to have committed at
      * least the initial configuration at index 1. */
     assert(r->configuration_index > 0);

@@ -146,7 +146,8 @@ void convertToFollower(struct raft *r)
 int convertToCandidate(struct raft *r, bool disrupt_leader)
 {
     const struct raft_server *server;
-    size_t n_voters = configurationVoterCount(&r->configuration);
+    size_t n_voters = configurationVoterCount(&r->configuration,
+                                              RAFT_GROUP_ANY);
     int rv;
 
     (void)server; /* Only used for assertions. */
@@ -167,7 +168,8 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
      * configuration. */
     server = configurationGet(&r->configuration, r->id);
     assert(server != NULL);
-    assert(server->role == RAFT_VOTER || server->role == RAFT_LOGGER);
+    assert(server->role == RAFT_VOTER || server->role_new == RAFT_VOTER
+        || server->role == RAFT_LOGGER || server->role_new == RAFT_LOGGER);
 
     if (n_voters == 1) {
         tracef("self elect and convert to leader");
@@ -176,7 +178,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
         if (rv != 0) {
             evtErrf("raft(%llx) convert to leader failed %d", r->id, rv);
             return rv;
-	}
+        }
         /* Check if we can commit some new entries. */
         replicationQuorum(r, r->last_stored);
 
@@ -226,10 +228,10 @@ int convertToLeader(struct raft *r)
 
     /* Reset promotion state. */
     r->leader_state.promotee_id = 0;
-    r->leader_state.promotee_role = -1;
     r->leader_state.round_number = 0;
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
+    r->leader_state.remove_id = 0;
 
     if (r->state_change_cb)
 		r->state_change_cb(r, RAFT_LEADER);

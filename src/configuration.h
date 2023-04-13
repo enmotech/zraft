@@ -17,10 +17,12 @@ void configurationClose(struct raft_configuration *c);
 /* Add a server to the given configuration. */
 int configurationAdd(struct raft_configuration *c,
                      raft_id id,
-                     int role);
+                     int role,
+                     int role_new,
+                     int group);
 
 /* Return the number of servers with the RAFT_VOTER role. */
-unsigned configurationVoterCount(const struct raft_configuration *c);
+unsigned configurationVoterCount(const struct raft_configuration *c, int group);
 
 /* Return the index of the server with the given ID (relative to the c->servers
  * array). If there's no server with the given ID, return the number of
@@ -64,5 +66,18 @@ int configurationEncode(const struct raft_configuration *c,
 /* Populate a configuration object by decoding the given serialized payload. */
 int configurationDecode(const struct raft_buffer *buf,
                         struct raft_configuration *c);
+
+void configurationJointRemove(struct raft_configuration *c, raft_id id);
+
+void configurationJointReset(struct raft_configuration *c);
+
+bool configurationIsVoter(const struct raft_configuration *c,
+                         const struct raft_server *s, int group);
+
+bool configurationIsSpare(const struct raft_configuration *c,
+                          const struct raft_server *s, int group);
+
+int configurationJointToNormalCopy(const struct raft_configuration *src,
+                                   struct raft_configuration *dst);
 
 #endif /* CONFIGURATION_H_ */

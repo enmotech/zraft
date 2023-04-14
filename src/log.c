@@ -24,7 +24,8 @@ static size_t refsKey(const raft_index index, const size_t size)
 {
     assert(index > 0);
     assert(size > 0);
-    return (size_t)((index - 1) % size);
+    assert((size & (size - 1)) == 0);
+    return (size_t)((index - 1) & (size - 1));
 }
 
 static unsigned short refsCount(struct raft_log *l,
@@ -400,7 +401,9 @@ static raft_index indexAt(struct raft_log *l, size_t i)
 /* Return the circular buffer position of the i'th entry in the log. */
 static size_t positionAt(struct raft_log *l, size_t i)
 {
-    return (l->front + i) % l->size;
+    assert(l->size > 0);
+    assert((l->size & (l->size - 1)) == 0);
+    return (l->front + i) & (l->size - 1);
 }
 
 /* Return the i'th entry in the log. */
@@ -484,9 +487,12 @@ static int ensureCapacity(struct raft_log *l)
         return 0;
     }
 
-    /* Make the new size twice the current size plus one (for the new
-     * entry). Over-allocating now avoids smaller allocations later. */
-    size = (l->size + 1) * 2;
+    /* Make the new size twice the current (for the new entry).
+     * Over-allocating now avoids smaller allocations later. */
+    if (l->size == 0)
+        size = 2;
+    else
+        size = l->size * 2;
 
     entries = raft_calloc(size, sizeof *entries);
     if (entries == NULL) {
@@ -548,8 +554,9 @@ int logAppend(struct raft_log *l,
     entry->buf = *buf;
     entry->batch = batch;
 
+    assert((l->size & (l->size - 1)) == 0);
     l->back += 1;
-    l->back = l->back % l->size;
+    l->back = l->back & (l->size - 1);
 
     return 0;
 }
@@ -755,8 +762,9 @@ int logAcquireWithMax(struct raft_log *l,
         return RAFT_NOMEM;
     }
 
+    assert((l->size & (l->size - 1)) == 0);
     for (j = 0; j < *n; j++) {
-        size_t k = (i + j) % l->size;
+        size_t k = (i + j) & (l->size - 1);
         struct raft_entry *entry = &(*entries)[j];
         *entry = l->entries[k];
         refsIncr(l, entry->term, index + j);

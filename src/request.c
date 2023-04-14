@@ -27,7 +27,10 @@ size_t requestRegNumRequests(struct request_registry *reg)
 
 static size_t positionAt(struct request_registry *reg, size_t i)
 {
-    return (reg->front + i) % reg->size;
+    assert(reg->size > 0);
+    assert((reg->size & (reg->size - 1)) == 0);
+
+    return (reg->front + i) & (reg->size - 1);
 }
 
 static struct request_slot *slotAt(struct request_registry *reg, size_t i)
@@ -50,13 +53,14 @@ static int ensureCapacity(struct request_registry *reg, size_t required)
 {
     size_t i;
     size_t n;
-    size_t size;
+    size_t size = reg->size == 0 ? 16 : reg->size;
     struct request_slot *slots;
 
     if (required < reg->size)
         return 0;
 
-    size = required * 2;
+    while( required >= size) size <<= 1;
+
     slots = raft_calloc(size, sizeof(*slots));
     if (slots == NULL) {
         evtErrf("%s", "calloc request slots failed");
@@ -90,12 +94,14 @@ int requestRegEnqueue(struct request_registry *reg, struct request *req)
 	return rv;
     }
 
-    back = (reg->front + required - 1) % reg->size;
+    assert(reg->size > 0);
+    assert((reg->size & (reg->size - 1)) == 0);
+    back = (reg->front + required - 1) & (reg->size - 1);
     slot = &reg->slots[back];
     slot->req = req;
     slot->index = req->index;
 
-    reg->back = (back + 1) % reg->size;
+    reg->back = (back + 1) & (reg->size - 1);
     return 0;
 }
 
@@ -104,10 +110,12 @@ static void clearFromFront(struct request_registry *reg)
     struct request_slot *slot;
 
     while(requestRegNumRequests(reg)) {
+        assert(reg->size > 0);
+        assert((reg->size & (reg->size - 1)) == 0);
         slot = &reg->slots[reg->front];
         if (slot->req || slot->index)
             break;
-        reg->front = (reg->front + 1) % reg->size;
+        reg->front = (reg->front + 1) & (reg->size - 1);
     }
 }
 
@@ -117,11 +125,13 @@ static void clearFromBack(struct request_registry *reg)
     struct request_slot *slot;
 
     while(requestRegNumRequests(reg)) {
-        back = (reg->front + requestRegNumRequests(reg) - 1) % reg->size;
+        assert(reg->size > 0);
+        assert((reg->size & (reg->size - 1)) == 0);
+        back = (reg->front + requestRegNumRequests(reg) - 1) & (reg->size - 1);
         slot = &reg->slots[back];
         if (slot->req || slot->index)
             break;
-	reg->back = back;
+        reg->back = back;
     }
 }
 

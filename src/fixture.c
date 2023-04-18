@@ -321,15 +321,15 @@ static void copyInstallSnapshot(const struct raft_install_snapshot *src,
 static void mockLoadEntries(struct io *io, struct raft_append_entries *dst, bool *flag)
 {
     unsigned i;
-    if(dst->n_entries == 0)
-        return;
+
     for (i = 0; i < dst->n_entries; i++){
         if(dst->entries[i].buf.len == 0 && dst->entries[i].buf.base == NULL && dst->entries[i].type != RAFT_BARRIER){
             flag[i] = true;
             raft_index cur_index = dst->prev_log_index + i + 1;
             entryCopy(&io->entries[cur_index - 1], &dst->entries[i]);
-        } else
+        } else {
             flag[i] = false;
+        }
     }
 }
 
@@ -341,8 +341,7 @@ static void ioFlushSend(struct io *io, struct send *send)
     struct transmit *transmit;
     struct raft_message *src;
     struct raft_message *dst;
-    bool *entriesLoadByDisk;
-    unsigned int ae_nums = 0;
+    bool *flags = NULL;
     unsigned i;
     int status;
 
@@ -364,12 +363,10 @@ static void ioFlushSend(struct io *io, struct send *send)
 
     QUEUE_PUSH(&io->requests, &transmit->queue);
 
-    if(src->type == RAFT_IO_APPEND_ENTRIES)
-        ae_nums = (&src->append_entries)->n_entries;
-    entriesLoadByDisk = raft_malloc(ae_nums * sizeof(bool));
-
-    if(src->type == RAFT_IO_APPEND_ENTRIES)
-        mockLoadEntries(io, &src->append_entries, entriesLoadByDisk);
+    if(src->type == RAFT_IO_APPEND_ENTRIES && src->append_entries.n_entries) {
+        flags = raft_malloc(src->append_entries.n_entries * sizeof(bool));
+        mockLoadEntries(io, &src->append_entries, flags);
+    }
 
     *dst = *src;
     switch (dst->type) {
@@ -387,12 +384,11 @@ static void ioFlushSend(struct io *io, struct send *send)
     status = g_fixture_errno;
     if (src->type == RAFT_IO_APPEND_ENTRIES) {
         for (i = 0; i < src->append_entries.n_entries; i++)
-            if (entriesLoadByDisk[i] == true){
+            if (flags[i] == true){
                 raft_entry_free(src->append_entries.entries[i].buf.base);
             }
     }
-    raft_free(entriesLoadByDisk);
-
+    raft_free(flags);
 out:
     if (send->req->cb != NULL) {
         send->req->cb(send->req, status);
@@ -764,7 +760,7 @@ static int ioMethodSend(struct raft_io *raft_io,
     r->req = req;
     r->message = *message;
     r->req->cb = cb;
-    
+
     /* TODO: simulate the presence of an OS send buffer, whose available size
      * might delay the completion of send requests */
     r->completion_time = *io->time;

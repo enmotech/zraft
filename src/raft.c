@@ -357,11 +357,15 @@ void raft_enable_request_hook(struct raft *r, bool enable)
 }
 
 void raft_enable_dynamic_trailing(struct raft *r, bool enable){
-    r->enable_dynamic_trailing = enable;
+    (void)r;
+    (void)enable;
 }
+
 void raft_enable_free_trailing(struct raft *r, bool enable){
-    r->enable_free_trailing = enable;
+    (void)r;
+    (void)enable;
 }
+
 void raft_enable_election_at_start(struct raft *r, bool enable)
 {
     r->enable_election_at_start = enable;

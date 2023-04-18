@@ -71,9 +71,6 @@ void *HeapMalloc(size_t size)
 
 void HeapFree(void *ptr)
 {
-    if (ptr == NULL) {
-        return;
-    }
     currentHeap->free(currentHeap->data, ptr);
 }
 

@@ -342,7 +342,7 @@ static void ioFlushSend(struct io *io, struct send *send)
     struct raft_message *src;
     struct raft_message *dst;
     bool *entriesLoadByDisk;
-    // unsigned int ae_nums = 0;
+    unsigned int ae_nums = 0;
     unsigned i;
     int status;
 
@@ -364,10 +364,9 @@ static void ioFlushSend(struct io *io, struct send *send)
 
     QUEUE_PUSH(&io->requests, &transmit->queue);
 
-    // if(src->type == RAFT_IO_APPEND_ENTRIES)
-    //     ae_nums = src->append_entries.n_entries;
-    // entriesLoadByDisk = raft_malloc(ae_nums * sizeof(bool));
-    entriesLoadByDisk = raft_malloc(1024 * sizeof(bool));
+    if(src->type == RAFT_IO_APPEND_ENTRIES)
+        ae_nums = (&src->append_entries)->n_entries;
+    entriesLoadByDisk = raft_malloc(ae_nums * sizeof(bool));
 
     if(src->type == RAFT_IO_APPEND_ENTRIES)
         mockLoadEntries(io, &src->append_entries, entriesLoadByDisk);

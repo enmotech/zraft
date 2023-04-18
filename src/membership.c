@@ -142,6 +142,7 @@ int membershipUncommittedChange(struct raft *r,
     raft_configuration_close(&r->configuration);
 
     r->configuration = configuration;
+    setRoleByConfigChange(r);
     r->configuration_uncommitted_index = index;
 
     evtNoticef("raft(%llx) conf received at index %lu", r->id, index);

@@ -34,6 +34,7 @@ static int restoreMostRecentConfiguration(struct raft *r,
     }
     raft_configuration_close(&r->configuration);
     r->configuration = configuration;
+    setRoleByConfigChange(r);
     r->configuration_uncommitted_index = index;
     return 0;
 }
@@ -71,7 +72,7 @@ int restoreEntries(struct raft *r,
                    size_t n)
 {
     struct raft_entry *conf = NULL;
-    raft_index conf_index;
+    raft_index conf_index = 0;
     raft_index pre_conf_index = r->configuration_index;
     size_t i;
     int rv;
@@ -261,6 +262,7 @@ int restoreEntriesAndSnapshotInfo(struct raft *r,
     }
     configurationClose(&r->configuration);
     r->configuration = snapshot->configuration;
+    setRoleByConfigChange(r);
     r->configuration_index = snapshot->configuration_index;
     r->commit_index = snapshot->index;
     r->last_applying = snapshot->index;

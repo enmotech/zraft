@@ -1987,6 +1987,7 @@ static int replicationChangeConfiguration(struct raft *r,
     if (configuration != &r->configuration) {
         raft_configuration_close(&r->configuration);
         r->configuration = *configuration;
+        setRoleByConfigChange(r);
     }
 
     /* Start writing the new log entry to disk and send it to the followers. */

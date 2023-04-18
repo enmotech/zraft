@@ -7,7 +7,6 @@
 #include "assert.h"
 #include "configuration.h"
 #include "event.h"
-#include "../test/lib/munit.h"
 
 #ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
@@ -1010,7 +1009,6 @@ void freeEntriesBufReverse(struct raft_log *l, raft_index last_index){
 void freeEntriesBufForward(struct raft_log *l, raft_index last_index)
 {
     size_t i;
-    bool flag = true;
     if (logNumEntries(l) == 0)
         return;
     l->need_free = max(l->need_free, indexAt(l, 0));
@@ -1024,17 +1022,11 @@ void freeEntriesBufForward(struct raft_log *l, raft_index last_index)
         if(entry->buf.base == NULL)
             continue;
         n_refs = refsCount(l, entry->term, idx);
-        if (n_refs != 1) {
-            if (n_refs > 1 && flag) {
-                flag = false;
-                l->need_free = idx;
-            }
-            continue;
-        }
+        if (n_refs > 1) 
+            break;
         destroyEntry(l, entry);        
     }
-    if (flag) 
-        l->need_free = idx;
+    l->need_free = idx;
     raft_term last_term = logTermOf(l, last_index);
     /* We must have an entry at this index */
     assert(last_term != 0);

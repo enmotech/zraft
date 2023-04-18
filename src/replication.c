@@ -42,7 +42,6 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
     struct sendAppendEntries *req = send->data;
     struct raft *r = req->raft;
     unsigned i = configurationIndexOf(&r->configuration, req->server_id);
-    unsigned j;
 
     if (r->state == RAFT_LEADER && i < r->configuration.n) {
         if (status != 0) {
@@ -54,18 +53,9 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
             progressToProbe(r, i);
         }
     }
-    //对于在zstorage和raft-test里加载的entry.buf，需要在raft内部的sendAppendEntriesCb里释放
-    if (req->n > 0) {
-        for(j = 0; j < req->n; j++){
-            if(req->entriesLoadByDisk[j] == true && req->entries[j].buf.base != NULL){
-                raft_entry_free(req->entries[j].buf.base);
-            }
-        }
-    }
+
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, req->index, req->entries, req->n);
-    if (req->n > 0)
-        raft_free(req->entriesLoadByDisk);
     raft_free(req);
 }
 
@@ -83,7 +73,6 @@ static int sendAppendEntries(struct raft *r,
     raft_index next_index = prev_index + 1;
     raft_index optimistic_next_index;
     int rv;
-    unsigned j;
 
     args->term = r->current_term;
     args->prev_log_index = prev_index;
@@ -94,11 +83,11 @@ static int sendAppendEntries(struct raft *r,
 
     rv = logAcquireWithMax(&r->log, next_index, &args->entries,
 			   &args->n_entries, r->message_log_threshold);
-    for(j = 0; j < args->n_entries; j++) {
-        if(args->entries[j].buf.base == NULL){
-            args->entries_reload = true;
-        }
+    if(r->enable_free_trailing && args->n_entries > 0 
+        && args->entries[0].buf.base == NULL){
+        args->entries_reload = true;
     }
+
     if (rv != 0) {
         evtErrf("raft(%llx) log acquire failed %d", r->id, rv);
         goto err;
@@ -138,17 +127,9 @@ static int sendAppendEntries(struct raft *r,
     req->entries = args->entries;
     req->n = args->n_entries;
     req->server_id = server->id;
-    if(req->n > 0)
-        req->entriesLoadByDisk = raft_calloc((size_t)req->n, sizeof(bool));
     req->send.data = req;
     optimistic_next_index = req->index + req->n;
-    for (j = 0; j < req->n; j++) {
-        if (req->entries[j].buf.len == 0 && req->entries[j].type != RAFT_BARRIER) {
-            req->entriesLoadByDisk[j] = true;
-        } else{
-            req->entriesLoadByDisk[j] = false;
-        }
-    }
+
     rv = r->io->send(r->io, &req->send, &message, sendAppendEntriesCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)

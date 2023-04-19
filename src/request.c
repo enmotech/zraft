@@ -148,7 +148,6 @@ static struct request_slot *slotForIndex(struct request_registry *reg,
 	    return NULL;
 
     slot = slotAt(reg, index - slotAt(reg, 0)->index);
-    evtNoticef("index %lld slot index:%lld", index, slot->index);
     assert(slot->index == 0 || slot->index == index);
     return slot;
 }

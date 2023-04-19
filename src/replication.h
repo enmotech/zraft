@@ -13,7 +13,6 @@ struct sendAppendEntries
     struct raft_io_send send;   /* Underlying I/O send request. */
     raft_index index;           /* Index of the first entry in the request. */
     struct raft_entry *entries; /* Entries referenced in the request. */
-    bool *entriesLoadByDisk;      /*  */
     unsigned n;                 /* Length of the entries array. */
     raft_id server_id;          /* Destination server. */
 };

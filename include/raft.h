@@ -665,6 +665,7 @@ struct raft
     struct raft_io *io;         /* Disk and network I/O implementation. */
     struct raft_fsm *fsm;       /* User-defined FSM to apply commands to. */
     raft_id id;                 /* Server ID of this raft instance. */
+    int     role;               /* Server role of this raft instance. */
     /*
      * Cache of the server's persistent state, updated on stable storage before
      * responding to RPCs (Figure 3.1).

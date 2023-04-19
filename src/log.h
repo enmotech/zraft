@@ -22,7 +22,6 @@ void logStart(struct raft_log *l,
               raft_term snapshot_term,
               raft_index start_index);
 
-void freeEntriesBufReverse(struct raft_log *l, raft_index last_index);
 void freeEntriesBufForward(struct raft_log *l, raft_index last_index);
 /* Get the number of entries the log currently contains. */
 size_t logNumEntries(struct raft_log *l);
@@ -112,7 +111,7 @@ void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing);
  * values, and the offset adjusted accordingly. */
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term);
 
-/* 
+/*
  * 返回盘上最早的日志条目的索引和任期
  */
 raft_index logStartIndex(struct raft *r);

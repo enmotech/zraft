@@ -80,9 +80,6 @@ bool configurationIsSpare(const struct raft_configuration *c,
 int configurationJointToNormalCopy(const struct raft_configuration *src,
                                    struct raft_configuration *dst);
 
-/**
- * set raft role when configuration change
- */
-void setRoleByConfigChange(struct raft *r);
+int configurationServerRole(struct raft_configuration *c, raft_id id);
 
 #endif /* CONFIGURATION_H_ */

@@ -74,7 +74,7 @@ int recvAppendEntriesResult(struct raft *r,
     }
 
     //如果logger收到了voter的AER且result->last_log_index >= logLastIndex(&r->log), logger就让权给该voter
-    if (r->role == RAFT_LOGGER && getRaftRole(r, id) == RAFT_VOTER && result->last_log_index >= logLastIndex(&r->log))
+    if (r->role == RAFT_LOGGER && configurationServerRole(&r->configuration, id) == RAFT_VOTER && result->last_log_index >= logLastIndex(&r->log))
     {
         tracef("other server have caught up, logger convert to follower");
         struct raft_transfer *req = raft_malloc(sizeof(struct raft_transfer));

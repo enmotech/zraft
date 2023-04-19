@@ -41,6 +41,7 @@ int raft_init(struct raft *r,
     r->fsm = fsm;
     r->tracer = &NoopTracer;
     r->id = id;
+    r->role = RAFT_STANDBY;
     r->current_term = 0;
     r->voted_for = 0;
     logInit(&r->log);
@@ -329,7 +330,7 @@ RAFT_API int raft_replace_configuration(struct raft *r,
 	assert(r->state == RAFT_FOLLOWER);
 	raft_configuration_close(&r->configuration);
 	r->configuration = conf;
-    setRoleByConfigChange(r);
+    r->role = configurationServerRole(&r->configuration, r->id);
 
 	evtNoticef("raft(%llx) conf replace", r->id);
 	evtDumpConfiguration(r, &conf);
@@ -358,11 +359,15 @@ void raft_enable_request_hook(struct raft *r, bool enable)
 }
 
 void raft_enable_dynamic_trailing(struct raft *r, bool enable){
-    r->enable_dynamic_trailing = enable;
+    (void)r;
+    (void)enable;
 }
+
 void raft_enable_free_trailing(struct raft *r, bool enable){
-    r->enable_free_trailing = enable;
+    (void)r;
+    (void)enable;
 }
+
 void raft_enable_election_at_start(struct raft *r, bool enable)
 {
     r->enable_election_at_start = enable;

@@ -83,7 +83,7 @@ static int sendAppendEntries(struct raft *r,
 
     rv = logAcquireWithMax(&r->log, next_index, &args->entries,
 			   &args->n_entries, r->message_log_threshold);
-    if(r->enable_free_trailing && args->n_entries > 0 
+    if(r->enable_free_trailing && args->n_entries > 0
         && args->entries[0].buf.base == NULL){
         args->entries_reload = true;
     }
@@ -312,8 +312,6 @@ int replicationProgress(struct raft *r, unsigned i)
     bool progress_state_is_snapshot = progressState(r, i) == PROGRESS__SNAPSHOT;
     raft_index snapshot_index = logSnapshotIndex(&r->log);
     raft_index next_index = progressNextIndex(r, i);
-    raft_index match_index = progressMatchIndex(r, i);
-    raft_index match_term;
     raft_index prev_index;
     raft_term prev_term;
 
@@ -361,8 +359,7 @@ int replicationProgress(struct raft *r, unsigned i)
         prev_term = logTermOf(&r->log, prev_index);
         /* If the entry is not anymore in our log, send the last snapshot if we're
          * not doing so already. */
-        if ((prev_term == 0 && !progress_state_is_snapshot)
-        || (prev_index < snapshot_index && progressGetRecentRecv(r, i) == false)) {
+        if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
 	    evtNoticef(
@@ -386,10 +383,6 @@ int replicationProgress(struct raft *r, unsigned i)
 
 send_snapshot:
     if (progressGetRecentRecv(r, i)) {
-        if(r->log.offset <= match_index && r->configuration.servers[i].id !=  r->leader_state.promotee_id) {
-            match_term = match_index == 0 ? 0 : logTermOf(&r->log, match_index);
-            return sendAppendEntries(r, i, match_index, match_term);
-        }
         /* Only send a snapshot when we have heard from the server */
         return sendSnapshot(r, i);
     } else {
@@ -1643,11 +1636,7 @@ static raft_index nextSnapshotIndex(struct raft *r)
 static bool shouldTakeSnapshot(struct raft *r)
 {
     raft_index snapshot_index;
-    struct raft_server *s;
-    struct raft_progress *p;
-    raft_index tmp = logLastIndex(&r->log);
-    bool ignoreUpdateTrailing = false;
-    unsigned i;
+
     /* If we are shutting down, let's not do anything. */
     if (r->state == RAFT_UNAVAILABLE) {
         return false;
@@ -1664,28 +1653,6 @@ static bool shouldTakeSnapshot(struct raft *r)
         return false;
     }
 
-    for (i = 0; i<r->configuration.n; i++) {
-        if(r->state != RAFT_LEADER)
-            break;
-        s = &r->configuration.servers[i];
-        if (s->role == RAFT_SPARE &&
-			s->id != r->leader_state.promotee_id) {
-			continue;
-		}
-        p = &r->leader_state.progress[i];
-        if (p->match_index <= tmp) {
-			tmp = p->match_index;
-            raft_time now = r->io->time(r->io);
-
-            if(now - p->recent_recv_time > r->reset_trailing_timeout){
-                raft_set_snapshot_trailing(r, r->snapshot.threshold);
-                if(r->log.snapshot.last_index > 0)
-                    logSnapshot(&r->log, r->log.snapshot.last_index, r->snapshot.trailing);
-                ignoreUpdateTrailing = true;
-            }
-        }
-    }
-
     snapshot_index = nextSnapshotIndex(r);
     if (snapshot_index <= r->log.snapshot.last_index)
 	    return false;
@@ -1693,21 +1660,6 @@ static bool shouldTakeSnapshot(struct raft *r)
     if (snapshot_index - r->log.snapshot.last_index < r->snapshot.threshold) {
         return false;
     }
-    evtInfof("raft(%llx) ignoreUpdateTrailing %d enable_dynamic_trailing %d", r->id,
-                ignoreUpdateTrailing, r->enable_dynamic_trailing);
-    if (ignoreUpdateTrailing == false && r->enable_dynamic_trailing) {
-        if (r->state == RAFT_LEADER) {
-            r->snapshot.trailing = 0;
-            do{
-                r->snapshot.trailing += r->snapshot.threshold;
-                tmp += r->snapshot.threshold;
-            }while(tmp < snapshot_index);
-        } else {
-            r->snapshot.trailing += r->snapshot.threshold;
-        }
-        evtInfof("raft(%llx) update snapshot trailing to %u", r->id, r->snapshot.trailing);
-    }
-
 
     return true;
 }
@@ -1987,7 +1939,7 @@ static int replicationChangeConfiguration(struct raft *r,
     if (configuration != &r->configuration) {
         raft_configuration_close(&r->configuration);
         r->configuration = *configuration;
-        setRoleByConfigChange(r);
+        r->role = configurationServerRole(&r->configuration, r->id);
     }
 
     /* Start writing the new log entry to disk and send it to the followers. */

@@ -52,7 +52,7 @@ int snapshotRestore(struct raft *r, struct raft_snapshot *snapshot)
     }
     configurationClose(&r->configuration);
     r->configuration = snapshot->configuration;
-    setRoleByConfigChange(r);
+    r->role = configurationServerRole(&r->configuration, r->id);
     r->configuration_index = snapshot->configuration_index;
     r->commit_index = snapshot->index;
     r->last_applying = snapshot->index;

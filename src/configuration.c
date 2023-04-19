@@ -468,10 +468,14 @@ void raft_configuration_codec_set_default(void)
 {
 	currentCodec = &defaultCodec;
 }
-void setRoleByConfigChange(struct raft *r)
+
+int configurationServerRole(struct raft_configuration *c, raft_id id)
 {
-    const struct raft_server *server;
-    server = configurationGet(&r->configuration, r->id);
-    if(server != NULL)
-        r->role = server->role;
+    const struct raft_server *server = configurationGet(c, id);
+
+    if (server == NULL)
+        return RAFT_STANDBY;
+    if (server->group & RAFT_GROUP_NEW)
+        return server->role_new;
+    return server->role;
 }

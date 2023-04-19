@@ -4,6 +4,7 @@
 #include "tracing.h"
 #include "recv.h"
 #include "replication.h"
+#include "progress.h"
 #include "event.h"
 #include "log.h"
 
@@ -17,6 +18,37 @@ static void loggerLeadershipTransferCb(struct raft_transfer *req)
 {
     if (req != NULL)
         raft_free(req);
+}
+
+static void loggerTransfer(struct raft *r, const raft_id id)
+{
+    int rv;
+    struct raft_transfer *req;
+    raft_index match_index;
+    unsigned server_index = configurationIndexOf(&r->configuration, id);
+    assert(server_index < r->configuration.n);
+
+    match_index = progressMatchIndex(r, server_index);
+    if (configurationServerRole(&r->configuration, id) != RAFT_VOTER) {
+        tracef("server role is not voter");
+        return;
+    }
+
+    if (match_index != logLastIndex(&r->log)) {
+        return;
+    }
+
+    tracef("other server have caught up, logger convert to follower");
+    req = raft_malloc(sizeof(struct raft_transfer));
+    if (req == NULL) {
+        tracef("out of memory when malloc transfer request");
+        return;
+    }
+
+    rv = raft_transfer(r, req, id, loggerLeadershipTransferCb);
+    if (rv != 0) {
+        tracef("transfer leader to %llx faild %d", id, rv);
+    }
 }
 
 int recvAppendEntriesResult(struct raft *r,
@@ -74,12 +106,8 @@ int recvAppendEntriesResult(struct raft *r,
     }
 
     //如果logger收到了voter的AER且result->last_log_index >= logLastIndex(&r->log), logger就让权给该voter
-    if (r->role == RAFT_LOGGER && configurationServerRole(&r->configuration, id) == RAFT_VOTER && result->last_log_index >= logLastIndex(&r->log))
-    {
-        tracef("other server have caught up, logger convert to follower");
-        struct raft_transfer *req = raft_malloc(sizeof(struct raft_transfer));
-        rv = raft_transfer(r, req, id, loggerLeadershipTransferCb);
-        return rv;
+    if (r->role == RAFT_LOGGER && r->configuration.phase == RAFT_CONF_NORMAL) {
+        loggerTransfer(r, id);
     }
 
     return 0;

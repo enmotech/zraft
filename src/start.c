@@ -207,6 +207,7 @@ int raft_start(struct raft *r)
         return rv;
     }
 
+    r->role = configurationServerRole(&r->configuration, r->id);
     /* Start the I/O backend. The tickCb function is expected to fire every
      * r->heartbeat_timeout milliseconds and recvCb whenever an RPC is
      * received. */
@@ -236,7 +237,7 @@ err_skip_self_elect:
     return 0;
 }
 
-int restoreEntriesAndSnapshotInfo(struct raft *r, 
+int restoreEntriesAndSnapshotInfo(struct raft *r,
                                   struct raft_snapshot *s,
                                   raft_index start_index,
                                   struct raft_entry *entries,
@@ -268,7 +269,7 @@ int restoreEntriesAndSnapshotInfo(struct raft *r,
 
     logTruncate(&r->log, r->log.offset + 1);
 
-    rv = restoreEntries(r, snapshot->index, snapshot->term, 
+    rv = restoreEntries(r, snapshot->index, snapshot->term,
         start_index, entries, n_entries);
     if(rv != 0){
         raft_free(snapshot);
@@ -281,12 +282,12 @@ int restoreEntriesAndSnapshotInfo(struct raft *r,
         r->configuration_uncommitted_index = 0;
         r->configuration_index = snapshot->configuration_index;
     }
-	
-    r->follower_state.current_leader.id = 0; 
-    
+
+    r->follower_state.current_leader.id = 0;
+
     // i = configurationIndexOf(&r->configuration, r->id);
 
-    raft_free(snapshot); 
+    raft_free(snapshot);
     return 0;
 }
 struct loadData {
@@ -370,6 +371,7 @@ static void loadCb(struct raft_io_load *req,
         goto err;
     }
 
+    r->role = configurationServerRole(&r->configuration, r->id);
     /* Start the I/O backend. The tickCb function is expected to fire every
      * r->heartbeat_timeout milliseconds and recvCb whenever an RPC is
      * received. */

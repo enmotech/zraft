@@ -41,6 +41,7 @@ int raft_init(struct raft *r,
     r->fsm = fsm;
     r->tracer = &NoopTracer;
     r->id = id;
+    r->role = RAFT_STANDBY;
     r->current_term = 0;
     r->voted_for = 0;
     logInit(&r->log);

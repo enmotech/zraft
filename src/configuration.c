@@ -471,7 +471,6 @@ void raft_configuration_codec_set_default(void)
 
 int configurationServerRole(struct raft_configuration *c, raft_id id)
 {
-    int role = RAFT_STANDBY;
     const struct raft_server *server = configurationGet(c, id);
 
     if (server == NULL)

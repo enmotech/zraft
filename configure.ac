@@ -87,6 +87,10 @@ AM_CONDITIONAL(DEBUG_ENABLED, test "x$enable_debug" = "xyes")
 AC_ARG_ENABLE(sanitize, AS_HELP_STRING([--enable-sanitize[=ARG]], [enable code sanitizers [default=no]]))
 AM_CONDITIONAL(SANITIZE_ENABLED, test x"$enable_sanitize" = x"yes")
 
+# Whether to enable .
+AC_ARG_ENABLE(lto, AS_HELP_STRING([--enable-lto[=ARG]], [enable link time optimization [default=no]]))
+AM_CONDITIONAL(LTO_ENABLED, test x"$enable_lto" = x"yes")
+
 # Whether to enable code coverage.
 AX_CODE_COVERAGE
 

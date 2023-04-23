@@ -264,6 +264,10 @@ if SANITIZE_ENABLED
   AM_CFLAGS += -fsanitize=address
 endif
 
+if LTO_ENABLED
+  AM_CFLAGS += -flto
+endif
+
 if CODE_COVERAGE_ENABLED
 
 include $(top_srcdir)/aminclude_static.am

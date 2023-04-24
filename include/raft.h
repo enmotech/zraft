@@ -1017,6 +1017,11 @@ RAFT_API const char *raft_errmsg(struct raft *r);
 RAFT_API int raft_state(struct raft *r);
 
 /**
+ * Return the code of the current raft role.
+ */
+RAFT_API int raft_role(struct raft *r);
+
+/**
  * Return the code of the current raft_io state.
  */
 RAFT_API int raft_io_state(struct raft_io *io);

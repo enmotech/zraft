@@ -96,6 +96,11 @@ err_after_address_alloc:
     return rv;
 }
 
+int raft_role(struct raft *r)
+{
+    return r->role;
+}
+
 int raft_io_state(struct raft_io *io)
 {
 	return io->state;

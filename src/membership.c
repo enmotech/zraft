@@ -187,6 +187,7 @@ int membershipRollback(struct raft *r)
         return rv;
     }
 
+    r->role = configurationServerRole(&r->configuration, r->id);
     r->configuration_uncommitted_index = 0;
     evtNoticef("raft(%llx) conf rollback ", r->id);
     evtDumpConfiguration(r, &r->configuration);

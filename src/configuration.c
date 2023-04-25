@@ -75,7 +75,7 @@ bool configurationIsSpare(const struct raft_configuration *c,
 
     if (s->group & RAFT_GROUP_NEW & group) {
         assert(c->phase == RAFT_CONF_JOINT);
-        spare = spare || (s->role_new == RAFT_SPARE);
+        spare = spare && (s->role_new == RAFT_SPARE);
     }
 
     return spare;

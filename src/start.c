@@ -251,7 +251,9 @@ int restoreEntriesAndSnapshotInfo(struct raft *r,
 
     assert(s->index <= (start_index + n_entries -1));
     snapshot = raft_malloc(sizeof(*snapshot));
-    assert(snapshot != NULL);
+    if (snapshot == NULL) {
+        return RAFT_NOMEM;
+    }
     configurationClose(&r->snapshot.configuration);
     snapshotCopy(s, snapshot);
     rv = configurationCopy(&snapshot->configuration,
@@ -274,8 +276,7 @@ int restoreEntriesAndSnapshotInfo(struct raft *r,
     rv = restoreEntries(r, snapshot->index, snapshot->term,
         start_index, entries, n_entries);
     if(rv != 0){
-        raft_free(snapshot);
-        return rv;
+        goto err_free_snapshot;
     }
 
     r->snapshot.trailing = (unsigned int)n_entries;
@@ -284,14 +285,22 @@ int restoreEntriesAndSnapshotInfo(struct raft *r,
         r->configuration_uncommitted_index = 0;
         r->configuration_index = snapshot->configuration_index;
     }
-
     r->follower_state.current_leader.id = 0;
 
-    // i = configurationIndexOf(&r->configuration, r->id);
-
+err_free_snapshot:
+    raft_free(snapshot->bufs);
     raft_free(snapshot);
-    return 0;
+    return rv;
 }
+
+int raft_restore(struct raft *r, struct raft_snapshot *snapshot,
+                 raft_index start_index, struct raft_entry *entries,
+                 size_t n_entries)
+{
+    return restoreEntriesAndSnapshotInfo(r, snapshot, start_index, entries,
+                                         n_entries);
+}
+
 struct loadData {
     struct raft *raft;
     struct raft_io_load req;

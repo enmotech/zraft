@@ -301,20 +301,8 @@ int raft_joint_promote(struct raft *r,
 
     /* Check if we have already the desired role. */
     if (server->role == role) {
-        const char *name;
+        const char *name = configurationRoleName(role);
         rv = RAFT_BADROLE;
-        switch (role) {
-            case RAFT_VOTER:
-                name = "voter";
-                break;
-            case RAFT_LOGGER:
-                name = "logger";
-                break;
-            default:
-                name = NULL;
-                assert(0);
-                break;
-        }
         ErrMsgPrintf(r->errmsg, "server is already %s", name);
         evtWarnf("raft(%llx) server %llx is already %s", r->id, server->id, name);
         goto err;
@@ -445,26 +433,8 @@ int raft_assign(struct raft *r,
 
     /* Check if we have already the desired role. */
     if (server->role == role) {
-        const char *name;
+        const char *name = configurationRoleName(role);
         rv = RAFT_BADROLE;
-        switch (role) {
-            case RAFT_VOTER:
-                name = "voter";
-                break;
-            case RAFT_STANDBY:
-                name = "stand-by";
-                break;
-            case RAFT_SPARE:
-                name = "spare";
-                break;
-            case RAFT_LOGGER:
-                name = "logger";
-                break;
-            default:
-                name = NULL;
-                assert(0);
-                break;
-        }
         ErrMsgPrintf(r->errmsg, "server is already %s", name);
         evtWarnf("raft(%llx) server %llx is already %s", r->id, server->id, name);
         goto err;

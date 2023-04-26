@@ -479,3 +479,11 @@ int configurationServerRole(struct raft_configuration *c, raft_id id)
         return server->role_new;
     return server->role;
 }
+
+static const char *roleNames[] = {"stand-by", "voter", "spare", "logger"};
+const char *configurationRoleName(int role)
+{
+    assert(role == RAFT_STANDBY || role == RAFT_VOTER || role == RAFT_SPARE
+        || role == RAFT_LOGGER);
+    return roleNames[role];
+}

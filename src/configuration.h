@@ -82,4 +82,6 @@ int configurationJointToNormalCopy(const struct raft_configuration *src,
 
 int configurationServerRole(struct raft_configuration *c, raft_id id);
 
+const char *configurationRoleName(int role);
+
 #endif /* CONFIGURATION_H_ */

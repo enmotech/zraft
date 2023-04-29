@@ -41,6 +41,7 @@ static void convertClearFollower(struct raft *r)
 {
     r->follower_state.current_leader.id = 0;
     r->follower_state.current_leader.snapshot_index = 0;
+    r->follower_state.current_leader.trailing = 0;
     r->follower_aux.match_leader = false;
 }
 
@@ -139,6 +140,7 @@ void convertToFollower(struct raft *r)
 
     r->follower_state.current_leader.id = 0;
     r->follower_state.current_leader.snapshot_index = 0;
+    r->follower_state.current_leader.trailing = r->snapshot.trailing;
     if (r->state_change_cb)
 		r->state_change_cb(r, RAFT_FOLLOWER);
 }

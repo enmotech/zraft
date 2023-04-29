@@ -655,6 +655,19 @@ struct request_registry
     size_t front, back;         // Used slots [front, back)
 };
 
+struct raft_snapshot_sample {
+	raft_index index;
+};
+
+struct raft_snapshot_sampler {
+	raft_time span; // Time span between first and last sample
+	raft_time period; // Sample period in ms
+	struct raft_snapshot_sample *samples; // Circular buffer of sample
+	size_t			     size; // Number of samples
+	size_t			     last; // Last sample index
+	raft_time		     last_time;
+};
+
 /**
  * Hold and drive the state of a single raft server in a cluster.
  */
@@ -766,7 +779,8 @@ struct raft
             struct                                /* Current leader info. */
             {
                 raft_id id;
-		raft_index snapshot_index;
+                raft_index snapshot_index;
+                unsigned int trailing;
             } current_leader;
         } follower_state;
         struct
@@ -872,6 +886,7 @@ struct raft
     bool enable_dynamic_trailing;
     /* Flag for raft free log trailing buffer */
     bool enable_free_trailing;
+    struct raft_snapshot_sampler sampler;
 };
 
 RAFT_API int raft_init(struct raft *r,

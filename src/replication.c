@@ -1690,7 +1690,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 	     r->snapshot.trailing, r->enable_free_trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
     if (r->enable_free_trailing) {
-        freeEntriesBufForward(&r->log, snapshot->index);
+        logFreeEntriesBufForward(&r->log, snapshot->index);
     }
 out:
     snapshotClose(&r->snapshot.pending);

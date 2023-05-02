@@ -44,8 +44,8 @@ static void recvUpdateLeaderSnapshot(struct raft *r,
 	if (r->follower_state.current_leader.snapshot_index == snapshot_index)
 		return;
 
-	evtInfof("raft(%llx) update leader snapshot index %llu",
-		 r->id, snapshot_index);
+	evtInfof("raft(%llx) update leader snapshot index %llu trailing %u",
+		 r->id, snapshot_index, trailing);
 	r->follower_state.current_leader.snapshot_index = snapshot_index;
     r->follower_state.current_leader.trailing = trailing;
 }

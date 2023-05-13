@@ -1,11 +1,23 @@
 #include "configuration.h"
 
 #include "assert.h"
-#include "byte.h"
 #include "event.h"
+#include "byte.h"
 
 /* Current encoding format version. */
 #define ENCODING_FORMAT 1
+#define CONF_SERVER_VERSION_V1 1
+/**
+ * raft_configuration meta info, fixed size 256.
+ */
+struct raft_configuration_meta
+{
+    uint32_t version;
+    uint32_t server_version;
+    uint32_t server_size;
+    uint8_t  phase;
+    uint8_t  reserve[243];
+};
 
 int getRaftRole(struct raft *r, raft_id id)
 {
@@ -320,11 +332,16 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
 
     /* We need one byte for the encoding format version */
     n++;
-    /* then 8 bytes for phase */
-    n += sizeof(uint64_t);
     /* Then 8 bytes for number of servers. */
     n += sizeof(uint64_t);
 
+    /* Then some space for each server. */
+    for (i = 0; i < c->n; i++) {
+        n += sizeof(uint64_t);            /* Server ID */
+        n++;                              /* Voting flag */
+    };
+
+    n += sizeof(struct raft_configuration_meta);
     /* Then some space for each server. */
     for (i = 0; i < c->n; i++) {
         n += sizeof(uint64_t);            /* Server ID */
@@ -335,15 +352,16 @@ size_t configurationEncodedSize(const struct raft_configuration *c)
     return bytePad64(n);
 }
 
-
 void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
 {
     void *cursor = buf;
     unsigned i;
+    struct raft_configuration_meta meta = {0};
+    uint8_t *start;
 
+    assert(sizeof(meta) == CONF_META_SIZE);
     /* Encoding format version */
     bytePut8(&cursor, ENCODING_FORMAT);
-    bytePut64Unaligned(&cursor, c->phase);
     /* Number of servers. */
     bytePut64Unaligned(&cursor, c->n); /* cursor might not be 8-byte aligned */
 
@@ -352,15 +370,50 @@ void configurationEncodeToBuf(const struct raft_configuration *c, void *buf)
         bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
         assert(server->role < 255);
         bytePut8(&cursor, (uint8_t)server->role);
+    };
+
+    meta.version = CONF_META_VERSION;
+    meta.server_version = CONF_SERVER_VERSION;
+    meta.server_size = CONF_SERVER_SIZE;
+    meta.phase = c->phase;
+    bytePut32(&cursor, meta.version);
+    bytePut32(&cursor, meta.server_version);
+    bytePut32(&cursor, meta.server_size);
+    bytePut8(&cursor, meta.phase);
+    for (i = 0; i < sizeof(meta.reserve); i++){
+        bytePut8(&cursor, meta.reserve[i]);
+    }
+
+    for (i = 0;i < c->n; i++) {
+        struct raft_server *server = &c->servers[i];
+        start = (uint8_t *)cursor;
+        bytePut64Unaligned(&cursor, server->id); /* might not be aligned */
+        assert(server->role < 255);
+        bytePut8(&cursor, (uint8_t)server->role);
         bytePut8(&cursor, (uint8_t)server->role_new);
         bytePut8(&cursor, (uint8_t)server->group);
-    };
+        assert(((uint8_t *)cursor - start) == CONF_SERVER_SIZE);
+    }
 }
 
-int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c)
+static size_t pointerDiff(const void *start, const void *end)
+{
+    assert((uint8_t *)end  >= (uint8_t *)start);
+
+    return (uintptr_t)(uint8_t *)end - (uintptr_t)(uint8_t *)start;
+}
+
+int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c,
+                               size_t size)
 {
     size_t i;
     size_t n;
+    int rv;
+    int role;
+    raft_id id;
+    const void *start = buf;
+    struct raft_server *s;
+    struct raft_configuration_meta meta = {0};
 
     /* Check the encoding format version */
     if (byteGet8(&buf) != ENCODING_FORMAT) {
@@ -368,33 +421,62 @@ int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c)
 	    return RAFT_MALFORMED;
     }
     /* then read the phase */
-    c->phase = (size_t)byteGet64Unaligned(&buf);
+    c->phase = RAFT_CONF_NORMAL;
     /* Read the number of servers. */
     n = (size_t)byteGet64Unaligned(&buf);
 
     /* Decode the individual servers. */
     for (i = 0; i < n; i++) {
-        raft_id id;
-        int role;
-        int role_new;
-        int group;
-        int rv;
         /* Server ID. */
         id = byteGet64Unaligned(&buf);
         /* Role code. */
         role = byteGet8(&buf);
-        role_new = byteGet8(&buf);
-        group = byteGet8(&buf);
-        rv = configurationAdd(c, id, role, role_new, group);
+        rv = configurationAdd(c, id, role, role, RAFT_GROUP_OLD);
         if (rv != 0) {
             evtErrf("conf add %llx failed", id, rv);
             return rv;
         }
     }
 
+    if (size < pointerDiff(start, buf) + CONF_META_SIZE)
+        return 0;
+
+    meta.version = byteGet32(&buf);
+    meta.server_version = byteGet32(&buf);
+    meta.server_size = byteGet32(&buf);
+    meta.phase = byteGet8(&buf);
+    // discard reserve filed
+    buf = (const uint8_t *)buf + sizeof(meta.reserve);
+
+    assert(meta.server_version >= CONF_SERVER_VERSION_V1);
+    for (i = 0; i < n; i++) {
+        /* Server ID. */
+        id = byteGet64Unaligned(&buf);
+        /* Role code. */
+        role = byteGet8(&buf);
+        s = (struct raft_server *)configurationGet(c, id);
+        assert(s);
+        assert(s->role == role);
+        /* New role */
+        s->role_new = byteGet8(&buf);
+        /* Group */
+        s->group = byteGet8(&buf);
+
+        /* Compare server version for new field */
+        // if (meta.server_version < CONF_SERVER_VERSION_V2)
+        //      continue;
+
+        /* Decode v2 field */
+        // s->v2_field = byteGet(&buf);
+
+        /* Skip unknown unknown field */
+        assert(meta.server_size >= CONF_SERVER_SIZE);
+        buf = (const uint8_t *)buf + (meta.server_size - CONF_SERVER_SIZE);
+    }
+    c->phase = meta.phase;
+
     return 0;
 }
-
 static int defaultEncode(void *ptr,
 			 const struct raft_configuration *c,
 			 struct raft_buffer *buf)
@@ -434,8 +516,7 @@ static int defaultDecode(void *ptr,
     /* Check that the target configuration is empty. */
     assert(c->n == 0);
     assert(c->servers == NULL);
-
-    return configurationDecodeFromBuf(buf->base, c);
+    return configurationDecodeFromBuf(buf->base, c, buf->len);
 }
 
 static struct raft_configuration_codec defaultCodec = {

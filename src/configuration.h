@@ -5,6 +5,11 @@
 
 #include "../include/raft.h"
 
+#define CONF_META_SIZE 256
+#define CONF_META_VERSION 1
+#define CONF_SERVER_SIZE (8 + 1 + 1 + 1) /* id|role|new role|group */
+#define CONF_SERVER_VERSION 1
+
 /* 从r的configuration中获取id对应的raft_server的role */
 int getRaftRole(struct raft *r, raft_id id);
 
@@ -55,7 +60,8 @@ size_t configurationEncodedSize(const struct raft_configuration *c);
  * which is assumed to be at least configurationEncodedSize(c) bytes. */
 void configurationEncodeToBuf(const struct raft_configuration *c, void *buf);
 
-int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c);
+int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c,
+                               size_t size);
 
 /* Encode the given configuration object. The memory of the returned buffer is
  * allocated using raft_malloc(), and client code is responsible for releasing

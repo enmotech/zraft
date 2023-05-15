@@ -192,7 +192,7 @@ static int electionUpdateMeta(struct raft *r)
 
 
     r->io->state = RAFT_IO_BUSY;
-    evtNoticef("raft(%llx) election set meta term %u vote_for %llx", r->id,
+    evtNoticef("raft(%llx) election set meta term %u vote_fo %lu", r->id,
 	       request->term, request->voted_for);
     rv = r->io->set_meta(r->io,
                  &request->req,

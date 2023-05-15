@@ -16,28 +16,25 @@
 
 static void loggerLeadershipTransferCb(struct raft_transfer *req)
 {
-    raft_free(req);
+    if (req != NULL)
+        raft_free(req);
 }
 
 static void loggerTransfer(struct raft *r, const raft_id id)
 {
     int rv;
-    unsigned i;
     struct raft_transfer *req;
+    raft_index match_index;
+    unsigned server_index = configurationIndexOf(&r->configuration, id);
+    assert(server_index < r->configuration.n);
 
-    i = configurationIndexOf(&r->configuration, id);
-    if (i == r->configuration.n) {
-        tracef("server %llx is not part of configuration", id);
-        return;
-    }
-
+    match_index = progressMatchIndex(r, server_index);
     if (configurationServerRole(&r->configuration, id) != RAFT_VOTER) {
         tracef("server role is not voter");
         return;
     }
 
-    if (progressMatchIndex(r, i) != logLastIndex(&r->log)) {
-        tracef("server log is not catch up with leader");
+    if (match_index != logLastIndex(&r->log)) {
         return;
     }
 

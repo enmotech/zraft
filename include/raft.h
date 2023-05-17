@@ -1401,6 +1401,12 @@ RAFT_API void raft_enable_election_at_start(struct raft *r, bool enable);
  */
 RAFT_API bool raft_is_distruptive_candidate(struct raft *r);
 
+/**
+ * Set snapshot sample span in ms.
+ * Return 0 or RAFT_NOMEM
+ */
+RAFT_API int raft_set_snapshot_sample_span(struct raft *r, unsigned span);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

@@ -24,7 +24,8 @@
 #define DEFAULT_MESSAGE_LOG_THRESHOLD 32
 #define DEFAULT_INFLIGHT_LOG_THRESHOLD 0
 #define DEFAULT_SYNC_REPLICATION_TIMEOUT 3000
-#define SNAPSHOT_SAMPLE_SPAN 15000 /* Snapshot sample span in ms */
+#define SNAPSHOT_SAMPLE_SPAN 10000 /* Snapshot sample span in ms */
+#define SNAPSHOT_SAMPLE_SPAN_MIN 1000 /* Snapshot sample min span in ms */
 #define SNAPSHOT_SAMPLE_PERIOD 100 /* Snapshot sample period in ms */
 
 /* Number of milliseconds after which a server promotion will be aborted if the
@@ -391,4 +392,13 @@ bool raft_is_distruptive_candidate(struct raft *r)
     assert(r->state == RAFT_CANDIDATE);
 
     return r->candidate_state.disrupt_leader;
+}
+
+int raft_set_snapshot_sample_span(struct raft *r, unsigned span)
+{
+    assert(span >= SNAPSHOT_SAMPLE_SPAN_MIN);
+    snapshotSamplerClose(&r->sampler);
+
+    return snapshotSamplerInit(&r->sampler, span, SNAPSHOT_SAMPLE_PERIOD,
+        r->io->time(r->io));
 }

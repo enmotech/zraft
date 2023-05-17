@@ -88,13 +88,15 @@ static void tearDown(void *data)
 
 /* Assert that the attributes of the I'th server in the fixture's configuration
  * match the given values. */
-#define ASSERT_SERVER(I, ID, ROLE)                  \
+#define ASSERT_SERVER(I, ID, ROLE, NROLE, GROUP)             \
     {                                                        \
         struct raft_server *server;                          \
         munit_assert_int(I, <, f->configuration.n);          \
         server = &f->configuration.servers[I];               \
         munit_assert_int(server->id, ==, ID);                \
         munit_assert_int(server->role, ==, ROLE);            \
+        munit_assert_int(server->role_new, ==, NROLE);       \
+        munit_assert_int(server->group, ==, GROUP);          \
     }
 
 /******************************************************************************
@@ -273,7 +275,7 @@ TEST(configurationAdd, one, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     ADD(1, RAFT_VOTER);
     ASSERT_N(1);
-    ASSERT_SERVER(0, 1, RAFT_VOTER);
+    ASSERT_SERVER(0, 1, RAFT_VOTER, RAFT_VOTER, RAFT_GROUP_OLD);
     return MUNIT_OK;
 }
 
@@ -284,8 +286,8 @@ TEST(configurationAdd, two, setUp, tearDown, 0, NULL)
     ADD(1, RAFT_VOTER);
     ADD(2, RAFT_STANDBY);
     ASSERT_N(2);
-    ASSERT_SERVER(0, 1, RAFT_VOTER);
-    ASSERT_SERVER(1, 2, RAFT_STANDBY);
+    ASSERT_SERVER(0, 1, RAFT_VOTER, RAFT_VOTER, RAFT_GROUP_OLD);
+    ASSERT_SERVER(1, 2, RAFT_STANDBY, RAFT_STANDBY, RAFT_GROUP_OLD);
     return MUNIT_OK;
 }
 
@@ -359,7 +361,7 @@ TEST(configurationRemove, first, setUp, tearDown, 0, NULL)
     ADD(2, RAFT_STANDBY);
     REMOVE(1);
     ASSERT_N(1);
-    ASSERT_SERVER(0, 2, RAFT_STANDBY);
+    ASSERT_SERVER(0, 2, RAFT_STANDBY, RAFT_STANDBY, RAFT_GROUP_OLD);
     return MUNIT_OK;
 }
 
@@ -372,8 +374,8 @@ TEST(configurationRemove, middle, setUp, tearDown, 0, NULL)
     ADD(3, RAFT_VOTER);
     REMOVE(2);
     ASSERT_N(2);
-    ASSERT_SERVER(0, 1, RAFT_VOTER);
-    ASSERT_SERVER(1, 3, RAFT_VOTER);
+    ASSERT_SERVER(0, 1, RAFT_VOTER, RAFT_VOTER, RAFT_GROUP_OLD);
+    ASSERT_SERVER(1, 3, RAFT_VOTER, RAFT_VOTER, RAFT_GROUP_OLD);
     return MUNIT_OK;
 }
 
@@ -412,12 +414,15 @@ TEST(configurationEncode, one_server, setUp, tearDown, 0, NULL)
     struct raft_buffer buf;
     size_t len;
     const void *cursor;
+    size_t i;
     //const char *address = "127.0.0.1:666";
     ADD(1, RAFT_VOTER);
     ENCODE(&buf);
 
-    len = 1 + 8 + 8 +                 /* Version and n of servers */
-          8; /* Server */
+    len = 1 + 8 +             /* Version and n of servers */
+          8 + 1 +             /* Old Id and role */
+          256 +               /* Meta */
+          8 + 1 + 1 + 1;      /* Server */
     len = bytePad64(len);
 
     munit_assert_int(buf.len, ==, len);
@@ -425,11 +430,25 @@ TEST(configurationEncode, one_server, setUp, tearDown, 0, NULL)
     cursor = buf.base;
 
     munit_assert_int(byteGet8(&cursor), ==, 1);
-    munit_assert_int(byteGet64Unaligned(&cursor), ==, 0);
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
 
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
     munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
+
+    // meta
+    munit_assert_int(byteGet32(&cursor), ==, CONF_META_VERSION);
+    munit_assert_int(byteGet32(&cursor), ==, CONF_SERVER_VERSION);
+    munit_assert_int(byteGet32(&cursor), ==, CONF_SERVER_SIZE);
+    munit_assert_int(byteGet8(&cursor), ==, 0);
+
+    // skip reserve
+    for (i = 0; i < 243; ++i)
+        byteGet8(&cursor);
+
+    munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_GROUP_OLD);
 
     raft_free(buf.base);
 
@@ -442,15 +461,20 @@ TEST(configurationEncode, two_servers, setUp, tearDown, 0, NULL)
     struct fixture *f = data;
     struct raft_buffer buf;
     size_t len;
+    size_t i;
     const void *cursor;
 
     ADD(1, RAFT_STANDBY);
     ADD(2, RAFT_VOTER);
     ENCODE(&buf);
 
-    len = 1 + 8 + 8 +                       /* Version and n of servers */
-          8 + 1 + 1 + 1 + /* Server 1 */
-          8 + 1 + 1 + 1;  /* Server 2 */
+    len = 1 + 8 +             /* Version and n of servers */
+          8 + 1 +             /* Server 1 */
+          8 + 1 +             /* Server 2 */
+          256 +               /* Meta */
+          8 + 1 + 1 + 1 +     /* Server 1 */
+          8 + 1 + 1 + 1;      /* Server 2*/
+
     len = bytePad64(len);
 
     munit_assert_int(buf.len, ==, len);
@@ -458,8 +482,23 @@ TEST(configurationEncode, two_servers, setUp, tearDown, 0, NULL)
     cursor = buf.base;
 
     munit_assert_int(byteGet8(&cursor), ==, 1);
-    munit_assert_int(byteGet64Unaligned(&cursor), ==, 0);
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 2);
+
+    munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_STANDBY);
+
+    munit_assert_int(byteGet64Unaligned(&cursor), ==, 2);
+    munit_assert_int(byteGet8(&cursor), ==, RAFT_VOTER);
+
+    // meta
+    munit_assert_int(byteGet32(&cursor), ==, CONF_META_VERSION);
+    munit_assert_int(byteGet32(&cursor), ==, CONF_SERVER_VERSION);
+    munit_assert_int(byteGet32(&cursor), ==, CONF_SERVER_SIZE);
+    munit_assert_int(byteGet8(&cursor), ==, 0);
+
+    // skip reserve
+    for (i = 0; i < 243; ++i)
+        byteGet8(&cursor);
 
     munit_assert_int(byteGet64Unaligned(&cursor), ==, 1);
     munit_assert_int(byteGet8(&cursor), ==, RAFT_STANDBY);
@@ -500,22 +539,45 @@ SUITE(configurationDecode)
 TEST(configurationDecode, one_server, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    uint8_t bytes[] = {1,                            /* Version */
-                       0,   0,  0,  0,  0,  0,  0,  0,
-                       1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
-                       5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
-                       1, 1, 0};                           /* Role code */
+    uint8_t bytes[] = {1,                      /* Version */
+                       1, 0, 0, 0, 0, 0, 0, 0, /* Number of servers */
+                       5, 0, 0, 0, 0, 0, 0, 0, /* Server ID */
+                       2};                     /* Role code */
+    uint8_t metas[CONF_META_SIZE] = {1 , 0, 0, 0, /* Version */
+                                     1 , 0, 0, 0, /* Server version */
+                                     11, 0, 0, 0, /* Server size*/
+                                     1 };         /* Phase joint */
+    uint8_t nservers[] = {5, 0, 0, 0, 0, 0, 0, 0, /* Server ID */
+                          2,                      /* Role code */
+                          1,                      /* New Role */
+                          3};                     /* Group */
     struct raft_buffer buf;
     int rv;
+    uint8_t nbytes[sizeof(bytes) + CONF_META_SIZE + sizeof(nservers)] = {0};
+
+    memcpy(nbytes, bytes, sizeof(bytes));
+    memcpy(nbytes + sizeof(bytes), metas, sizeof(metas));
+    memcpy(nbytes + sizeof(bytes) + sizeof(metas), nservers, sizeof(nservers));
 
     buf.base = bytes;
     buf.len = sizeof bytes;
-
     rv = configurationDecode(&buf, &f->configuration);
     munit_assert_int(rv, ==, 0);
 
     ASSERT_N(1);
-    ASSERT_SERVER(0, 5, RAFT_VOTER);
+    ASSERT_SERVER(0, 5, RAFT_SPARE, RAFT_SPARE, RAFT_GROUP_OLD);
+    configurationClose(&f->configuration);
+    configurationInit(&f->configuration);
+
+    // new format
+    buf.base = nbytes;
+    buf.len= sizeof(nbytes);
+    rv = configurationDecode(&buf, &f->configuration);
+    munit_assert_int(rv, ==, 0);
+
+    ASSERT_N(1);
+    ASSERT_SERVER(0, 5, RAFT_SPARE, RAFT_VOTER, RAFT_GROUP_OLD|RAFT_GROUP_NEW);
+    munit_assert_uint32(f->configuration.phase, ==, RAFT_CONF_JOINT);
 
     return MUNIT_OK;
 }
@@ -525,22 +587,50 @@ TEST(configurationDecode, one_server, setUp, tearDown, 0, NULL)
 TEST(configurationDecode, two_servers, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
-    uint8_t bytes[] = {1,                                /* Version */
-                       0,0,0,0,0,0,0,0,
-                       2,   0,   0,   0,   0,   0, 0, 0, /* Number of servers */
-                       5,   0,   0,   0,   0,   0, 0, 0, /* Server ID */
-                       1,                                /* Role code */
-                       1, 0,
-                       3,   0,   0,   0,   0,   0, 0, 0, /* Server ID */
-                       0,
-                       1, 0};                               /* Role code */
+    uint8_t bytes[] = {1,                      /* Version */
+                       2, 0, 0, 0, 0, 0, 0, 0, /* Number of servers */
+                       5, 0, 0, 0, 0, 0, 0, 0, /* Server ID */
+                       1,                      /* Role code */
+                       3, 0, 0, 0, 0, 0, 0, 0, /* Server ID */
+                       2};                     /* Role code */
+    uint8_t metas[CONF_META_SIZE] = {1 , 0, 0, 0, /* Version */
+                                     1 , 0, 0, 0, /* Server version */
+                                     11, 0, 0, 0, /* Server size*/
+                                     1 };         /* Phase joint */
+    uint8_t nservers[] = {5, 0, 0, 0, 0, 0, 0, 0, /* Server ID */
+                          1,                      /* Role code */
+                          1,                      /* New Role */
+                          3,                      /* Group */
+                          3, 0, 0, 0, 0, 0, 0, 0, /* Server ID */
+                          2,                      /* Role code */
+                          1,                      /* New Role */
+                          3};                     /* Group */
+
     struct raft_buffer buf;
+    uint8_t nbytes[sizeof(bytes) + CONF_META_SIZE + sizeof(nservers)] = {0};
+
+    memcpy(nbytes, bytes, sizeof(bytes));
+    memcpy(nbytes + sizeof(bytes), metas, sizeof(metas));
+    memcpy(nbytes + sizeof(bytes) + sizeof(metas), nservers, sizeof(nservers));
+
     buf.base = bytes;
     buf.len = sizeof bytes;
     DECODE(&buf);
     ASSERT_N(2);
-    ASSERT_SERVER(1, 5, RAFT_VOTER);
-    ASSERT_SERVER(0, 3, RAFT_STANDBY);
+    ASSERT_SERVER(1, 5, RAFT_VOTER, RAFT_VOTER, RAFT_GROUP_OLD);
+    ASSERT_SERVER(0, 3, RAFT_SPARE, RAFT_SPARE, RAFT_GROUP_OLD);
+    configurationClose(&f->configuration);
+    configurationInit(&f->configuration);
+
+     // new format
+    buf.base = nbytes;
+    buf.len= sizeof(nbytes);
+    DECODE(&buf);
+    ASSERT_N(2);
+    ASSERT_SERVER(1, 5, RAFT_VOTER, RAFT_VOTER, RAFT_GROUP_OLD|RAFT_GROUP_NEW);
+    ASSERT_SERVER(0, 3, RAFT_SPARE, RAFT_VOTER, RAFT_GROUP_OLD|RAFT_GROUP_NEW);
+    munit_assert_uint32(f->configuration.phase, ==, RAFT_CONF_JOINT);
+
     return MUNIT_OK;
 }
 
@@ -549,10 +639,9 @@ TEST(configurationDecode, oom, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     uint8_t bytes[] = {1,                            /* Version */
-                       0,0,0,0,0,0,0,0,
                        1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
                        5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
-                       1, 1, 0};                           /* Voting flag */
+                       1};                           /* Voting flag */
     struct raft_buffer buf;
     HeapFaultConfig(&f->heap, 0, 1);
     HeapFaultEnable(&f->heap);

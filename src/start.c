@@ -399,6 +399,11 @@ static void loadCb(struct raft_io_load *req,
         goto err;
     }
 
+    if (r->enable_free_trailing && snapshot_index) {
+        logFreeEntriesBufForward(&r->log, snapshot_index);
+        evtNoticef("raft(%llx) free entry to index %u", r->id, snapshot_index);
+    }
+
     evtNoticef("raft(%llx) conf start %lu/%lu", r->id, r->configuration_index,
 	       r->configuration_uncommitted_index);
     evtDumpConfiguration(r, &r->configuration);

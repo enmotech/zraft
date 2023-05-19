@@ -40,9 +40,8 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
     }
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
-	evtErrf("raft %x set meta for rv %x %u failed %d", r->id,
+        evtErrf("raft %x set meta for rv %x %u failed %d", r->id,
 		request->voted_for, request->term, status);
-        convertToUnavailable(r);
         goto err;
     }
     evtNoticef("raft(%llx) set meta succeed %u %16llx",
@@ -57,7 +56,7 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 
     reqs = raft_malloc(sizeof *reqs);
     if (reqs == NULL) {
-	evtErrf("raft %x malloc req failed", r->id);
+        evtErrf("raft %x malloc req failed", r->id);
         convertToUnavailable(r);
         goto err;
     }

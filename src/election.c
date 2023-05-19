@@ -129,8 +129,7 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
     assert(r->state == RAFT_CANDIDATE);
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
-	evtErrf("raft(%llx) set meta failed %d", r->id, status);
-        convertToUnavailable(r);
+        evtErrf("raft(%llx) set meta failed %d", r->id, status);
         goto err;
     }
 

@@ -80,21 +80,33 @@ meta_err_nomen:
     return rv;
 }
 
+static void freeRaftMessageData(struct raft_message *message)
+{
+    switch (message->type) {
+        case RAFT_IO_APPEND_ENTRIES:
+            entryBatchesDestroy(message->append_entries.entries,
+                                message->append_entries.n_entries);
+            break;
+        case RAFT_IO_INSTALL_SNAPSHOT:
+            raft_configuration_close(&message->install_snapshot.conf);
+            raft_free(message->install_snapshot.data.base);
+            break;
+        }
+}
+
 static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
 {
     struct set_meta_req *request = req->data;
     struct raft *r = request->raft;
 
     if (r->state == RAFT_UNAVAILABLE) {
-        evtErrf("raft(%llx) bump set meta cb, state is unavailable",
-		r->id);
+        evtErrf("raft(%llx) bump set meta cb, state is unavailable", r->id);
         goto err;
     }
 
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
-	evtErrf("raft %x bump term failed %d", r->id, status);
-	convertToUnavailable(r);
+        evtErrf("raft %x bump term failed %d", r->id, status);
         goto err;
     }
 
@@ -109,7 +121,10 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
     }
 
     recvCb(r->io, &request->message);
+    raft_free(request);
+    return;
 err:
+    freeRaftMessageData(&request->message);
     raft_free(request);
 }
 
@@ -265,23 +280,14 @@ void recvCb(struct raft_io *io, struct raft_message *message)
     int rv;
     if (r->state == RAFT_UNAVAILABLE ||
             r->io->state != RAFT_IO_AVAILABLE) {
-        switch (message->type) {
-            case RAFT_IO_APPEND_ENTRIES:
-                entryBatchesDestroy(message->append_entries.entries,
-                                    message->append_entries.n_entries);
-                break;
-            case RAFT_IO_INSTALL_SNAPSHOT:
-                raft_configuration_close(&message->install_snapshot.conf);
-                raft_free(message->install_snapshot.data.base);
-                break;
-        }
+        freeRaftMessageData(message);
         return;
     }
     rv = recvMessage(r, message);
     if (rv != 0) {
-	evtErrf("raft %x recv msg %d from %x failed %d", r->id, message->type,
-		message->server_id, rv);
-	convertToUnavailable(r);
+        evtErrf("raft %x recv msg %d from %x failed %d", r->id, message->type,
+		    message->server_id, rv);
+        convertToUnavailable(r);
     }
 }
 

@@ -451,6 +451,14 @@
 #define CLUSTER_IO_FAULT(I, DELAY, REPEAT) \
     raft_fixture_io_fault(&f->cluster, I, DELAY, REPEAT)
 
+/* Set I/O error occur locations */
+#define CLUSTER_IO_FAULT_LOCATIONS(I, MASK) \
+    raft_fixture_io_fault_set_locations(&f->cluster, I, MASK)
+
+/* Reset I/O errorr occur locations */
+#define CLUSTER_IO_FAULT_RESET_LOCATIONS(I, MASK) \
+    raft_fixture_io_fault_reset_locations(&f->cluster, I)
+
 /* Return the number of messages sent by the given server. */
 #define CLUSTER_N_SEND(I, TYPE) raft_fixture_n_send(&f->cluster, I, TYPE)
 
@@ -548,4 +556,15 @@ void cluster_randomize(struct raft_fixture *f,
                                 RAFT_VOTER, remove_id, NULL); \
         munit_assert_int(rv, ==, 0); \
     }
+
+/* Step until I's fault count equal n */
+#define CLUSTER_STEP_UNTIL_IO_FAULT(I, FAULT, MAX_MSECS)					   \
+    {																		   \
+        bool done;															   \
+        done =																   \
+            raft_fixture_step_until_io_fault(&f->cluster, I, FAULT, MAX_MSECS);\
+        munit_assert_true(done);											   \
+    }
+
+
 #endif /* TEST_CLUSTER_H */

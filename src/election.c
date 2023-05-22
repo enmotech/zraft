@@ -202,9 +202,7 @@ static int electionUpdateMeta(struct raft *r)
         evtErrf("raft(%llx) set meta failed %d", r->id, rv);
         goto err1;
     }
-
     return 0;
-
 err1:
     raft_free(request);
 err2:

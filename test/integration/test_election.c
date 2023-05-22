@@ -957,3 +957,22 @@ TEST(election, DuelingPreCandidates, setUp, tearDown, 0, cluster_3_params)
 
 	return MUNIT_OK;
 }
+
+TEST(election, setMetaFailed, setUp, tearDown, 0, cluster_3_params)
+{
+	struct fixture *f = data;
+	(void)params;
+
+	/* enable pre-vote */
+	raft_set_pre_vote(CLUSTER_RAFT(0), true);
+	raft_set_pre_vote(CLUSTER_RAFT(1), true);
+	raft_set_pre_vote(CLUSTER_RAFT(2), true);
+    CLUSTER_IO_FAULT_LOCATIONS(0, RAFT_IOFAULT_SETMETA);
+    CLUSTER_IO_FAULT(0, 0, 1);
+	CLUSTER_START;
+    CLUSTER_STEP_UNTIL_HAS_LEADER(2000);
+    munit_assert_int(CLUSTER_LEADER, ==, 1);
+
+    return MUNIT_OK;
+}
+

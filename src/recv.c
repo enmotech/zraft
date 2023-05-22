@@ -72,7 +72,6 @@ int recvUpdateMeta(struct raft *r,
         evtErrf("raft(%llx) set meta failed %d", r->id, rv);
         goto meta_io_err;
     }
-
     return 0;
 meta_io_err:
     raft_free(request);

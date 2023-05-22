@@ -31,7 +31,7 @@
 #define DISK_LATENCY 10
 
 /* To keep in sync with raft.h */
-#define N_MESSAGE_TYPES 5
+#define N_MESSAGE_TYPES 7
 
 /* Maximum number of peer stub instances connected to a certain stub
  * instance. This should be enough for testing purposes. */
@@ -144,6 +144,7 @@ struct io
     {
         int countdown; /* Trigger the fault when this counter gets to zero. */
         int n;         /* Repeat the fault this many times. Default is -1. */
+        unsigned mask; /* Trigger the falut only when bit mask is set. */
     } fault;
 
     /* If flag i is true, messages of type i will be silently dropped. */
@@ -205,7 +206,7 @@ static int ioMethodStart(struct raft_io *raft_io,
                          raft_io_recv_cb recv_cb)
 {
     struct io *io = raft_io->impl;
-    if (ioFaultTick(io)) {
+    if ((io->fault.mask & RAFT_IOFAULT_START) && ioFaultTick(io)) {
         return RAFT_IOERR;
     }
     io->tick_interval = msecs;
@@ -471,7 +472,7 @@ static int ioMethodLoad(struct raft_io *io,
 
     s = io->impl;
 
-    if (ioFaultTick(s)) {
+    if ((s->fault.mask & RAFT_IOFAULT_LOAD) && ioFaultTick(s)) {
         return RAFT_IOERR;
     }
 
@@ -507,7 +508,7 @@ static int ioMethodBootstrap(struct raft_io *raft_io,
     struct raft_entry *entries;
     int rv;
 
-    if (ioFaultTick(io)) {
+    if ((io->fault.mask & RAFT_IOFAULT_BOOTSTRAP) && ioFaultTick(io)) {
         return RAFT_IOERR;
     }
 
@@ -589,8 +590,9 @@ static int ioMethodSetMeta(struct raft_io *raft_io,
 {
     struct io *io = raft_io->impl;
 
-    if (ioFaultTick(io)) {
-        return RAFT_IOERR;
+    if ((io->fault.mask & RAFT_IOFAULT_SETMETA) && ioFaultTick(io)) {
+        cb(req, RAFT_IOERR);
+        return 0;
     }
 
     io->term = term;
@@ -609,7 +611,7 @@ static int ioMethodAppend(struct raft_io *raft_io,
     struct io *io = raft_io->impl;
     struct append *r;
 
-    if (ioFaultTick(io)) {
+    if ((io->fault.mask & RAFT_IOFAULT_APPEND) && ioFaultTick(io)) {
         return RAFT_IOERR;
     }
 
@@ -634,7 +636,7 @@ static int ioMethodTruncate(struct raft_io *raft_io, raft_index index)
     struct io *io = raft_io->impl;
     size_t n;
 
-    if (ioFaultTick(io)) {
+    if ((io->fault.mask & RAFT_IOFAULT_TRUNCATE) && ioFaultTick(io)) {
         return RAFT_IOERR;
     }
 
@@ -746,7 +748,7 @@ static int ioMethodSend(struct raft_io *raft_io,
 {
     struct io *io = raft_io->impl;
     struct send *r;
-    if (ioFaultTick(io)) {
+    if ((io->fault.mask & RAFT_IOFAULT_SEND) && ioFaultTick(io)) {
         return RAFT_IOERR;
     }
 
@@ -904,6 +906,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     io->disk_latency = DISK_LATENCY;
     io->fault.countdown = -1;
     io->fault.n = -1;
+    io->fault.mask = RAFT_IOFAULT_ALL;
     memset(io->drop, 0, sizeof io->drop);
     memset(io->n_send, 0, sizeof io->n_send);
     memset(io->n_recv, 0, sizeof io->n_recv);
@@ -2469,6 +2472,19 @@ void raft_fixture_io_fault(struct raft_fixture *f,
     io->fault.n = repeat;
 }
 
+void raft_fixture_io_fault_reset_locations(struct raft_fixture *f, unsigned i)
+{
+    struct io *io = f->servers[i].io.impl;
+    io->fault.mask = RAFT_IOFAULT_ALL;
+}
+
+void raft_fixture_io_fault_set_locations(struct raft_fixture *f, unsigned i,
+                                         unsigned mask)
+{
+    struct io *io = f->servers[i].io.impl;
+    io->fault.mask = mask;
+}
+
 unsigned raft_fixture_n_send(struct raft_fixture *f, unsigned i, int type)
 {
     struct io *io = f->servers[i].io.impl;
@@ -2669,6 +2685,31 @@ void raft_fixture_enable_recorder(struct raft_fixture *f)
     f->recorder.record = raft_fixture_record;
 
     raft_set_event_recorder(&f->recorder);
+}
+
+struct step_io_fault {
+    unsigned i;
+    int fault;
+};
+
+static bool hasIOFault(struct raft_fixture *f, void *arg)
+{
+    struct step_io_fault *expect = arg;
+    struct raft *raft;
+	struct io *io;
+	raft = raft_fixture_get(f, (unsigned)expect->i);
+	io = raft->io->impl;
+
+    return io->fault.n == expect->fault;
+}
+
+bool raft_fixture_step_until_io_fault(struct raft_fixture *f,
+									  unsigned i,
+									  int n,
+									  unsigned max_msecs)
+{
+	struct step_io_fault target = {i, n};
+	return raft_fixture_step_until(f, hasIOFault, &target, max_msecs);
 }
 
 #undef tracef

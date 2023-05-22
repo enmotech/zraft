@@ -19,6 +19,17 @@ enum {
     RAFT_FIXTURE_DISK      /* An I/O request has been submitted */
 };
 
+enum {
+    RAFT_IOFAULT_START     = 1 << 0,
+    RAFT_IOFAULT_LOAD      = 1 << 1,
+    RAFT_IOFAULT_BOOTSTRAP = 1 << 2,
+    RAFT_IOFAULT_SETMETA   = 1 << 3,
+    RAFT_IOFAULT_APPEND    = 1 << 4,
+    RAFT_IOFAULT_TRUNCATE  = 1 << 5,
+    RAFT_IOFAULT_SEND      = 1 << 6,
+    RAFT_IOFAULT_ALL       = (1 << 7) - 1,
+};
+
 /**
  * State of a single server in a cluster fixture.
  */
@@ -508,6 +519,19 @@ RAFT_API void raft_fixture_io_fault(struct raft_fixture *f,
                                     int repeat);
 
 /**
+ * Reset I/O failure locations
+ */
+RAFT_API void raft_fixture_io_fault_reset_locations(struct raft_fixture *f,
+                                                    unsigned i);
+
+/**
+ * Set I/O failure locations
+ */
+RAFT_API void raft_fixture_io_fault_set_locations(struct raft_fixture *f,
+                                                  unsigned i,
+                                                  unsigned mask);
+
+/**
  * Return the number of messages of the given type that the @i'th server has
  * successfully sent so far.
  */
@@ -573,4 +597,6 @@ RAFT_API raft_index raft_fixture_last_index(struct raft_fixture *f, unsigned int
 RAFT_API void raft_fixture_enable_recorder(struct raft_fixture *f);
 
 RAFT_API void raft_fixture_step_until_phase(struct raft_fixture *f, unsigned int i, int phase, unsigned msecs);
+
+RAFT_API bool raft_fixture_step_until_io_fault(struct raft_fixture *f, unsigned i, int n, unsigned max_msecs);
 #endif /* RAFT_FIXTURE_H */

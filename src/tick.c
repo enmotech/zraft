@@ -286,7 +286,7 @@ void tickCb(struct raft_io *io)
     }
     rv = tick(r);
     if (rv != 0) {
-	evtErrf("raft %x tick failed %d", r->id, rv);
+        evtErrf("raft %x tick failed %d", r->id, rv);
         convertToUnavailable(r);
         return;
     }

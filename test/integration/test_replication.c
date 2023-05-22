@@ -814,3 +814,35 @@ TEST(replication, resultRetry, setUp, tearDown, 0, NULL)
 
     return MUNIT_OK;
 }
+
+TEST(replication, setMetaFailed, setUp, tearDown, 0, NULL)
+{
+	struct fixture *f = data;
+	(void)params;
+    struct raft *raft;
+
+    CLUSTER_GROW;
+    CLUSTER_BOOTSTRAP;
+    CLUSTER_SATURATE_BOTHWAYS(0, 2);
+    CLUSTER_SATURATE_BOTHWAYS(1, 2);
+
+	raft_set_pre_vote(CLUSTER_RAFT(0), true);
+	raft_set_pre_vote(CLUSTER_RAFT(1), true);
+	raft_set_pre_vote(CLUSTER_RAFT(2), true);
+	CLUSTER_START;
+    CLUSTER_STEP_UNTIL_HAS_LEADER(2000);
+    munit_assert_int(CLUSTER_LEADER, ==, 0);
+    munit_assert_uint64(CLUSTER_TERM(2), ==, 1);
+
+    raft = CLUSTER_RAFT(0);
+    munit_assert_uint64(raft_last_index(raft), ==, 1);
+    CLUSTER_IO_FAULT_LOCATIONS(2, RAFT_IOFAULT_SETMETA);
+    CLUSTER_IO_FAULT(2, 0, 1);
+    CLUSTER_DESATURATE_BOTHWAYS(0, 2);
+    CLUSTER_DESATURATE_BOTHWAYS(1, 2);
+    CLUSTER_STEP_UNTIL_IO_FAULT(2, 0, 1000);
+
+    CLUSTER_STEP_UNTIL_TERM_IS(2, 2, 1000);
+
+    return MUNIT_OK;
+}

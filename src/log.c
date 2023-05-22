@@ -1015,14 +1015,14 @@ void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
 
 raft_index logStartIndex(struct raft *r)
 {
-	if (logNumEntries(&r->log) == 0)
+    if (logNumEntries(&r->log) == 0)
         return 0;
     return indexAt(&r->log, 0);
 }
 
 raft_term logStartTerm(struct raft *r)
 {
-	if (logStartIndex(r) == 0)
+    if (logStartIndex(r) == 0)
         return 0;
     return r->log.entries[r->log.front].term;
 }

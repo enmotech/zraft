@@ -107,6 +107,13 @@ int restoreEntries(struct raft *r,
             r->configuration_uncommitted_index = 0;
         }
     }
+
+    if (r->configuration_uncommitted_index &&
+        snapshot_index >= r->configuration_uncommitted_index) {
+        r->configuration_index = r->configuration_uncommitted_index;
+        r->configuration_uncommitted_index = 0;
+    }
+
     raft_free(entries);
     return 0;
 

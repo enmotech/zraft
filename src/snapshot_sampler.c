@@ -50,9 +50,11 @@ snapshotSamplerTake(struct raft_snapshot_sampler *s, raft_index snapshot_index,
 		s->samples[idx].index = s->samples[s->last].index;
 	}
 
-	s->last_time		  = time;
-	s->last			  = (s->last + diff) % s->size;
-	s->samples[s->last].index = snapshot_index;
+	if (diff != 0) {
+		s->last_time		  = time;
+		s->last			  = (s->last + diff) % s->size;
+		s->samples[s->last].index = snapshot_index;
+	}
 }
 
 raft_index

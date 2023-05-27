@@ -149,29 +149,23 @@ static int recvEnsureMatchingTerm(struct raft *r,
     assert(message);
     assert(async);
     raft_term term;
-    raft_id vote;
     int match;
     /* check and asynchronously bump term */
     switch (message->type) {
     case RAFT_IO_APPEND_ENTRIES:
         term = message->append_entries.term;
-        vote = message->server_id;
         break;
     case RAFT_IO_APPEND_ENTRIES_RESULT:
         term = message->append_entries_result.term;
-        vote = 0;
         break;
     case RAFT_IO_INSTALL_SNAPSHOT:
         term = message->install_snapshot.term;
-        vote = message->server_id;
         break;
     case RAFT_IO_TIMEOUT_NOW:
         term = message->timeout_now.term;
-        vote = message->server_id;
         break;
     case RAFT_IO_REQUEST_VOTE_RESULT:
         term = message->request_vote_result.term;
-        vote = 0;
         break;
     default:
         *async = false;
@@ -183,7 +177,7 @@ static int recvEnsureMatchingTerm(struct raft *r,
         return recvUpdateMeta(r,
                               message,
                               term,
-                              vote,
+                              0,
                               recvBumpTermIOCb);
     }
     *async = false;

@@ -21,6 +21,7 @@
 #include "hook.h"
 #include "../test/lib/fsm.h"
 #include "byte.h"
+#include "snapshot_sampler.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -967,9 +968,6 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     }
 
     i = updateLastStored(r, request->index, args->entries, args->n_entries);
-    if(r->enable_dynamic_trailing){
-        raft_set_snapshot_trailing(r, args->trailing);
-    }
 
     /* If none of the entries that we persisted is present anymore in our
      * in-memory log, there's nothing to report or to do. We just discard
@@ -1615,12 +1613,6 @@ static raft_index nextSnapshotIndex(struct raft *r)
 	if (r->hook->get_next_snapshot_index)
 		hook_snapshot_index = r->hook->get_next_snapshot_index(r->hook);
 
-	if (r->state == RAFT_LEADER && r->sync_replication) {
-		progressUpdateMinMatch(r);
-		snapshot_index = min(r->leader_state.min_match_index,
-				     r->last_applied);
-	}
-
 	if (r->state == RAFT_FOLLOWER && r->sync_snapshot) {
 		snapshot_index =
 			min(r->follower_state.current_leader.snapshot_index,
@@ -1679,6 +1671,8 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 		snapshot->term, status);
         goto out;
     }
+    snapshotSamplerTake(&r->sampler, snapshot->index, r->io->time(r->io));
+
     /* backup the configuration in case a membershipRollback occurs */
     configurationClose(&r->snapshot.configuration);
     status = configurationCopy(&r->snapshot.pending.configuration,
@@ -1696,11 +1690,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 	     r->snapshot.trailing, r->enable_free_trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
     if (r->enable_free_trailing) {
-        freeEntriesBufForward(&r->log, snapshot->index);
-    }
-    if (r->enable_dynamic_trailing) {
-        raft_set_snapshot_trailing(r, r->snapshot.threshold + r->snapshot.trailing);
-        evtInfof("raft(%llx) update snapshot trailing to %u", r->id, r->snapshot.trailing);
+        logFreeEntriesBufForward(&r->log, snapshot->index);
     }
 out:
     snapshotClose(&r->snapshot.pending);
@@ -1709,6 +1699,7 @@ out:
 
 static int takeSnapshot(struct raft *r)
 {
+    raft_index index;
     struct raft_snapshot *snapshot;
     unsigned i;
     int rv;
@@ -1720,6 +1711,7 @@ static int takeSnapshot(struct raft *r)
     snapshot->index = snapshot_index;
     snapshot->term = logTermOf(&r->log, snapshot_index);
 
+    assert(snapshot->term);
     rv = configurationCopy(&r->configuration, &snapshot->configuration);
     if (rv != 0) {
         evtErrf("raft(%llx) copy conf failed %d", r->id, rv);
@@ -1736,6 +1728,22 @@ static int takeSnapshot(struct raft *r)
             rv = 0;
         }
         goto abort_after_config_copy;
+    }
+
+    if (r->enable_dynamic_trailing) {
+        if (r->state == RAFT_LEADER) {
+            index = snapshotSamplerFirstIndex(&r->sampler);
+            if (index == 0)
+                index = logStartIndex(r);
+            progressUpdateMinMatch(r);
+            index = max(r->leader_state.min_match_index, index);
+            if (index < snapshot->index)
+                r->snapshot.trailing = (unsigned int)(snapshot->index - index);
+            else
+                r->snapshot.trailing = 0;
+        } else {
+            r->snapshot.trailing = r->follower_state.current_leader.trailing;
+        }
     }
 
     assert(r->snapshot.put.data == NULL);

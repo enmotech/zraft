@@ -37,16 +37,17 @@ static void recvInvokeEntryHook(struct raft *r,
 				       args->prev_log_term);
 }
 
-static void recvUpdateLeaderSnapshotIndex(struct raft *r,
-					  raft_index snapshot_index)
+static void recvUpdateLeaderSnapshot(struct raft *r,
+					  raft_index snapshot_index, unsigned trailing)
 {
 	assert(r->state == RAFT_FOLLOWER);
 	if (r->follower_state.current_leader.snapshot_index == snapshot_index)
 		return;
 
-	evtInfof("raft(%llx) update leader snapshot index %llu",
-		 r->id, snapshot_index);
+	evtInfof("raft(%llx) update leader snapshot index %llu trailing %u",
+		 r->id, snapshot_index, trailing);
 	r->follower_state.current_leader.snapshot_index = snapshot_index;
+    r->follower_state.current_leader.trailing = trailing;
 }
 
 int recvAppendEntries(struct raft *r,
@@ -153,7 +154,7 @@ int recvAppendEntries(struct raft *r,
     }
 
     if (!result->rejected)
-	    recvUpdateLeaderSnapshotIndex(r, args->snapshot_index);
+	    recvUpdateLeaderSnapshot(r, args->snapshot_index, args->trailing);
 
     recvInvokeEntryHook(r, args, result->rejected);
     if (async) {

@@ -14,6 +14,7 @@
 #include "tracing.h"
 #include "hook.h"
 #include "event.h"
+#include "snapshot_sampler.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -23,6 +24,9 @@
 #define DEFAULT_MESSAGE_LOG_THRESHOLD 32
 #define DEFAULT_INFLIGHT_LOG_THRESHOLD 0
 #define DEFAULT_SYNC_REPLICATION_TIMEOUT 3000
+#define SNAPSHOT_SAMPLE_SPAN 10000 /* Snapshot sample span in ms */
+#define SNAPSHOT_SAMPLE_SPAN_MIN 1000 /* Snapshot sample min span in ms */
+#define SNAPSHOT_SAMPLE_PERIOD 100 /* Snapshot sample period in ms */
 
 /* Number of milliseconds after which a server promotion will be aborted if the
  * server hasn't caught up with the logs yet. */
@@ -89,6 +93,12 @@ int raft_init(struct raft *r,
         evtErrf("raft(%llx) init failed %d", r->id, rv);
         goto err_after_address_alloc;
     }
+    rv = snapshotSamplerInit(&r->sampler, SNAPSHOT_SAMPLE_SPAN,
+                             SNAPSHOT_SAMPLE_PERIOD, r->io->time(r->io));
+    if (rv != 0) {
+        evtErrf("raft(%llx) init snapshot sampler failed %d", r->id, rv);
+        goto err_after_address_alloc;
+    }
     return 0;
 
 err_after_address_alloc:
@@ -112,6 +122,7 @@ static void ioCloseCb(struct raft_io *io)
     logClose(&r->log);
     raft_configuration_close(&r->configuration);
     raft_configuration_close(&r->snapshot.configuration);
+    snapshotSamplerClose(&r->sampler);
     if (r->close_cb != NULL) {
         r->close_cb(r);
     }
@@ -364,13 +375,11 @@ void raft_enable_request_hook(struct raft *r, bool enable)
 }
 
 void raft_enable_dynamic_trailing(struct raft *r, bool enable){
-    (void)r;
-    (void)enable;
+    r->enable_dynamic_trailing = enable;
 }
 
 void raft_enable_free_trailing(struct raft *r, bool enable){
-    (void)r;
-    (void)enable;
+    r->enable_free_trailing = enable;
 }
 
 void raft_enable_election_at_start(struct raft *r, bool enable)
@@ -383,4 +392,13 @@ bool raft_is_distruptive_candidate(struct raft *r)
     assert(r->state == RAFT_CANDIDATE);
 
     return r->candidate_state.disrupt_leader;
+}
+
+int raft_set_snapshot_sample_span(struct raft *r, unsigned span)
+{
+    assert(span >= SNAPSHOT_SAMPLE_SPAN_MIN);
+    snapshotSamplerClose(&r->sampler);
+
+    return snapshotSamplerInit(&r->sampler, span, SNAPSHOT_SAMPLE_PERIOD,
+        r->io->time(r->io));
 }

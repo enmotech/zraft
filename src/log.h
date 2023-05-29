@@ -22,7 +22,7 @@ void logStart(struct raft_log *l,
               raft_term snapshot_term,
               raft_index start_index);
 
-void freeEntriesBufForward(struct raft_log *l, raft_index last_index);
+void logFreeEntriesBufForward(struct raft_log *l, raft_index last_index);
 /* Get the number of entries the log currently contains. */
 size_t logNumEntries(struct raft_log *l);
 

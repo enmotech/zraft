@@ -349,20 +349,15 @@ void progressUpdateMinMatch(struct raft *r)
 	struct raft_progress *p;
 	raft_index tmp = logLastIndex(&r->log);
 	raft_id id = 0;
-	raft_time now = r->io->time(r->io);
 
 	assert(r->sync_replication);
 	for (i = 0; i < r->configuration.n; ++i) {
 		s = &r->configuration.servers[i];
-		if (s->role == RAFT_SPARE &&
+		if (configurationIsSpare(&r->configuration, s, s->group) &&
 			s->id != r->leader_state.promotee_id) {
 			continue;
 		}
 		p = &r->leader_state.progress[i];
-		if (r->sync_replication_timeout
-		&& (p->recent_recv_time + r->sync_replication_timeout < now))
-			continue;
-
 		if (p->match_index <= tmp) {
 			tmp = p->match_index;
 			id = s->id;

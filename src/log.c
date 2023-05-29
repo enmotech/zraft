@@ -977,18 +977,19 @@ void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
     removePrefix(l, last_index - trailing);
 }
 
-void freeEntriesBufForward(struct raft_log *l, raft_index last_index)
+void logFreeEntriesBufForward(struct raft_log *l, raft_index last_index)
 {
+    struct raft_entry *entry;
+    unsigned short n_refs;
+    raft_index idx;
     size_t i;
+
     if (logNumEntries(l) == 0)
         return;
-    l->need_free = max(l->need_free, indexAt(l, 0));
-    raft_index idx = l->need_free;
-    for (i = locateEntry(l, l->need_free); idx <= last_index; i++, idx++) {
+    for (idx = max(l->need_free, indexAt(l, 0)); idx <= last_index; idx++) {
+        i = locateEntry(l, idx);
         if(i == l->size)
-            i = 0;
-        struct raft_entry *entry;
-        unsigned short n_refs;
+            break;
         entry = &l->entries[i];
         if(entry->buf.base == NULL)
             continue;
@@ -997,6 +998,7 @@ void freeEntriesBufForward(struct raft_log *l, raft_index last_index)
             break;
         destroyEntry(l, entry);
     }
+    assert(idx >= l->need_free);
     l->need_free = idx;
 }
 

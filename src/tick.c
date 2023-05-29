@@ -46,8 +46,17 @@ static int tickFollower(struct raft *r)
      *   If election timeout elapses without receiving AppendEntries RPC from
      *   current leader or granting vote to candidate, convert to candidate.
      */
-    if (electionTimerExpired(r)
-        && configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
+    if (!electionTimerExpired(r)) {
+        return 0;
+    }
+
+    if (r->nr_appending_requests != 0) {
+        evtNoticef("raft(%llx) has %u pending append requests", r->id,
+            r->nr_appending_requests);
+        return 0;
+    }
+
+    if (configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
         tracef("convert to candidate and start new election");
         evtInfof("raft(%llx) convert to candidate", r->id);
         rv = convertToCandidate(r, false /* disrupt leader */);

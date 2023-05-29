@@ -30,7 +30,8 @@ int recvTimeoutNow(struct raft *r,
 
     /* Ignore the request if we are not voters. */
     local_server = configurationGet(&r->configuration, r->id);
-    if (local_server == NULL || local_server->role != RAFT_VOTER) {
+    if (local_server == NULL || !configurationIsVoter(&r->configuration,
+        local_server, RAFT_GROUP_ANY)) {
         return 0;
     }
 
@@ -38,6 +39,12 @@ int recvTimeoutNow(struct raft *r,
      * leader. */
     if (r->state != RAFT_FOLLOWER ||
         r->follower_state.current_leader.id != id) {
+        return 0;
+    }
+
+    if (r->nr_appending_requests != 0) {
+        evtNoticef("raft(%llx) has %u pending append requests", r->id,
+            r->nr_appending_requests);
         return 0;
     }
 

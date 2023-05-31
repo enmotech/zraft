@@ -451,6 +451,7 @@ struct raft_load_data {
     raft_index start_index;
     struct raft_entry *entries;
     size_t n_entries;
+    raft_index applied_index;
 };
 /**
  * Asynchronous request to load raft data from the disk.

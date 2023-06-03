@@ -1737,8 +1737,9 @@ static int takeSnapshot(struct raft *r)
                 index = logStartIndex(r);
             progressUpdateMinMatch(r);
             index = max(r->leader_state.min_match_index, index);
-            if (index < snapshot->index)
-                r->snapshot.trailing = (unsigned int)(snapshot->index - index);
+            if (index <= snapshot->index)
+                r->snapshot.trailing =
+                    (unsigned int)(snapshot->index - index) + 1;
             else
                 r->snapshot.trailing = 0;
         } else {

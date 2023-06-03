@@ -172,7 +172,7 @@ int membershipRollback(struct raft *r)
     raft_configuration_close(&r->configuration);
 
     entry = logGet(&r->log, r->configuration_index);
-    if (entry != NULL) {
+    if (entry != NULL && entry->buf.base) {
         raft_configuration_init(&r->configuration);
         rv = configurationDecode(&entry->buf, &r->configuration);
     } else {

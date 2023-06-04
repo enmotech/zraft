@@ -1322,6 +1322,9 @@ struct raft_hook
 	void (*request_apply_done)(struct raft_hook *h, struct request *req);
 	raft_index (*get_next_snapshot_index)(struct raft_hook *h);
     void (*conf_change)(struct raft_hook *h, const struct raft_configuration *c);
+    bool (*hack_append_entries)(struct raft_hook *h,
+                                const struct raft_append_entries *ae,
+                                struct raft_append_entries_result *result);
 };
 
 RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);

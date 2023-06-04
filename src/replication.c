@@ -755,6 +755,7 @@ int replicationUpdate(struct raft *r,
     raft_index last_index;
     raft_index prev_match_index;
     raft_index match_index;
+    struct raft_progress *p;
     unsigned i;
     int rv;
 
@@ -764,6 +765,7 @@ int replicationUpdate(struct raft *r,
     assert(i < r->configuration.n);
 
     progressMarkRecentRecv(r, i);
+    p = &r->leader_state.progress[i];
 
     /* If the RPC failed because of a log mismatch, retry.
      *
@@ -775,15 +777,16 @@ int replicationUpdate(struct raft *r,
      *     decrement nextIndex and retry.
      */
     if (result->rejected > 0) {
-        evtNoticef("raft(%llx) %llx %d rejected %lu %lu %lu %lu",
-		   r->id, id, i, result->rejected, result->last_log_index,
-		   result->term, result->pkt);
+        if (p->state != PROGRESS__SNAPSHOT)
+            evtNoticef("raft(%llx) %llx %d rejected %lu %lu %lu %lu",
+                r->id, id, i, result->rejected, result->last_log_index,
+                result->term, result->pkt);
         bool retry;
         retry = progressMaybeDecrement(r, i, result->rejected,
                                        result->last_log_index);
         if (retry) {
             /* Retry, ignoring errors. */
-	    tracef("log mismatch -> send old entries to %llu", id);
+	        tracef("log mismatch -> send old entries to %llu", id);
             evtNoticef("raft(%llx) send old entries to %llx", r->id, id);
             replicationProgress(r, i);
         }
@@ -811,9 +814,9 @@ int replicationUpdate(struct raft *r,
         return 0;
     }
     match_index = progressMatchIndex(r, i);
-    assert(match_index > prev_match_index);
-    hookRequestMatch(r, prev_match_index + 1, match_index - prev_match_index,
-		     id);
+    if(match_index > prev_match_index)
+        hookRequestMatch(r, prev_match_index + 1,
+                         match_index - prev_match_index, id);
 
     switch (progressState(r, i)) {
         case PROGRESS__SNAPSHOT:

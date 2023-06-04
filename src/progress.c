@@ -235,23 +235,22 @@ bool progressMaybeDecrement(struct raft *r,
     assert(p->state == PROGRESS__PROBE || p->state == PROGRESS__PIPELINE ||
            p->state == PROGRESS__SNAPSHOT);
 
-    evtNoticef("raft(%llx) %llx progress %u %llu %llu %llu %llu %llu %d",
-	       r->id, id, p->state, p->next_index, p->match_index,
-	       p->snapshot_index, p->last_send, p->snapshot_last_send,
-	       p->recent_recv);
     if (p->state == PROGRESS__SNAPSHOT) {
         /* The rejection must be stale or spurious if the rejected index does
          * not match the last snapshot index. */
         if (rejected != p->snapshot_index) {
-            evtWarnf("raft(%llx) %llx rejected %lu diff snapshot index %llu",
-		     r->id, id, rejected, p->snapshot_index);
             return false;
         }
         progressAbortSnapshot(r, i);
-        evtNoticef("raft(%llx) %llx abort snapshot", r->id, id);
+        evtNoticef("raft(%llx) %llx abort snapshot %llu", r->id, id,
+            p->snapshot_index);
         return true;
     }
 
+    evtNoticef("raft(%llx) %llx progress %u %llu %llu %llu %llu %llu %d",
+	       r->id, id, p->state, p->next_index, p->match_index,
+	       p->snapshot_index, p->last_send, p->snapshot_last_send,
+	       p->recent_recv);
     if (p->state == PROGRESS__PIPELINE) {
         /* The rejection must be stale if the rejected index is smaller than
          * the matched one. */

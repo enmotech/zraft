@@ -14,4 +14,8 @@ void hookRequestApplyDone(struct raft *r, raft_index index);
 
 void hookConfChange(struct raft *r, const struct raft_configuration *c);
 
+bool hookHackAppendEntries(struct raft *r,
+                           const struct raft_append_entries *ae,
+                           struct raft_append_entries_result *result);
+
 #endif //HOOK_H

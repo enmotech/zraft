@@ -1493,7 +1493,11 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     raft_index index = request->index;
     struct raft_apply *creq;
 
-    assert((r->last_applied + 1) == index);
+    if (r->last_applied + 1 != index) {
+        evtNoticef("%llx apply index not match %llu/%llu status %d", r->id,
+            index, r->last_applied, status);
+        status = RAFT_IOERR;
+    }
     hookRequestApplyDone(r, index);
 
     creq = (struct raft_apply *)getRequest(r, index);
@@ -1501,8 +1505,13 @@ static void applyCommandCb(struct raft_fsm_apply *req,
         assert(creq->type == RAFT_COMMAND);
         creq->cb(creq, status, result);
     }
-    r->last_applied = index;
     raft_free(request);
+
+    if (status != 0) {
+        evtErrf("%llx apply index %llu failed %d", r->id, index, status);
+        return;
+    }
+    r->last_applied = index;
 
     if (r->last_applied == r->last_applying) {
         if (r->state == RAFT_LEADER ||

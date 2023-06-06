@@ -378,6 +378,13 @@ static void loadCb(struct raft_io_load *req,
         r->last_applied = 1;
     }
 
+    if (load->applied_index != 0) {
+        assert(load->applied_index >= r->last_applied);
+        r->commit_index = load->applied_index;
+        r->last_applying = load->applied_index;
+        r->last_applied = load->applied_index;
+    }
+
     /* Append the entries to the log, possibly restoring the last
      * configuration. */
     tracef("restore %lu entries starting at %llu", n_entries, start_index);
@@ -404,8 +411,16 @@ static void loadCb(struct raft_io_load *req,
         evtNoticef("raft(%llx) free entry to index %u", r->id, snapshot_index);
     }
 
-    evtNoticef("raft(%llx) conf start %lu/%lu", r->id, r->configuration_index,
-	       r->configuration_uncommitted_index);
+    if (r->configuration_uncommitted_index &&
+            r->last_applied >= r->configuration_uncommitted_index) {
+        r->configuration_index = r->configuration_uncommitted_index;
+        r->configuration_uncommitted_index = 0;
+        evtNoticef("raft(%llx) reset conf index %lu", r->configuration_index);
+    }
+
+    evtNoticef("raft(%llx) conf start %lu/%lu applied %lu", r->id,
+            r->configuration_index, r->configuration_uncommitted_index,
+            load->applied_index);
     evtDumpConfiguration(r, &r->configuration);
     hookConfChange(r, &r->configuration);
 

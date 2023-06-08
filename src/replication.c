@@ -1496,6 +1496,8 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     raft_index index = request->index;
     struct raft_apply *creq;
 
+    assert(r->nr_applying);
+    r->nr_applying -= 1;
     if (r->last_applied + 1 != index) {
         evtNoticef("%llx apply index not match %llu/%llu status %d", r->id,
             index, r->last_applied, status);
@@ -1512,6 +1514,11 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 
     if (status != 0) {
         evtErrf("%llx apply index %llu failed %d", r->id, index, status);
+        if (r->nr_applying == 0) {
+            evtNoticef("raft(%llx) reset applying %llu %llu", r->id,
+                r->last_applying, r->last_applied);
+            r->last_applying = r->last_applied;
+        }
         return;
     }
     r->last_applied = index;
@@ -1811,9 +1818,13 @@ int replicationApply(struct raft *r)
         switch (entry->type) {
             case RAFT_COMMAND:
                 r->last_applying = index;
+                r->nr_applying += 1;
                 rv = applyCommand(r, index, &entry->buf);
-                if (rv != 0)
+                if (rv != 0) {
+                    assert(r->nr_applying);
                     r->last_applying -= 1;
+                    r->nr_applying -= 1;
+                }
                 break;
             case RAFT_BARRIER:
                 if (r->last_applying > r->last_applied)

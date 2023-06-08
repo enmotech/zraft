@@ -1512,6 +1512,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     }
     raft_free(request);
 
+    r->apply_status = status;
     if (status != 0) {
         evtErrf("%llx apply index %llu failed %d", r->id, index, status);
         if (r->nr_applying == 0) {
@@ -1803,7 +1804,10 @@ int replicationApply(struct raft *r)
         goto err_take_snapshot;
     }
 
+    r->apply_status = 0;
     while(r->last_applying < r->commit_index) {
+        if (r->apply_status != 0)
+            break;
         index = r->last_applying + 1;
         const struct raft_entry *entry = logGet(&r->log, index);
         if (entry == NULL) {

@@ -768,6 +768,7 @@ struct raft
     raft_index last_applied; /* Highest log entry applied to the FSM */
     raft_index last_stored;  /* Highest log entry persisted on disk */
     unsigned nr_applying;    /* In-progress applying request */
+    int       apply_status;  /* Last apply status */
 
     /*
      * Current server state of this raft instance, along with a union defining

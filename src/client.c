@@ -33,10 +33,11 @@ int raft_apply(struct raft *r,
     assert(bufs != NULL);
     assert(n > 0);
 
-    if (r->state != RAFT_LEADER || r->transfer != NULL) {
+    if (r->state != RAFT_LEADER || r->transfer != NULL
+        || r->leader_state.removed_from_cluster) {
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
-	evtErrf("raft(%llx) apply failed %d", r->id, rv);
+	    evtErrf("raft(%llx) apply failed %d", r->id, rv);
         goto err;
     }
 
@@ -152,6 +153,7 @@ static int clientChangeConfiguration(
     raft_term term = r->current_term;
     int rv;
     const struct raft_entry *entry;
+    unsigned server_index;
 
     (void)req;
 
@@ -198,6 +200,10 @@ static int clientChangeConfiguration(
     }
 
     r->configuration_uncommitted_index = index;
+    server_index = configurationIndexOf(&r->configuration, r->id);
+    if (r->state == RAFT_LEADER && server_index == r->configuration.n) {
+        r->leader_state.removed_from_cluster = true;
+    }
 
     return 0;
 

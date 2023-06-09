@@ -44,8 +44,8 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 		request->voted_for, request->term, status);
         goto err;
     }
-    evtNoticef("raft(%llx) set meta succeed %u %16llx",
-	       r->id, request->term, r->voted_for);
+    evtNoticef("raft(%llx) set meta succeed %u %llx",
+	       r->id, request->term, request->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;
 

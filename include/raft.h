@@ -801,9 +801,10 @@ struct raft
             unsigned short round_number;    /* Current sync round. */
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
-	    struct request_registry reg;    /* Outstanding client requests. */
-	    raft_index min_match_index;     /* The minimum match index */
-	    raft_id slowest_replica_id;     /* The slowest replica id */
+            struct request_registry reg;    /* Outstanding client requests. */
+            raft_index min_match_index;     /* The minimum match index */
+            raft_id slowest_replica_id;     /* The slowest replica id */
+            bool removed_from_cluster;      /* Removed from cluster */
         } leader_state;
     };
 

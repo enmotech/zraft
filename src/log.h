@@ -23,6 +23,10 @@ void logStart(struct raft_log *l,
               raft_index start_index);
 
 void logFreeEntriesBufForward(struct raft_log *l, raft_index last_index);
+
+/* Reset freed entry index */
+void logResetFreedIndex(struct raft_log *l);
+
 /* Get the number of entries the log currently contains. */
 size_t logNumEntries(struct raft_log *l);
 

@@ -225,6 +225,7 @@ int convertToLeader(struct raft *r)
         evtErrf("raft(%llx) build array failed %d", r->id, rv);
         return rv;
     }
+    logResetFreedIndex(&r->log);
 
     r->leader_state.change = NULL;
 
@@ -234,6 +235,7 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
     r->leader_state.remove_id = 0;
+    r->leader_state.removed_from_cluster = false;
 
     if (r->state_change_cb)
 		r->state_change_cb(r, RAFT_LEADER);

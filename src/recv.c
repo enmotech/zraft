@@ -61,7 +61,7 @@ int recvUpdateMeta(struct raft *r,
     request->voted_for = voted_for;
     request->req.data = request;
     r->io->state = RAFT_IO_BUSY;
-    evtNoticef("raft(%llx) recv set meta term %u vote_fo %lu", r->id,
+    evtNoticef("raft(%llx) recv set meta term %u vote_for %llx", r->id,
 	       request->term, request->voted_for);
     rv = r->io->set_meta(r->io,
                  &request->req,

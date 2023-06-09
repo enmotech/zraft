@@ -509,19 +509,18 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
         evtErrf("raft(%llx) append leader failed %d", r->id, status);
         struct raft_apply *apply;
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        apply =
-            (struct raft_apply *)getRequest(r, request->index);
+        apply = (struct raft_apply *)getRequest(r, request->index);
         if (apply != NULL) {
             if (apply->cb != NULL) {
                 apply->cb(apply, status, NULL);
             }
         }
 
-	if (r->state == RAFT_LEADER) {
-		convertToFollower(r);
-		evtNoticef("raft(%llx) convert from leader to follower",
-			   r->id, status);
-	}
+        if (r->state == RAFT_LEADER) {
+            convertToFollower(r);
+            evtNoticef("raft(%llx) convert from leader to follower",
+			    r->id, status);
+        }
         goto out;
     }
 
@@ -531,7 +530,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     /* If we are not leader anymore, just discard the result. */
     if (r->state != RAFT_LEADER) {
         tracef("local server is not leader -> ignore write log result");
-	evtWarnf("raft(%llx) is not leader, ignore write log result", r->id);
+        evtWarnf("raft(%llx) is not leader, ignore write log result", r->id);
         goto out;
     }
 
@@ -562,7 +561,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     if (rv != 0) {
         evtErrf("raft(%llx) replication apply failed %d", r->id, status);
         /* TODO: just log the error? */
-	evtErrf("raft(%llx) apply error %d", r->id, rv);
+        evtErrf("raft(%llx) apply error %d", r->id, rv);
     }
 
 out:
@@ -1943,6 +1942,7 @@ static int replicationChangeConfiguration(struct raft *r,
     raft_term term = r->current_term;
     int rv;
     const struct raft_entry *entry;
+    unsigned server_index;
 
     /* Index of the entry being appended. */
     index = logLastIndex(&r->log) + 1;
@@ -1987,6 +1987,11 @@ static int replicationChangeConfiguration(struct raft *r,
     }
 
     r->configuration_uncommitted_index = index;
+    server_index = configurationIndexOf(&r->configuration, r->id);
+    if (r->state == RAFT_LEADER && server_index == r->configuration.n) {
+        r->leader_state.removed_from_cluster = true;
+    }
+
     return 0;
 err_after_log_append:
     logTruncate(&r->log, index);

@@ -1002,6 +1002,11 @@ void logFreeEntriesBufForward(struct raft_log *l, raft_index last_index)
     l->need_free = idx;
 }
 
+void logResetFreedIndex(struct raft_log *l)
+{
+    l->need_free = 1;
+}
+
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
 {
     size_t n = logNumEntries(l);

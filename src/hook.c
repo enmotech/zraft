@@ -49,10 +49,21 @@ static void defaultRequestMatch(struct raft_hook *h, struct request *req,
 }
 
 static void defaultConfChange(struct raft_hook *h,
-							  const struct raft_configuration *c)
+			      const struct raft_configuration *c)
 {
 	(void)h;
 	(void)c;
+}
+
+static bool defaultHackAppendEntries(struct raft_hook *h,
+				     const struct raft_append_entries *ae,
+				     struct raft_append_entries_result *result)
+{
+	(void)h;
+	(void)ae;
+	(void)result;
+
+	return false;
 }
 
 struct raft_hook defaultHook = {
@@ -68,6 +79,7 @@ struct raft_hook defaultHook = {
 	.request_commit = defaultRequestDummy,
 	.request_apply = defaultRequestDummy,
 	.request_apply_done = defaultRequestDummy,
+	.hack_append_entries = defaultHackAppendEntries,
 };
 
 void hookRequestAccept(struct raft *r, raft_index index)
@@ -174,4 +186,13 @@ void hookConfChange(struct raft *r, const struct raft_configuration *c)
 	if (!r->hook->conf_change)
 		return;
 	r->hook->conf_change(r->hook, c);
+}
+
+bool hookHackAppendEntries(struct raft *r,
+                           const struct raft_append_entries *ae,
+			   struct raft_append_entries_result *result)
+{
+	if (!r->hook->hack_append_entries)
+		return false;
+	return r->hook->hack_append_entries(r->hook, ae, result);
 }

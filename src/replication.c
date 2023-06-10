@@ -754,6 +754,7 @@ int replicationUpdate(struct raft *r,
     raft_index last_index;
     raft_index prev_match_index;
     raft_index match_index;
+    struct raft_progress *p;
     unsigned i;
     int rv;
 
@@ -763,6 +764,7 @@ int replicationUpdate(struct raft *r,
     assert(i < r->configuration.n);
 
     progressMarkRecentRecv(r, i);
+    p = &r->leader_state.progress[i];
 
     /* If the RPC failed because of a log mismatch, retry.
      *
@@ -774,15 +776,16 @@ int replicationUpdate(struct raft *r,
      *     decrement nextIndex and retry.
      */
     if (result->rejected > 0) {
-        evtNoticef("raft(%llx) %llx %d rejected %lu %lu %lu %lu",
-		   r->id, id, i, result->rejected, result->last_log_index,
-		   result->term, result->pkt);
+        if (p->state != PROGRESS__SNAPSHOT)
+            evtNoticef("raft(%llx) %llx %d rejected %lu %lu %lu %lu",
+                r->id, id, i, result->rejected, result->last_log_index,
+                result->term, result->pkt);
         bool retry;
         retry = progressMaybeDecrement(r, i, result->rejected,
                                        result->last_log_index);
         if (retry) {
             /* Retry, ignoring errors. */
-	    tracef("log mismatch -> send old entries to %llu", id);
+	        tracef("log mismatch -> send old entries to %llu", id);
             evtNoticef("raft(%llx) send old entries to %llx", r->id, id);
             replicationProgress(r, i);
         }
@@ -810,9 +813,9 @@ int replicationUpdate(struct raft *r,
         return 0;
     }
     match_index = progressMatchIndex(r, i);
-    assert(match_index > prev_match_index);
-    hookRequestMatch(r, prev_match_index + 1, match_index - prev_match_index,
-		     id);
+    if(match_index > prev_match_index)
+        hookRequestMatch(r, prev_match_index + 1,
+                         match_index - prev_match_index, id);
 
     switch (progressState(r, i)) {
         case PROGRESS__SNAPSHOT:
@@ -1492,6 +1495,8 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     raft_index index = request->index;
     struct raft_apply *creq;
 
+    assert(r->nr_applying);
+    r->nr_applying -= 1;
     if (r->last_applied + 1 != index) {
         evtNoticef("%llx apply index not match %llu/%llu status %d", r->id,
             index, r->last_applied, status);
@@ -1506,8 +1511,14 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     }
     raft_free(request);
 
+    r->apply_status = status;
     if (status != 0) {
         evtErrf("%llx apply index %llu failed %d", r->id, index, status);
+        if (r->nr_applying == 0) {
+            evtNoticef("raft(%llx) reset applying %llu %llu", r->id,
+                r->last_applying, r->last_applied);
+            r->last_applying = r->last_applied;
+        }
         return;
     }
     r->last_applied = index;
@@ -1792,7 +1803,10 @@ int replicationApply(struct raft *r)
         goto err_take_snapshot;
     }
 
+    r->apply_status = 0;
     while(r->last_applying < r->commit_index) {
+        if (r->apply_status != 0)
+            break;
         index = r->last_applying + 1;
         const struct raft_entry *entry = logGet(&r->log, index);
         if (entry == NULL) {
@@ -1807,9 +1821,13 @@ int replicationApply(struct raft *r)
         switch (entry->type) {
             case RAFT_COMMAND:
                 r->last_applying = index;
+                r->nr_applying += 1;
                 rv = applyCommand(r, index, &entry->buf);
-                if (rv != 0)
+                if (rv != 0) {
+                    assert(r->nr_applying);
                     r->last_applying -= 1;
+                    r->nr_applying -= 1;
+                }
                 break;
             case RAFT_BARRIER:
                 if (r->last_applying > r->last_applied)

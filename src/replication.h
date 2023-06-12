@@ -80,7 +80,8 @@ int replicationUpdate(struct raft *r,
 int replicationAppend(struct raft *r,
                       const struct raft_append_entries *args,
                       raft_index *rejected,
-                      bool *async);
+                      bool *async,
+                      raft_index *last_log_index);
 
 int replicationInstallSnapshot(struct raft *r,
                                const struct raft_install_snapshot *args,

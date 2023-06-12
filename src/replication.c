@@ -691,8 +691,6 @@ static int triggerActualPromotion(struct raft *r)
 
     server = &r->configuration.servers[server_index];
 
-    assert(server->role != RAFT_VOTER);
-
     /* Update our current configuration. */
     old_role = server->role;
     if (r->leader_state.remove_id == 0) {

@@ -691,8 +691,6 @@ static int triggerActualPromotion(struct raft *r)
 
     server = &r->configuration.servers[server_index];
 
-    assert(server->role != RAFT_VOTER);
-
     /* Update our current configuration. */
     old_role = server->role;
     if (r->leader_state.remove_id == 0) {
@@ -1067,6 +1065,7 @@ static int checkLogMatchingProperty(struct raft *r,
 
     /* If this is the very first entry, there's nothing to check. */
     if (args->prev_log_index == 0) {
+        evtNoticef("raft(%llx) pre_log_index 0", r->id);
         return 0;
     }
 
@@ -1117,6 +1116,12 @@ static int deleteConflictingEntries(struct raft *r,
         struct raft_entry *entry = &args->entries[j];
         raft_index entry_index = args->prev_log_index + 1 + j;
         raft_term local_term = logTermOf(&r->log, entry_index);
+
+        if (entry_index <= logSnapshotIndex(&r->log)) {
+            evtNoticef("raft(%llx) skip index %llu le snap index %llu", r->id,
+                entry_index, logSnapshotIndex(&r->log));
+                continue;
+        }
 
         if (local_term > 0 && local_term != entry->term) {
             if (entry_index <= r->commit_index) {
@@ -1171,7 +1176,8 @@ static int deleteConflictingEntries(struct raft *r,
 int replicationAppend(struct raft *r,
                       const struct raft_append_entries *args,
                       raft_index *rejected,
-                      bool *async)
+                      bool *async,
+                      raft_index *last_log_index)
 {
     struct appendFollower *request;
     int match;
@@ -1179,6 +1185,7 @@ int replicationAppend(struct raft *r,
     size_t i;
     size_t j;
     int rv;
+    raft_index args_last_index = args->prev_log_index + args->n_entries;
 
     assert(r != NULL);
     assert(args != NULL);
@@ -1189,12 +1196,13 @@ int replicationAppend(struct raft *r,
 
     *rejected = args->prev_log_index;
     *async = false;
+    *last_log_index = r->last_stored;
 
     if (args->prev_log_index == 0) {
         evtNoticef("raft(%llx) recv term %llu entries %lu %llu %llu %llu",
 		   r->id, args->term, args->n_entries, args->prev_log_index,
 		   args->prev_log_term, args->leader_commit);
-	evtNoticef("raft(%llx) snapshot %llu last log %llu",
+        evtNoticef("raft(%llx) snapshot %llu last log %llu",
 		   r->id, r->log.snapshot.last_index, logLastIndex(&r->log));
     }
 
@@ -1203,6 +1211,14 @@ int replicationAppend(struct raft *r,
     if (match != 0) {
         assert(match == 1 || match == -1);
         return match == 1 ? 0 : RAFT_SHUTDOWN;
+    }
+
+    if (args->n_entries && args_last_index <= logSnapshotIndex(&r->log)) {
+            evtNoticef("raft(%llx) ae last index %llu snap index %llu",
+                args_last_index, logSnapshotIndex(&r->log));
+            *last_log_index = logSnapshotIndex(&r->log);
+            *rejected = 0;
+            return 0;
     }
 
     /* Delete conflicting entries. */

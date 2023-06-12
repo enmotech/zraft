@@ -151,7 +151,8 @@ int recvAppendEntries(struct raft *r,
         return 0;
     }
 
-    rv = replicationAppend(r, args, &result->rejected, &async);
+    rv = replicationAppend(r, args, &result->rejected, &async,
+                           &result->last_log_index);
     if (rv != 0) {
         evtErrf("raft(%llx) replication append %d", r->id, rv);
         return rv;
@@ -164,10 +165,6 @@ int recvAppendEntries(struct raft *r,
     if (async) {
         return 0;
     }
-
-    /* Echo back to the leader the point that we reached. */
-    result->last_log_index = r->last_stored;
-
 reply:
     result->term = r->current_term;
     message.type = RAFT_IO_APPEND_ENTRIES_RESULT;

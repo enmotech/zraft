@@ -222,7 +222,6 @@ static int tickLeader(struct raft *r)
          * is not yet considered as voting. */
         server_index = configurationIndexOf(&r->configuration, id);
         assert(server_index < r->configuration.n);
-        assert(r->configuration.servers[server_index].role != RAFT_VOTER);
 
         is_too_slow = (r->leader_state.round_number == r->max_catch_up_rounds &&
                        round_duration > r->election_timeout);

@@ -126,7 +126,7 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
 		r->id);
         goto err;
     }
-    assert(r->state == RAFT_CANDIDATE);
+
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
         evtErrf("raft(%llx) set meta failed %d", r->id, status);
@@ -138,6 +138,10 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
     r->current_term = request->term;
     r->voted_for = request->voted_for;
 
+    if (r->state != RAFT_CANDIDATE) {
+        evtErrf("raft(%llx) state is %u", r->id, r->state);
+        goto err;
+    }
     /* Reset election timer. */
     electionResetTimer(r);
 

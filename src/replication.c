@@ -74,6 +74,7 @@ static int sendAppendEntries(struct raft *r,
     raft_index next_index = prev_index + 1;
     raft_index optimistic_next_index;
     int rv;
+    unsigned j;
 
     args->term = r->current_term;
     args->prev_log_index = prev_index;
@@ -84,9 +85,19 @@ static int sendAppendEntries(struct raft *r,
 
     rv = logAcquireWithMax(&r->log, next_index, &args->entries,
 			   &args->n_entries, r->message_log_threshold);
-    if(r->enable_free_trailing && args->n_entries > 0
-        && args->entries[0].buf.base == NULL){
-        args->entries_reload = true;
+    if(r->enable_free_trailing){
+        for (j = 0; j < args->n_entries; ++j) {
+            if (args->entries[j].buf.base == NULL) {
+                args->entries_reload = true;
+                break;
+            }
+        }
+
+        if (args->entries_reload && j != 0) {
+            evtInfof("raft(%llx) not first index freed %llu %u %u %llu", r->id,
+                args->prev_log_index, args->n_entries, j,
+                logUnFreedIndex(&r->log));
+        }
     }
 
     if (rv != 0) {
@@ -1695,6 +1706,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 {
     struct raft *r = req->data;
     struct raft_snapshot *snapshot;
+    raft_index unfreed_index;
 
     r->snapshot.put.data = NULL;
     snapshot = &r->snapshot.pending;
@@ -1725,7 +1737,11 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 	     r->snapshot.trailing, r->enable_free_trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
     if (r->enable_free_trailing) {
+        unfreed_index = logUnFreedIndex(&r->log);
         logFreeEntriesBufForward(&r->log, snapshot->index);
+        evtInfof("raft(%llx) free entries %llu %u %llu->%llu", r->id,
+            logStartIndex(r), logNumEntries(&r->log), unfreed_index,
+            logUnFreedIndex(&r->log));
     }
 out:
     snapshotClose(&r->snapshot.pending);

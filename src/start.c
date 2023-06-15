@@ -324,6 +324,7 @@ static void loadCb(struct raft_io_load *req,
     assert(request);
     struct raft *r = request->raft;
     struct raft_start *start = request->start;
+    raft_index unfreed_index;
 
     raft_free(request);
     assert(r != NULL);
@@ -408,7 +409,11 @@ static void loadCb(struct raft_io_load *req,
 
     if (r->enable_free_trailing && snapshot_index) {
         logFreeEntriesBufForward(&r->log, snapshot_index);
-        evtNoticef("raft(%llx) free entry to index %u", r->id, snapshot_index);
+        unfreed_index = logUnFreedIndex(&r->log);
+        logFreeEntriesBufForward(&r->log, snapshot->index);
+        evtInfof("raft(%llx) free entries %llu %u %llu->%llu", r->id,
+            logStartIndex(r), logNumEntries(&r->log), unfreed_index,
+            logUnFreedIndex(&r->log));
     }
 
     if (r->configuration_uncommitted_index &&

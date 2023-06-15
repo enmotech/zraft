@@ -225,7 +225,11 @@ int convertToLeader(struct raft *r)
         evtErrf("raft(%llx) build array failed %d", r->id, rv);
         return rv;
     }
-    logResetFreedIndex(&r->log);
+    if (r->enable_free_trailing) {
+        logResetUnFreedIndex(&r->log);
+        evtInfof("raft(%llx) reset unfreed index %llu", r->id,
+            logUnFreedIndex(&r->log));
+    }
 
     r->leader_state.change = NULL;
 

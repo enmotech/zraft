@@ -388,7 +388,7 @@ void logInit(struct raft_log *l)
     l->refs_size = 0;
     l->snapshot.last_index = 0;
     l->snapshot.last_term = 0;
-    l->need_free = 1;
+    l->unfreed_index = 1;
 }
 
 /* Return the index of the i'th entry in the log. */
@@ -986,7 +986,7 @@ void logFreeEntriesBufForward(struct raft_log *l, raft_index last_index)
 
     if (logNumEntries(l) == 0)
         return;
-    for (idx = max(l->need_free, indexAt(l, 0)); idx <= last_index; idx++) {
+    for (idx = max(l->unfreed_index, indexAt(l, 0)); idx <= last_index; idx++) {
         i = locateEntry(l, idx);
         if(i == l->size)
             break;
@@ -998,13 +998,18 @@ void logFreeEntriesBufForward(struct raft_log *l, raft_index last_index)
             break;
         destroyEntry(l, entry);
     }
-    assert(idx >= l->need_free);
-    l->need_free = idx;
+    assert(idx >= l->unfreed_index);
+    l->unfreed_index = idx;
 }
 
-void logResetFreedIndex(struct raft_log *l)
+void logResetUnFreedIndex(struct raft_log *l)
 {
-    l->need_free = 1;
+    l->unfreed_index = 1;
+}
+
+raft_index logUnFreedIndex(struct raft_log *l)
+{
+    return l->unfreed_index;
 }
 
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)

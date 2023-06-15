@@ -106,32 +106,6 @@ static MunitParameterEnum cluster_2_params[] = {
     {NULL, NULL},
 };
 
-// static char *cluster_5[] = {"5", NULL};
-// static MunitParameterEnum cluster_5_params[] = {
-// 	{CLUSTER_N_PARAM, cluster_5},
-// 	{NULL, NULL},
-// };
-
-
-// static bool configurationEquals(struct raft_configuration *c1,
-//     struct raft_configuration *c2)
-// {
-//     if (c1->n != c2->n)
-//         return false;
-
-//     for (unsigned int i = 0; i < c1->n; i++) {
-//         unsigned int j = 0;
-//         for (; j < c2->n; j++) {
-//             if (c2->servers[j].id == c1->servers[i].id)
-//                 break;
-//         }
-//         if (j == c2->n)
-//             return false;
-//     }
-
-//     return true;
-// }
-
 SUITE(raft_change)
 
 TEST(raft_change, replace_non_leader, setUp, tearDown, 0,
@@ -153,6 +127,10 @@ TEST(raft_change, replace_non_leader, setUp, tearDown, 0,
     c = &r->configuration;
     munit_assert(c->phase == RAFT_CONF_JOINT);
 
+    CLUSTER_STEP_UNTIL_ELAPSED(1000);
+    c = &r->configuration;
+    munit_assert(c->phase == RAFT_CONF_JOINT);
+    CLUSTER_REMOVE(&f->req, 2);
 
     CLUSTER_STEP_UNTIL_COMMITTED(0, index + 2, 1000);
     r = CLUSTER_RAFT(0);
@@ -189,6 +167,11 @@ TEST(raft_change, replace_leader, setUp, tearDown, 0, enable_recorder_params)
     r = CLUSTER_RAFT(0);
     c = &r->configuration;
     munit_assert(c->phase == RAFT_CONF_JOINT);
+
+    CLUSTER_STEP_UNTIL_ELAPSED(1000);
+    c = &r->configuration;
+    munit_assert(c->phase == RAFT_CONF_JOINT);
+    CLUSTER_REMOVE(&f->req, 1);
 
     CLUSTER_STEP_UNTIL_COMMITTED(0, index + 2, 1000);
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(1000);
@@ -229,6 +212,11 @@ TEST(raft_change, replace_leader_2, setUp, tearDown, 0, cluster_2_params)
     r = CLUSTER_RAFT(0);
     c = &r->configuration;
     munit_assert(c->phase == RAFT_CONF_JOINT);
+
+    CLUSTER_STEP_UNTIL_ELAPSED(1000);
+    c = &r->configuration;
+    munit_assert(c->phase == RAFT_CONF_JOINT);
+    CLUSTER_REMOVE(&f->req, 1);
 
     CLUSTER_STEP_UNTIL_COMMITTED(0, index + 2, 1000);
     CLUSTER_STEP_UNTIL_HAS_NO_LEADER(1000);
@@ -271,8 +259,17 @@ TEST(raft_change, crash_two_replica, setUp, tearDown, 0,
     // kill two replica
     CLUSTER_KILL(0);
     CLUSTER_KILL(3);
-    CLUSTER_STEP_UNTIL_STATE_IS(0, RAFT_FOLLOWER, 2000);
+    CLUSTER_STEP_UNTIL_HAS_NO_LEADER(2000);
+
+    CLUSTER_STEP_UNTIL_HAS_LEADER(5000);
+    CLUSTER_STEP_UNTIL_STATE_IS(2, RAFT_FOLLOWER, 2000);
     CLUSTER_STEP_UNTIL_STATE_IS(1, RAFT_LEADER, 2000);
+
+    CLUSTER_MAKE_PROGRESS;
+
+    c = &r->configuration;
+    munit_assert(c->phase == RAFT_CONF_JOINT);
+    CLUSTER_REMOVE(&f->req, 1);
 
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_STEP_UNTIL_COMMITTED(1, index + 3, 3000);

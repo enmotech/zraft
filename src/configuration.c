@@ -93,21 +93,23 @@ bool configurationIsSpare(const struct raft_configuration *c,
     return spare;
 }
 
-int configurationJointToNormalCopy(const struct raft_configuration *src,
-                                   struct raft_configuration *dst)
+int configurationJointToNormal(const struct raft_configuration *src,
+                               struct raft_configuration *dst,
+                               enum raft_group group)
 {
     size_t i;
     int rv;
+    int role;
 
+    assert(group == RAFT_GROUP_OLD || group == RAFT_GROUP_NEW);
     assert(src->phase == RAFT_CONF_JOINT);
     configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
-        if (!(server->group & RAFT_GROUP_NEW))
+        if (!(server->group & (int)group))
             continue;
-        rv = configurationAdd(dst, server->id, server->role_new,
-                              server->role_new,
-                              RAFT_GROUP_OLD);
+        role = (group == RAFT_GROUP_OLD) ? server->role: server->role_new;
+        rv = configurationAdd(dst, server->id, role, role, RAFT_GROUP_OLD);
         if (rv != 0) {
             evtErrf("add conf failed id %d role %d", server->id, server->role);
             return rv;

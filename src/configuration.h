@@ -83,8 +83,9 @@ bool configurationIsVoter(const struct raft_configuration *c,
 bool configurationIsSpare(const struct raft_configuration *c,
                           const struct raft_server *s, int group);
 
-int configurationJointToNormalCopy(const struct raft_configuration *src,
-                                   struct raft_configuration *dst);
+int configurationJointToNormal(const struct raft_configuration *src,
+                               struct raft_configuration *dst,
+                               enum raft_group group);
 
 int configurationServerRole(struct raft_configuration *c, raft_id id);
 

@@ -9,7 +9,7 @@
 #include "progress.h"
 #include "event.h"
 
-int membershipCanChangeConfiguration(struct raft *r)
+int membershipCanChangeConfiguration(struct raft *r, bool igore_joint)
 {
     int rv;
 
@@ -34,7 +34,7 @@ int membershipCanChangeConfiguration(struct raft *r)
         goto err;
     }
 
-    if (r->configuration.phase != RAFT_CONF_NORMAL) {
+    if (!igore_joint && r->configuration.phase != RAFT_CONF_NORMAL) {
         rv = RAFT_CANTCHANGE;
         evtNoticef("raft(%llx) is changing",
 		r->id);

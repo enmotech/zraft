@@ -8,7 +8,7 @@
 /* Helper returning an error if the configuration can't be changed, either
  * because this node is not the leader or because a configuration change is
  * already in progress. */
-int membershipCanChangeConfiguration(struct raft *r);
+int membershipCanChangeConfiguration(struct raft *r, bool ignore_joint);
 
 /* Update the information about the progress that the non-voting server
  * currently being promoted is making in catching with logs.

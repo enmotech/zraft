@@ -420,7 +420,8 @@ static void loadCb(struct raft_io_load *req,
             r->last_applied >= r->configuration_uncommitted_index) {
         r->configuration_index = r->configuration_uncommitted_index;
         r->configuration_uncommitted_index = 0;
-        evtNoticef("raft(%llx) reset conf index %lu", r->configuration_index);
+        evtNoticef("raft(%llx) reset conf index %llu", r->id,
+            r->configuration_index);
     }
 
     evtNoticef("raft(%llx) conf start %lu/%lu applied %lu", r->id,

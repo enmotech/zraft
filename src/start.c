@@ -408,9 +408,8 @@ static void loadCb(struct raft_io_load *req,
     }
 
     if (r->enable_free_trailing && snapshot_index) {
-        logFreeEntriesBufForward(&r->log, snapshot_index);
         unfreed_index = logUnFreedIndex(&r->log);
-        logFreeEntriesBufForward(&r->log, snapshot->index);
+        logFreeEntriesBufForward(&r->log, snapshot_index);
         evtInfof("raft(%llx) free entries %llu %u %llu->%llu", r->id,
             logStartIndex(r), logNumEntries(&r->log), unfreed_index,
             logUnFreedIndex(&r->log));
@@ -420,7 +419,8 @@ static void loadCb(struct raft_io_load *req,
             r->last_applied >= r->configuration_uncommitted_index) {
         r->configuration_index = r->configuration_uncommitted_index;
         r->configuration_uncommitted_index = 0;
-        evtNoticef("raft(%llx) reset conf index %lu", r->configuration_index);
+        evtNoticef("raft(%llx) reset conf index %llu", r->id,
+            r->configuration_index);
     }
 
     evtNoticef("raft(%llx) conf start %lu/%lu applied %lu", r->id,

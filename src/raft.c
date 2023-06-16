@@ -346,7 +346,10 @@ RAFT_API int raft_replace_configuration(struct raft *r,
 	assert(r->state == RAFT_FOLLOWER);
 	raft_configuration_close(&r->configuration);
 	r->configuration = conf;
-    r->role = configurationServerRole(&r->configuration, r->id);
+    r->role = RAFT_STANDBY;
+    if (configurationIndexOf(&r->configuration, r->id) != r->configuration.n) {
+        r->role = configurationServerRole(&r->configuration, r->id);
+    }
 
 	evtNoticef("raft(%llx) conf replace", r->id);
 	evtDumpConfiguration(r, &conf);

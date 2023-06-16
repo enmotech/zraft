@@ -10,9 +10,6 @@
 #define CONF_SERVER_SIZE (8 + 1 + 1 + 1) /* id|role|new role|group */
 #define CONF_SERVER_VERSION 1
 
-/* 从r的configuration中获取id对应的raft_server的role */
-int getRaftRole(struct raft *r, raft_id id);
-
 /* Initialize an empty configuration. */
 void configurationInit(struct raft_configuration *c);
 

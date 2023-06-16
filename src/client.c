@@ -188,7 +188,11 @@ static int clientChangeConfiguration(
     if (configuration != &r->configuration) {
         raft_configuration_close(&r->configuration);
         r->configuration = *configuration;
-        r->role = configurationServerRole(&r->configuration, r->id);
+        r->role = RAFT_STANDBY;
+        if (configurationIndexOf(&r->configuration, r->id)
+            != r->configuration.n) {
+            r->role = configurationServerRole(&r->configuration, r->id);
+        }
     }
 
     /* Start writing the new log entry to disk and send it to the followers. */

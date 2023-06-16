@@ -19,17 +19,6 @@ struct raft_configuration_meta
     uint8_t  reserve[243];
 };
 
-int getRaftRole(struct raft *r, raft_id id)
-{
-    unsigned i;
-    for ( i = 0; i < r->configuration.n; i++) {
-        if (id == r->configuration.servers[i].id) {
-            return r->configuration.servers[i].role;
-        }
-    }
-    return -1;
-}
-
 void configurationInit(struct raft_configuration *c)
 {
     c->servers = NULL;
@@ -556,8 +545,7 @@ int configurationServerRole(struct raft_configuration *c, raft_id id)
 {
     const struct raft_server *server = configurationGet(c, id);
 
-    if (server == NULL)
-        return RAFT_STANDBY;
+    assert(server);
     if (server->group & RAFT_GROUP_NEW)
         return server->role_new;
     return server->role;

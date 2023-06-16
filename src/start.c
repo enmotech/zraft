@@ -34,7 +34,11 @@ static int restoreMostRecentConfiguration(struct raft *r,
     }
     raft_configuration_close(&r->configuration);
     r->configuration = configuration;
-    r->role = configurationServerRole(&r->configuration, r->id);
+
+    r->role = RAFT_STANDBY;
+    if (configurationIndexOf(&r->configuration, r->id) != r->configuration.n) {
+        r->role = configurationServerRole(&r->configuration, r->id);
+    }
     r->configuration_uncommitted_index = index;
     return 0;
 }
@@ -215,7 +219,10 @@ int raft_start(struct raft *r)
         return rv;
     }
 
-    r->role = configurationServerRole(&r->configuration, r->id);
+    r->role = RAFT_STANDBY;
+    if (configurationIndexOf(&r->configuration, r->id) != r->configuration.n) {
+        r->role = configurationServerRole(&r->configuration, r->id);
+    }
     /* Start the I/O backend. The tickCb function is expected to fire every
      * r->heartbeat_timeout milliseconds and recvCb whenever an RPC is
      * received. */
@@ -272,7 +279,11 @@ int restoreEntriesAndSnapshotInfo(struct raft *r,
     }
     configurationClose(&r->configuration);
     r->configuration = snapshot->configuration;
-    r->role = configurationServerRole(&r->configuration, r->id);
+
+    r->role = RAFT_STANDBY;
+    if (configurationIndexOf(&r->configuration, r->id) != r->configuration.n) {
+        r->role = configurationServerRole(&r->configuration, r->id);
+    }
     r->configuration_index = snapshot->configuration_index;
     r->commit_index = snapshot->index;
     r->last_applying = snapshot->index;
@@ -397,7 +408,10 @@ static void loadCb(struct raft_io_load *req,
         goto err;
     }
 
-    r->role = configurationServerRole(&r->configuration, r->id);
+    r->role = RAFT_STANDBY;
+    if (configurationIndexOf(&r->configuration, r->id) != r->configuration.n) {
+        r->role = configurationServerRole(&r->configuration, r->id);
+    }
     /* Start the I/O backend. The tickCb function is expected to fire every
      * r->heartbeat_timeout milliseconds and recvCb whenever an RPC is
      * received. */

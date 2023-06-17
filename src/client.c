@@ -188,7 +188,11 @@ static int clientChangeConfiguration(
     if (configuration != &r->configuration) {
         raft_configuration_close(&r->configuration);
         r->configuration = *configuration;
-        r->role = configurationServerRole(&r->configuration, r->id);
+        r->role = RAFT_STANDBY;
+        if (configurationIndexOf(&r->configuration, r->id)
+            != r->configuration.n) {
+            r->role = configurationServerRole(&r->configuration, r->id);
+        }
     }
 
     /* Start writing the new log entry to disk and send it to the followers. */
@@ -223,7 +227,7 @@ int raft_add(struct raft *r,
     struct raft_configuration configuration;
     int rv;
 
-    rv = membershipCanChangeConfiguration(r);
+    rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
         evtNoticef("raft(%llx) change conf failed %d", r->id, rv);
         return rv;
@@ -291,7 +295,7 @@ int raft_joint_promote(struct raft *r,
         goto err;
     }
 
-    rv = membershipCanChangeConfiguration(r);
+    rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
         evtNoticef("raft(%llx) change conf failed %d", r->id, rv);
         return rv;
@@ -374,7 +378,7 @@ int raft_dup(struct raft *r, struct raft_change *req, raft_change_cb cb)
 	struct raft_configuration configuration;
 	int rv;
 
-	rv = membershipCanChangeConfiguration(r);
+	rv = membershipCanChangeConfiguration(r, false);
 	if (rv != 0) {
 		return rv;
 	}
@@ -423,7 +427,7 @@ int raft_assign(struct raft *r,
         return rv;
     }
 
-    rv = membershipCanChangeConfiguration(r);
+    rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
         evtNoticef("raft(%llx) change conf failed %d", r->id, rv);
         return rv;
@@ -502,6 +506,25 @@ err:
     return rv;
 }
 
+static int copyJointRemoveConfiguration(struct raft *r,
+                                        struct raft_configuration *c,
+                                        raft_id id)
+{
+    assert(r->configuration.phase == RAFT_CONF_JOINT);
+    const struct raft_server *server;
+    enum raft_group group;
+
+    server = configurationGet(&r->configuration, id);
+    assert(server);
+
+    if (server->group & RAFT_GROUP_NEW)
+        group = RAFT_GROUP_OLD;
+    else
+        group = RAFT_GROUP_NEW;
+
+    return configurationJointToNormal(&r->configuration, c, group);
+}
+
 int raft_remove(struct raft *r,
                 struct raft_change *req,
                 raft_id id,
@@ -510,8 +533,9 @@ int raft_remove(struct raft *r,
     const struct raft_server *server;
     struct raft_configuration configuration;
     int rv;
+    bool joint = r->configuration.phase == RAFT_CONF_JOINT;
 
-    rv = membershipCanChangeConfiguration(r);
+    rv = membershipCanChangeConfiguration(r, joint);
     if (rv != 0) {
         evtErrf("raft(%llx) change conf failed %d", r->id, rv);
         return rv;
@@ -526,22 +550,30 @@ int raft_remove(struct raft *r,
 
     tracef("remove server: id %llu", id);
 
-    /* Make a copy of the current configuration, and remove the given server
-     * from it. */
-    rv = configurationCopy(&r->configuration, &configuration);
-    if (rv != 0) {
-        evtErrf("raft(%llx) copy conf failed %d", r->id, rv);
-        goto err;
-    }
+    if (r->configuration.phase == RAFT_CONF_JOINT) {
+        rv = copyJointRemoveConfiguration(r, &configuration, id);
+        if (rv != 0) {
+            evtErrf("raft(%llx) copy joint conf failed %d", r->id, rv);
+            goto err;
+        }
+        configurationRemove(&configuration, id);
+    } else {
+        /* Make a copy of the current configuration, and remove the given server
+        * from it. */
+        rv = configurationCopy(&r->configuration, &configuration);
+        if (rv != 0) {
+            evtErrf("raft(%llx) copy conf failed %d", r->id, rv);
+            goto err;
+        }
 
-    rv = configurationRemove(&configuration, id);
-    if (rv != 0) {
-        evtErrf("raft(%llx) remove %llx from conf failed %d", r->id, id, rv);
-        goto err_after_configuration_copy;
+        rv = configurationRemove(&configuration, id);
+        if (rv != 0) {
+            evtErrf("raft(%llx) remove %llx from conf failed %d", r->id, id, rv);
+            goto err_after_configuration_copy;
+        }
     }
 
     req->cb = cb;
-
     rv = clientChangeConfiguration(r, req, &configuration);
     if (rv != 0) {
         evtErrf("raft(%llx) change conf failed %d", r->id, rv);

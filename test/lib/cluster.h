@@ -370,6 +370,14 @@
         munit_assert_int(_rv, ==, 0);                                          \
     } while (0)
 
+/* Remove server by id */
+#define CLUSTER_REMOVE(REQ, ID)                                                \
+    {                                                                          \
+        int rv;                                                                \
+        rv = raft_remove(CLUSTER_RAFT(CLUSTER_LEADER), REQ, ID, NULL);         \
+        munit_assert_int(rv, ==, 0);                                           \
+    }
+
 /* Ensure that the cluster can make progress from the current state.
  *
  * - If no leader is present, wait for one to be elected.

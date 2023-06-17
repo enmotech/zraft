@@ -177,6 +177,9 @@ reply:
     }
     req->data = r;
 
+    tracef("send %llu aer term %llu reject %llu last_index %llu", id,
+        result->term, result->rejected, result->last_log_index);
+
     rv = r->io->send(r->io, req, &message, recvSendAppendEntriesResultCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)

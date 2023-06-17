@@ -19,17 +19,6 @@ struct raft_configuration_meta
     uint8_t  reserve[243];
 };
 
-int getRaftRole(struct raft *r, raft_id id)
-{
-    unsigned i;
-    for ( i = 0; i < r->configuration.n; i++) {
-        if (id == r->configuration.servers[i].id) {
-            return r->configuration.servers[i].role;
-        }
-    }
-    return -1;
-}
-
 void configurationInit(struct raft_configuration *c)
 {
     c->servers = NULL;
@@ -93,21 +82,23 @@ bool configurationIsSpare(const struct raft_configuration *c,
     return spare;
 }
 
-int configurationJointToNormalCopy(const struct raft_configuration *src,
-                                   struct raft_configuration *dst)
+int configurationJointToNormal(const struct raft_configuration *src,
+                               struct raft_configuration *dst,
+                               enum raft_group group)
 {
     size_t i;
     int rv;
+    int role;
 
+    assert(group == RAFT_GROUP_OLD || group == RAFT_GROUP_NEW);
     assert(src->phase == RAFT_CONF_JOINT);
     configurationInit(dst);
     for (i = 0; i < src->n; i++) {
         struct raft_server *server = &src->servers[i];
-        if (!(server->group & RAFT_GROUP_NEW))
+        if (!(server->group & (int)group))
             continue;
-        rv = configurationAdd(dst, server->id, server->role_new,
-                              server->role_new,
-                              RAFT_GROUP_OLD);
+        role = (group == RAFT_GROUP_OLD) ? server->role: server->role_new;
+        rv = configurationAdd(dst, server->id, role, role, RAFT_GROUP_OLD);
         if (rv != 0) {
             evtErrf("add conf failed id %d role %d", server->id, server->role);
             return rv;
@@ -554,8 +545,7 @@ int configurationServerRole(struct raft_configuration *c, raft_id id)
 {
     const struct raft_server *server = configurationGet(c, id);
 
-    if (server == NULL)
-        return RAFT_STANDBY;
+    assert(server);
     if (server->group & RAFT_GROUP_NEW)
         return server->role_new;
     return server->role;

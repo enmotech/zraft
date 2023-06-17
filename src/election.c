@@ -100,6 +100,10 @@ static int electionSend(struct raft *r, const struct raft_server *server)
         HeapFree(send);
         return rv;
     }
+    tracef("send %llu rv term %llu log term %llu index %llu pre %d disrupt %d",
+        server->id, message.request_vote.term,
+        message.request_vote.last_log_term, message.request_vote.last_log_index,
+        message.request_vote.pre_vote, message.request_vote.disrupt_leader);
 
     return 0;
 }
@@ -159,7 +163,8 @@ static void electionSetMetaCb(struct raft_io_set_meta *req, int status)
     }
     for (i = 0; i < r->configuration.n; i++) {
         const struct raft_server *server = &r->configuration.servers[i];
-        if (server->id == r->id || (server->role != RAFT_VOTER && server->role != RAFT_LOGGER)) {
+        if (server->id == r->id
+        || !configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
             continue;
         }
         rv = electionSend(r, server);
@@ -251,7 +256,8 @@ int electionStart(struct raft *r)
     }
     for (i = 0; i < r->configuration.n; i++) {
         const struct raft_server *server = &r->configuration.servers[i];
-        if (server->id == r->id || (server->role != RAFT_VOTER && server->role != RAFT_LOGGER)) {
+        if (server->id == r->id
+        || !configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
             continue;
         }
         rv = electionSend(r, server);

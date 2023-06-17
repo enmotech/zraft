@@ -107,7 +107,4 @@ int replicationApply(struct raft *r);
  *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N */
 void replicationQuorum(struct raft *r, const raft_index index);
 
-/* Append new conf for joint consensus configuration change*/
-int replicationAppendJointNewConf(struct raft *r);
-
 #endif /* REPLICATION_H_ */

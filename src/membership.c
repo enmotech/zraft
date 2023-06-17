@@ -9,7 +9,7 @@
 #include "progress.h"
 #include "event.h"
 
-int membershipCanChangeConfiguration(struct raft *r)
+int membershipCanChangeConfiguration(struct raft *r, bool igore_joint)
 {
     int rv;
 
@@ -34,7 +34,7 @@ int membershipCanChangeConfiguration(struct raft *r)
         goto err;
     }
 
-    if (r->configuration.phase != RAFT_CONF_NORMAL) {
+    if (!igore_joint && r->configuration.phase != RAFT_CONF_NORMAL) {
         rv = RAFT_CANTCHANGE;
         evtNoticef("raft(%llx) is changing",
 		r->id);
@@ -142,7 +142,10 @@ int membershipUncommittedChange(struct raft *r,
     raft_configuration_close(&r->configuration);
 
     r->configuration = configuration;
-    r->role = configurationServerRole(&r->configuration, r->id);
+    r->role = RAFT_STANDBY;
+    if (configurationIndexOf(&r->configuration, r->id) != r->configuration.n) {
+        r->role = configurationServerRole(&r->configuration, r->id);
+    }
     r->configuration_uncommitted_index = index;
 
     evtNoticef("raft(%llx) conf received at index %lu", r->id, index);
@@ -187,7 +190,10 @@ int membershipRollback(struct raft *r)
         return rv;
     }
 
-    r->role = configurationServerRole(&r->configuration, r->id);
+    r->role = RAFT_STANDBY;
+    if (configurationIndexOf(&r->configuration, r->id) != r->configuration.n) {
+        r->role = configurationServerRole(&r->configuration, r->id);
+    }
     r->configuration_uncommitted_index = 0;
     evtNoticef("raft(%llx) conf rollback ", r->id);
     evtDumpConfiguration(r, &r->configuration);

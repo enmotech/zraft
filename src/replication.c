@@ -1213,8 +1213,9 @@ int replicationAppend(struct raft *r,
         evtNoticef("raft(%llx) recv term %llu entries %lu %llu %llu %llu",
 		   r->id, args->term, args->n_entries, args->prev_log_index,
 		   args->prev_log_term, args->leader_commit);
-        evtNoticef("raft(%llx) snapshot %llu last log %llu",
-		   r->id, r->log.snapshot.last_index, logLastIndex(&r->log));
+        evtNoticef("raft(%llx) snapshot %llu log %llu/%llu/%llu",
+		   r->id, r->log.snapshot.last_index, logStartIndex(r), logStartTerm(r),
+           logNumEntries(&r->log));
     }
 
     /* Check the log matching property. */

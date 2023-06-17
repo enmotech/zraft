@@ -61,6 +61,7 @@ int recvAppendEntries(struct raft *r,
     int match;
     bool async;
     int rv;
+    bool discard;
 
     assert(r != NULL);
     assert(id > 0);
@@ -139,8 +140,11 @@ int recvAppendEntries(struct raft *r,
     /* Reset the election timer. */
     r->election_timer_start = r->io->time(r->io);
 
-    if (hookHackAppendEntries(r, args, result))
+    if (hookHackAppendEntries(r, args, result, &discard)) {
+        if (discard)
+            goto err_free_args;
         goto reply;
+    }
 
     /* If we are installing a snapshot, ignore these entries. TODO: we should do
      * something smarter, e.g. buffering the entries in the I/O backend, which
@@ -184,8 +188,9 @@ reply:
         raft_free(req);
         return rv;
     }
-    entryBatchesDestroy(args->entries, args->n_entries);
 
+err_free_args:
+    entryBatchesDestroy(args->entries, args->n_entries);
     return 0;
 }
 

@@ -1328,7 +1328,8 @@ struct raft_hook
     void (*conf_change)(struct raft_hook *h, const struct raft_configuration *c);
     bool (*hack_append_entries)(struct raft_hook *h,
                                 const struct raft_append_entries *ae,
-                                struct raft_append_entries_result *result);
+                                struct raft_append_entries_result *result,
+                                bool *discard);
 };
 
 RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);

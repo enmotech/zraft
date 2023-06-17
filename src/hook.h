@@ -16,6 +16,7 @@ void hookConfChange(struct raft *r, const struct raft_configuration *c);
 
 bool hookHackAppendEntries(struct raft *r,
                            const struct raft_append_entries *ae,
-                           struct raft_append_entries_result *result);
+                           struct raft_append_entries_result *result,
+                           bool *discard);
 
 #endif //HOOK_H

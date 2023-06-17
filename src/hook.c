@@ -57,11 +57,13 @@ static void defaultConfChange(struct raft_hook *h,
 
 static bool defaultHackAppendEntries(struct raft_hook *h,
 				     const struct raft_append_entries *ae,
-				     struct raft_append_entries_result *result)
+				     struct raft_append_entries_result *result,
+				     bool *discard)
 {
 	(void)h;
 	(void)ae;
 	(void)result;
+	(void)discard;
 
 	return false;
 }
@@ -190,9 +192,10 @@ void hookConfChange(struct raft *r, const struct raft_configuration *c)
 
 bool hookHackAppendEntries(struct raft *r,
                            const struct raft_append_entries *ae,
-			   struct raft_append_entries_result *result)
+			   struct raft_append_entries_result *result,
+			   bool *discard)
 {
 	if (!r->hook->hack_append_entries)
 		return false;
-	return r->hook->hack_append_entries(r->hook, ae, result);
+	return r->hook->hack_append_entries(r->hook, ae, result, discard);
 }

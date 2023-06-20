@@ -1316,6 +1316,12 @@ struct raft_hook
 				      raft_index index, raft_term term);
 	void (*entry_after_apply_fn)(struct raft_hook *h, raft_index index,
 				     const struct raft_entry *entry);
+    /**
+     * Check entry at @index should apply now.
+     * @return false entry couldn't apply, try later.
+     */
+    bool (*entry_should_apply)(struct raft_hook *h, raft_index index,
+                               const struct raft_entry *entry);
 	void (*request_accept)(struct raft_hook *h, struct request *req);
 	void (*request_append)(struct raft_hook *h, struct request *req);
 	void (*request_append_done)(struct raft_hook *h, struct request *req);

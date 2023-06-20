@@ -38,7 +38,7 @@ void evtDumpConfiguration(struct raft *r, const struct raft_configuration *c)
 
 	for (i = 0; i < c->n; ++i)
 		evtNoticef(
-		"phase %d raft(%llx) member %u %llx role %u %lu group %d",
+		"phase %d raft(%llx) member %u %llx role %d %d group %d",
 		c->phase, r->id, i, c->servers[i].id, c->servers[i].role,
 		c->servers[i].role_new, c->servers[i].group);
 

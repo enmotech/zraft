@@ -1846,6 +1846,12 @@ int replicationApply(struct raft *r)
             return 0;
         }
 
+        if (!hookEntryShouldApply(r, index, entry)) {
+            evtInfof("raft(%llx) entry at index %llu should apply later",
+                r->id, index);
+            break;
+        }
+
         assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
                entry->type == RAFT_CHANGE);
 

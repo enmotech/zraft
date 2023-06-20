@@ -34,6 +34,17 @@ static void defaultEntryAfterApply(struct raft_hook *h, raft_index index,
 	(void)entry;
 }
 
+static bool defaultEntryShouldApply(struct raft_hook *h, raft_index index,
+				    const struct raft_entry *entry)
+{
+	(void)h;
+	(void)index;
+	(void)entry;
+
+	return true;
+}
+
+
 static void defaultRequestDummy(struct raft_hook *h, struct request *req)
 {
 	(void)h;
@@ -73,6 +84,7 @@ struct raft_hook defaultHook = {
 	.entry_after_append_fn = defaultEntryAfterAppend,
 	.entry_match_change_cb = defaultEntryMatchChange,
 	.entry_after_apply_fn  = defaultEntryAfterApply,
+	.entry_should_apply    = defaultEntryShouldApply,
 	.conf_change = defaultConfChange,
 	.request_accept =  defaultRequestDummy,
 	.request_append = defaultRequestDummy,
@@ -198,4 +210,10 @@ bool hookHackAppendEntries(struct raft *r,
 	if (!r->hook->hack_append_entries)
 		return false;
 	return r->hook->hack_append_entries(r->hook, ae, result, discard);
+}
+
+bool hookEntryShouldApply(struct raft *r, raft_index index,
+			  const struct raft_entry *entry)
+{
+	return r->hook->entry_should_apply(r->hook, index, entry);
 }

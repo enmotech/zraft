@@ -437,9 +437,11 @@ static void loadCb(struct raft_io_load *req,
             r->configuration_index);
     }
 
-    evtNoticef("raft(%llx) conf start %lu/%lu applied %lu", r->id,
-            r->configuration_index, r->configuration_uncommitted_index,
-            load->applied_index);
+    evtNoticef("raft(%llx) conf %lu/%lu log %lu/%lu %lu snap %llu/%llu index %llu/%llu/%llu/%llu",
+            r->id, r->configuration_index, r->configuration_uncommitted_index,
+            logStartIndex(r), logStartTerm(r), logNumEntries(&r->log),
+            snapshot_index, snapshot_term, r->commit_index, r->last_applying,
+            r->last_applied, r->last_stored);
     evtDumpConfiguration(r, &r->configuration);
     hookConfChange(r, &r->configuration);
 

@@ -75,7 +75,7 @@ TEST(etcd_migrate, progressLeader, setUp, tearDown, 0, NULL)
 	CLUSTER_ELECT(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
-	
+
 	struct raft_progress *pr = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
 	munit_assert_not_null(pr);
 
@@ -86,7 +86,7 @@ TEST(etcd_migrate, progressLeader, setUp, tearDown, 0, NULL)
 	struct raft_append_entries_result res = {
 		.term = 2,
 		.rejected = 0,
-		.last_log_index = 1 
+		.last_log_index = 1
 	};
 	CLUSTER_STEP_UNTIL_AE_RES(j, i, &res, 200);
 
@@ -116,7 +116,7 @@ TEST(etcd_migrate, progressLeader, setUp, tearDown, 0, NULL)
 	raft_index match_before = pr->match_index;
 
 	//follower send AE_RESULTS
-	res.last_log_index = 2; 
+	res.last_log_index = 2;
 	CLUSTER_STEP_UNTIL_AE_RES(j, i, &res, 26);
 
 	//after recv results
@@ -144,11 +144,11 @@ TEST(etcd_migrate, leaderElectionMinority, setUp, tearDown, 0, NULL)
 	ASSERT_TERM(i,2);
 	//after one round election, all these RV has been dropped
 	CLUSTER_STEP_UNTIL_ELAPSED(1001);
-	
+
 	//I still be candidate, and add term to 3
 	ASSERT_CANDIDATE(i);
 	ASSERT_TERM(i,3);
-	
+
 	return MUNIT_OK;
 }
 
@@ -172,11 +172,11 @@ TEST(etcd_migrate, leaderElectionMajority, setUp, tearDown, 0, NULL)
 
 	//after one round election
 	CLUSTER_STEP_UNTIL_ELAPSED(30);
-	
+
 	//I will be leader, cause reach a majority
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
-	
+
 	return MUNIT_OK;
 }
 
@@ -197,11 +197,11 @@ TEST(etcd_migrate, leaderElectionMinorityPreVote, setUp, tearDown, 0, NULL)
 	ASSERT_TERM(i, 1);
 	//after one round election, all these RV has been dropped
 	CLUSTER_STEP_UNTIL_ELAPSED(1001);
-	
+
 	//I still be candidate, but term still is 2
 	ASSERT_CANDIDATE(i);
 	ASSERT_TERM(i, 1);
-	
+
 	return MUNIT_OK;
 }
 
@@ -231,7 +231,7 @@ TEST(etcd_migrate, leaderElectionMajorityPreVote, setUp, tearDown, 0, NULL)
 	//still be candidate
 	ASSERT_CANDIDATE(i);
 	ASSERT_TERM(i,2);
-	
+
 	//after the real one round election
 	CLUSTER_STEP_UNTIL_ELAPSED(30);
 
@@ -239,7 +239,7 @@ TEST(etcd_migrate, leaderElectionMajorityPreVote, setUp, tearDown, 0, NULL)
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_TERM(i, 2);
-	
+
 	return MUNIT_OK;
 }
 
@@ -258,7 +258,7 @@ TEST(etcd_migrate,
 	0,
 	cluster_3_with_1_standby_params)
 {
-	
+
     struct fixture *f = data;
 	unsigned i=0,j=1,k=2;
 	CLUSTER_START;
@@ -291,12 +291,12 @@ TEST(etcd_migrate, leaderCycle, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
 
-	CLUSTER_DEPOSE;	
+	CLUSTER_DEPOSE;
 	CLUSTER_ELECT(j);
 	ASSERT_FOLLOWER(i);
 	ASSERT_FOLLOWER(k);
 
-	CLUSTER_DEPOSE;	
+	CLUSTER_DEPOSE;
 	CLUSTER_ELECT(k);
 	ASSERT_FOLLOWER(i);
 	ASSERT_FOLLOWER(j);
@@ -315,12 +315,12 @@ TEST(etcd_migrate, leaderCyclePreVote, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
 
-	CLUSTER_DEPOSE;	
+	CLUSTER_DEPOSE;
 	CLUSTER_ELECT(j);
 	ASSERT_FOLLOWER(i);
 	ASSERT_FOLLOWER(k);
 
-	CLUSTER_DEPOSE;	
+	CLUSTER_DEPOSE;
 	CLUSTER_ELECT(k);
 	ASSERT_FOLLOWER(i);
 	ASSERT_FOLLOWER(j);
@@ -381,9 +381,9 @@ TEST(etcd_migrate, leaderElctionOverWriteNewerLogs, setUp, tearDown, 0, NULL)
 	munit_assert_llong(4, ==, logTermOf(&CLUSTER_RAFT(j)->log, 3));
 	munit_assert_llong(5, ==, logTermOf(&CLUSTER_RAFT(j)->log, 4));
 
-	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);	
-	munit_assert_llong(1, ==, CLUSTER_RAFT(j)->commit_index);	
-	
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+	munit_assert_llong(1, ==, CLUSTER_RAFT(j)->commit_index);
+
 	//a few moments later
 	CLUSTER_STEP_UNTIL_ELAPSED(1000);
 
@@ -403,8 +403,8 @@ TEST(etcd_migrate, leaderElctionOverWriteNewerLogs, setUp, tearDown, 0, NULL)
 	munit_assert_llong(3, ==, logTermOf(&CLUSTER_RAFT(j)->log, 3));
 	munit_assert_llong(6, ==, logTermOf(&CLUSTER_RAFT(j)->log, 4));
 
-	munit_assert_llong(4, ==, CLUSTER_RAFT(i)->commit_index);	
-	munit_assert_llong(4, ==, CLUSTER_RAFT(j)->commit_index);	
+	munit_assert_llong(4, ==, CLUSTER_RAFT(i)->commit_index);
+	munit_assert_llong(4, ==, CLUSTER_RAFT(j)->commit_index);
 	return MUNIT_OK;
 }
 
@@ -460,9 +460,9 @@ TEST(etcd_migrate, leaderElctionOverWriteNewerLogsPreVote, setUp, tearDown, 0, N
 	munit_assert_llong(4, ==, logTermOf(&CLUSTER_RAFT(j)->log, 3));
 	munit_assert_llong(5, ==, logTermOf(&CLUSTER_RAFT(j)->log, 4));
 
-	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);	
-	munit_assert_llong(1, ==, CLUSTER_RAFT(j)->commit_index);	
-	
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+	munit_assert_llong(1, ==, CLUSTER_RAFT(j)->commit_index);
+
 	//a few moments later
 	CLUSTER_STEP_UNTIL_ELAPSED(1000);
 
@@ -482,8 +482,8 @@ TEST(etcd_migrate, leaderElctionOverWriteNewerLogsPreVote, setUp, tearDown, 0, N
 	munit_assert_llong(3, ==, logTermOf(&CLUSTER_RAFT(j)->log, 3));
 	munit_assert_llong(6, ==, logTermOf(&CLUSTER_RAFT(j)->log, 4));
 
-	munit_assert_llong(4, ==, CLUSTER_RAFT(i)->commit_index);	
-	munit_assert_llong(4, ==, CLUSTER_RAFT(j)->commit_index);	
+	munit_assert_llong(4, ==, CLUSTER_RAFT(i)->commit_index);
+	munit_assert_llong(4, ==, CLUSTER_RAFT(j)->commit_index);
 	return MUNIT_OK;
 }
 
@@ -496,7 +496,7 @@ TEST(etcd_migrate, voteFromAnyState, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
-	
+
 	CLUSTER_STEP_UNTIL_ELAPSED(1000);
 
 	ASSERT_CANDIDATE(i);
@@ -513,7 +513,7 @@ TEST(etcd_migrate, voteFromAnyState, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 	CLUSTER_SATURATE_BOTHWAYS(j, k);
-	
+
 	CLUSTER_STEP_UNTIL_ELAPSED(1300);
 
 	ASSERT_FOLLOWER(i);
@@ -559,9 +559,9 @@ TEST(etcd_migrate, voteFromAnyStatePreVote, setUp, tearDown, 0, NULL)
 	ASSERT_FOLLOWER(k);
 
 	//set all server pre-vote true
-	raft_set_pre_vote(CLUSTER_RAFT(i), true);	
-	raft_set_pre_vote(CLUSTER_RAFT(j), true);	
-	raft_set_pre_vote(CLUSTER_RAFT(k), true);	
+	raft_set_pre_vote(CLUSTER_RAFT(i), true);
+	raft_set_pre_vote(CLUSTER_RAFT(j), true);
+	raft_set_pre_vote(CLUSTER_RAFT(k), true);
 
 	CLUSTER_STEP_UNTIL_ELAPSED(1000);
 
@@ -586,7 +586,7 @@ TEST(etcd_migrate, voteFromAnyStatePreVote, setUp, tearDown, 0, NULL)
 	CLUSTER_SATURATE_BOTHWAYS(i, j);
 	CLUSTER_SATURATE_BOTHWAYS(i, k);
 	CLUSTER_SATURATE_BOTHWAYS(j, k);
-	
+
 	CLUSTER_STEP_UNTIL_ELAPSED(1300);
 
 	ASSERT_FOLLOWER(i);
@@ -653,12 +653,12 @@ TEST(etcd_migrate, logReplication, setUp, tearDown, 0, NULL)
 
 	for (uint8_t a = 0; a < 3; a++)
 		CLUSTER_ADD_ENTRY(i, &g_et_0[a]);
-	
+
 
 	CLUSTER_START;
 
 	CLUSTER_STEP_UNTIL_ELAPSED(1030);
-	
+
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
 	ASSERT_FOLLOWER(k);
@@ -671,9 +671,9 @@ TEST(etcd_migrate, logReplication, setUp, tearDown, 0, NULL)
 	munit_assert_llong(2, ==, logTermOf(&CLUSTER_RAFT(i)->log, 3));
 	munit_assert_llong(2, ==, logTermOf(&CLUSTER_RAFT(i)->log, 4));
 
-	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);	
-	munit_assert_llong(1, ==, CLUSTER_RAFT(j)->commit_index);	
-	munit_assert_llong(1, ==, CLUSTER_RAFT(k)->commit_index);	
+	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
+	munit_assert_llong(1, ==, CLUSTER_RAFT(j)->commit_index);
+	munit_assert_llong(1, ==, CLUSTER_RAFT(k)->commit_index);
 
 	CLUSTER_STEP_UNTIL_ELAPSED(1000);
 
@@ -683,9 +683,9 @@ TEST(etcd_migrate, logReplication, setUp, tearDown, 0, NULL)
 	munit_assert_llong(4, ==, logLastIndex(&CLUSTER_RAFT(k)->log));
 
 	//check all the commit_index
-	munit_assert_llong(4, ==, CLUSTER_RAFT(i)->commit_index);	
-	munit_assert_llong(4, ==, CLUSTER_RAFT(j)->commit_index);	
-	munit_assert_llong(4, ==, CLUSTER_RAFT(k)->commit_index);	
+	munit_assert_llong(4, ==, CLUSTER_RAFT(i)->commit_index);
+	munit_assert_llong(4, ==, CLUSTER_RAFT(j)->commit_index);
+	munit_assert_llong(4, ==, CLUSTER_RAFT(k)->commit_index);
 
 	//check the log data
 	void *base = NULL;
@@ -699,7 +699,7 @@ TEST(etcd_migrate, logReplication, setUp, tearDown, 0, NULL)
 		base = (char *)CLUSTER_RAFT(k)->log.entries[a].buf.base + 8;
 		munit_assert_uint64(a*111, ==, byteGet64((const void **)&base));
 	}
-	
+
 	return MUNIT_OK;
 }
 
@@ -722,19 +722,20 @@ TEST(etcd_migrate, singleNodeCommit, setUp, tearDown, 0, cluster_1_params)
 	for (uint8_t a = 0; a < 3; a++)
 		CLUSTER_ADD_ENTRY(0, &g_et_0[a]);
 
-	CLUSTER_START;		
+	CLUSTER_START;
 	ASSERT_LEADER(0);
 
-	munit_assert_llong(4, ==, logLastIndex(&CLUSTER_RAFT(0)->log));
-	munit_assert_llong(4, ==, CLUSTER_RAFT(0)->commit_index);	
+	CLUSTER_MAKE_PROGRESS;
+	munit_assert_llong(5, ==, logLastIndex(&CLUSTER_RAFT(0)->log));
+	munit_assert_llong(5, ==, CLUSTER_RAFT(0)->commit_index);
 
 	struct raft_apply *req = munit_malloc(sizeof *req);
 	CLUSTER_APPLY_ADD_X(0, req, 1, test_free_req);
 
 	CLUSTER_STEP_UNTIL_ELAPSED(10);
 
-	munit_assert_llong(5, ==, logLastIndex(&CLUSTER_RAFT(0)->log));
-	munit_assert_llong(5, ==, CLUSTER_RAFT(0)->commit_index);	
+	munit_assert_llong(6, ==, logLastIndex(&CLUSTER_RAFT(0)->log));
+	munit_assert_llong(6, ==, CLUSTER_RAFT(0)->commit_index);
 
 	return MUNIT_OK;
 }
@@ -756,10 +757,10 @@ TEST(etcd_migrate, ignoreOldTermMessage, setUp, tearDown, 0, cluster_2_params)
 
 	ASSERT_LEADER(i);
 	ASSERT_FOLLOWER(j);
-	
+
 	struct raft_apply *req = munit_malloc(sizeof *req);
 	CLUSTER_APPLY_ADD_X(i, req, 1, test_free_req);
-	
+
 	struct raft_append_entries ae = {
 		.prev_log_term = 1,
 		.prev_log_index = 1,
@@ -767,11 +768,11 @@ TEST(etcd_migrate, ignoreOldTermMessage, setUp, tearDown, 0, cluster_2_params)
 		.n_entries = 1
 	};
 	CLUSTER_STEP_UNTIL_AE(i, j, &ae, 200);
-	ae_ptr = raft_fixture_get_ae_req(&f->cluster, i, j, &ae);	
+	ae_ptr = raft_fixture_get_ae_req(&f->cluster, i, j, &ae);
 	munit_assert_not_null(ae_ptr);
 
 	//mock a lower term
-	ae_ptr->term = 1;	
+	ae_ptr->term = 1;
 
 	CLUSTER_STEP_UNTIL_ELAPSED(15);
 
@@ -784,7 +785,7 @@ TEST(etcd_migrate, ignoreOldTermMessage, setUp, tearDown, 0, cluster_2_params)
 TEST(etcd_migrate, commitWithSingleNode, setUp, tearDown, 0, cluster_1_params)
 {
 	struct fixture *f = data;
-	
+
 	CLUSTER_START;
 	ASSERT_LEADER(0);
 	munit_assert_llong(1, ==, CLUSTER_RAFT(0)->commit_index);
@@ -793,11 +794,10 @@ TEST(etcd_migrate, commitWithSingleNode, setUp, tearDown, 0, cluster_1_params)
 	CLUSTER_APPLY_ADD_X(0, req, 1, test_free_req);
 
 	//mock a higher term
-	CLUSTER_RAFT(0)->current_term = 2;
 	CLUSTER_STEP_UNTIL_ELAPSED(10);
 
 	replicationQuorum(CLUSTER_RAFT(0), 2);
-	munit_assert_llong(1, ==, CLUSTER_RAFT(0)->commit_index);
+	munit_assert_llong(2, ==, CLUSTER_RAFT(0)->commit_index);
 
 	struct raft_apply *req1 = munit_malloc(sizeof *req1);
 	CLUSTER_APPLY_ADD_X(0, req1, 1, test_free_req);
@@ -818,7 +818,7 @@ static MunitParameterEnum cluster_4_params[] = {
 };
 extern void replicationQuorum(struct raft *r, const raft_index index);
 
-//test leader change commit index by check progress 
+//test leader change commit index by check progress
 TEST(etcd_migrate, commitWithOddNodeMatchTerm, setUp, tearDown, 0, NULL)
 {
 	struct fixture *f = data;
@@ -826,7 +826,7 @@ TEST(etcd_migrate, commitWithOddNodeMatchTerm, setUp, tearDown, 0, NULL)
 
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
-	
+
 	struct raft_progress *pr_i = &(CLUSTER_RAFT(i)->leader_state.progress[i]);
 	struct raft_progress *pr_j = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
 	struct raft_progress *pr_k = &(CLUSTER_RAFT(i)->leader_state.progress[k]);
@@ -864,7 +864,7 @@ TEST(etcd_migrate, commitWithOddNodeHigherTerm, setUp, tearDown, 0, NULL)
 
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
-	
+
 	struct raft_progress *pr_i = &(CLUSTER_RAFT(i)->leader_state.progress[i]);
 	struct raft_progress *pr_j = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
 	struct raft_progress *pr_k = &(CLUSTER_RAFT(i)->leader_state.progress[k]);
@@ -894,7 +894,7 @@ TEST(etcd_migrate, commitWithOddNodeHigherTerm, setUp, tearDown, 0, NULL)
 	pr_k->match_index = 1;
 	replicationQuorum(CLUSTER_RAFT(i), 2);
 
-	//commit index still be 1 since leader won't commit preceding log 
+	//commit index still be 1 since leader won't commit preceding log
 	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
 	return MUNIT_OK;
 }
@@ -906,7 +906,7 @@ TEST(etcd_migrate, commitWithEvenNodeMatchTerm, setUp, tearDown, 0, cluster_4_pa
 
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
-	
+
 	struct raft_progress *pr_i = &(CLUSTER_RAFT(i)->leader_state.progress[i]);
 	struct raft_progress *pr_j = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
 	struct raft_progress *pr_k = &(CLUSTER_RAFT(i)->leader_state.progress[k]);
@@ -959,7 +959,7 @@ TEST(etcd_migrate, commitWithEvenNodeHigherTerm, setUp, tearDown, 0, cluster_4_p
 
 	CLUSTER_START;
 	CLUSTER_ELECT(i);
-	
+
 	struct raft_progress *pr_i = &(CLUSTER_RAFT(i)->leader_state.progress[i]);
 	struct raft_progress *pr_j = &(CLUSTER_RAFT(i)->leader_state.progress[j]);
 	struct raft_progress *pr_k = &(CLUSTER_RAFT(i)->leader_state.progress[k]);
@@ -1002,7 +1002,7 @@ TEST(etcd_migrate, commitWithEvenNodeHigherTerm, setUp, tearDown, 0, cluster_4_p
 	pr_l->match_index = 1;
 	replicationQuorum(CLUSTER_RAFT(i), 2);
 
-	//commit index still be 1 since leader won't commit preceding log 
+	//commit index still be 1 since leader won't commit preceding log
 	munit_assert_llong(1, ==, CLUSTER_RAFT(i)->commit_index);
 
 	return MUNIT_OK;

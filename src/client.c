@@ -601,7 +601,8 @@ static raft_id clientSelectTransferee(struct raft *r)
 
     for (i = 0; i < r->configuration.n; i++) {
         const struct raft_server *server = &r->configuration.servers[i];
-        if (server->id == r->id || server->role != RAFT_VOTER) {
+        if (server->id == r->id ||
+            !configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
             continue;
         }
         transferee = server;
@@ -644,12 +645,17 @@ int raft_transfer(struct raft *r,
     }
 
     server = configurationGet(&r->configuration, id);
-    if (server == NULL || server->id == r->id || server->role != RAFT_VOTER) {
+    if (server == NULL || server->id == r->id
+        || !configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
         rv = RAFT_BADID;
         ErrMsgFromCode(r->errmsg, rv);
-        evtErrf("raft(%llx) get conf failed %d", r->id, rv);
+        evtErrf("raft(%llx) get transferee %lu failed %d", r->id,
+            server == NULL ? 0 : server->id, rv);
         goto err;
     }
+
+    evtNoticef("raft(%llx) transfer leader to %llx role %d %d group %d", r->id,
+        server->id, server->role, server->role_new, server->group);
 
     /* If this follower is up-to-date, we can send it the TimeoutNow message
      * right away. */

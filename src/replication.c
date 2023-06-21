@@ -764,6 +764,7 @@ int replicationUpdate(struct raft *r,
     raft_index prev_match_index;
     raft_index match_index;
     struct raft_progress *p;
+    bool updated;
     unsigned i;
     int rv;
 
@@ -818,9 +819,8 @@ int replicationUpdate(struct raft *r,
      *
      *   If successful update nextIndex and matchIndex for follower.
      */
-    if (!progressMaybeUpdate(r, i, last_index)) {
-        return 0;
-    }
+    updated = progressMaybeUpdate(r, i, last_index);
+
     match_index = progressMatchIndex(r, i);
     if(match_index > prev_match_index)
         hookRequestMatch(r, prev_match_index + 1,
@@ -836,6 +836,10 @@ int replicationUpdate(struct raft *r,
         case PROGRESS__PROBE:
             /* Transition to pipeline */
             progressToPipeline(r, i);
+    }
+
+    if (!updated) {
+        return 0;
     }
 
     /* If the server is currently being promoted and is catching with logs,

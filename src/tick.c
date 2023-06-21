@@ -33,6 +33,13 @@ static int tickFollower(struct raft *r)
         return 0;
     }
 
+    /* Try to apply and take snapshot*/
+    rv = replicationApply(r);
+    if (rv != 0) {
+        evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+        return rv;
+    }
+
     /* Check if we need to start an election.
      *
      * From Section 3.3:

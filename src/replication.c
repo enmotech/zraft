@@ -560,9 +560,6 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      */
     if (server_index < r->configuration.n) {
         r->leader_state.progress[server_index].match_index = r->last_stored;
-    } else if (r->nr_appending_requests == 0){
-        const struct raft_entry *entry = logGet(&r->log, r->last_stored);
-        assert(entry->type == RAFT_CHANGE);
     }
 
     /* Check if we can commit some new entries. */

@@ -38,7 +38,13 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 		r->id);
         goto err;
     }
+
     r->io->state = RAFT_IO_AVAILABLE;
+    if (r->state != RAFT_FOLLOWER) {
+        /* Also convert to follower. */
+        convertToFollower(r);
+    }
+
     if(status != 0) {
         evtErrf("raft %x set meta for rv %x %u failed %d", r->id,
 		request->voted_for, request->term, status);
@@ -48,11 +54,6 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 	       r->id, request->term, request->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;
-
-    if (r->state != RAFT_FOLLOWER) {
-        /* Also convert to follower. */
-        convertToFollower(r);
-    }
 
     reqs = raft_malloc(sizeof *reqs);
     if (reqs == NULL) {
@@ -72,12 +73,6 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 err:
     raft_free(request);
 }
-
-int recvUpdateMeta(struct raft *r,
-        struct raft_message *message,
-        raft_term	term,
-        raft_id voted_for,
-        raft_io_set_meta_cb cb);
 
 int recvRequestVote(struct raft *r,
                     const raft_id id,

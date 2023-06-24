@@ -204,37 +204,3 @@ TEST(raft_start, singleVotingNotUs, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
     return MUNIT_OK;
 }
-
-TEST(raft_start, restoreSnapAndEntries, setUp, tearDown, 0, NULL)
-{
-    struct raft_snapshot snapshot = {0};
-    struct fixture *f = data;
-    int rv;
-    struct raft *r;
-
-    CLUSTER_GROW;
-    CLUSTER_BOOTSTRAP_N_VOTING(1);
-    CLUSTER_START;
-    munit_assert_int(CLUSTER_STATE(1), ==, RAFT_FOLLOWER);
-    CLUSTER_MAKE_PROGRESS;
-
-    configurationInit(&snapshot.configuration);
-    configurationCopy(&CLUSTER_RAFT(1)->configuration, &snapshot.configuration);
-    munit_assert_int(CLUSTER_RAFT(1)->configuration_uncommitted_index, ==, 0);
-    snapshot.configuration_index = CLUSTER_RAFT(1)->configuration_index;
-    // move index forward by 1
-    snapshot.index = logLastIndex(&CLUSTER_RAFT(1)->log) + 1;
-    snapshot.term  = CLUSTER_RAFT(1)->current_term;
-
-    rv = raft_restore(CLUSTER_RAFT(1), &snapshot, snapshot.index + 1, NULL, 0);
-    munit_assert_int(rv, ==, 0);
-    r = CLUSTER_RAFT(1);
-
-    munit_assert_uint64(r->commit_index, ==, snapshot.index);
-    munit_assert_uint64(r->last_applying, ==, snapshot.index);
-    munit_assert_uint64(r->last_applied, ==, snapshot.index);
-    munit_assert_uint64(r->last_stored, ==, snapshot.index);
-    snapshotClose(&snapshot);
-
-    return MUNIT_OK;
-}

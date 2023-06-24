@@ -527,7 +527,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
             }
         }
 
-        if (r->state == RAFT_LEADER) {
+        if (r->state != RAFT_FOLLOWER) {
             convertToFollower(r);
             evtNoticef("raft(%llx) convert from leader to follower",
 			    r->id, status);
@@ -584,6 +584,12 @@ out:
     if (status != 0 && r->prev_append_status == 0) {
         logTruncate(&r->log, request->index);
         evtErrf("raft(%llx) truncate log from %llu", r->id, request->index);
+        if (r->configuration_uncommitted_index >= request->index) {
+                rv = membershipRollback(r);
+                if (rv != 0) {
+                    evtErrf("raft(%llx) rollback failed %d", r->id, rv);
+                }
+        }
     }
 
     r->prev_append_status = status;

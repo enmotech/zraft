@@ -157,6 +157,11 @@ static void convertToLeaderUpdateCb(struct raft_election_meta_update *update,
         goto err_free_request;
     }
 
+    if (r->state != RAFT_CANDIDATE) {
+        evtErrf("raft(%llx) isn't candidate, state %d", r->id, r->state);
+        goto err_free_request;
+    }
+
     evtNoticef("raft(%llx) convert to leader update meta term %llu succeed",
         r->id, update->term);
     r->current_term = update->term;

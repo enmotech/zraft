@@ -14,11 +14,6 @@
 #else
 #define tracef(...)
 #endif
-int recvUpdateMeta(struct raft *r,
-        struct raft_message *message,
-        raft_term	term,
-        raft_id voted_for,
-        raft_io_set_meta_cb cb);
 struct set_meta_req
 {
     struct raft	*raft; /* Instance that has submitted the request */

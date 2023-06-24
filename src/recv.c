@@ -104,20 +104,20 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
     }
 
     r->io->state = RAFT_IO_AVAILABLE;
+    if (r->state != RAFT_FOLLOWER) {
+        /* Also convert to follower. */
+        convertToFollower(r);
+    }
+
     if(status != 0) {
         evtErrf("raft %x bump term failed %d", r->id, status);
         goto err;
     }
 
-    evtNoticef("raft(%llx) set meta succeed %u %16llx",
-	       r->id, request->term, r->voted_for);
+    evtNoticef("raft(%llx) set meta succeed %u %llx", r->id, request->term,
+        r->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;
-
-    if (r->state != RAFT_FOLLOWER) {
-        /* Also convert to follower. */
-        convertToFollower(r);
-    }
 
     recvCb(r->io, &request->message);
     raft_free(request);

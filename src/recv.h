@@ -41,4 +41,6 @@ void recvCheckMatchingTerms(struct raft *r, raft_term term, int *match);
  * leader. Must be called only by followers. */
 int recvUpdateLeader(struct raft *r, raft_id id);
 
+int recvUpdateMeta(struct raft *r, struct raft_message *message, raft_term term,
+                   raft_id voted_for, raft_io_set_meta_cb cb);
 #endif /* RECV_H_ */

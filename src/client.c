@@ -331,8 +331,7 @@ int raft_joint_promote(struct raft *r,
     /* If we are not promoting to the voter role or if the log of this server is
      * already up-to-date, we can submit the configuration change
      * immediately. */
-    if (role != RAFT_VOTER ||
-        progressMatchIndex(r, server_index) == last_index) {
+    if (progressMatchIndex(r, server_index) == last_index) {
         configurationJointRemove(&r->configuration, remove);
         r->configuration.servers[server_index].role_new = role;
 

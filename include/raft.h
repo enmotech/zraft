@@ -1410,6 +1410,11 @@ RAFT_API bool raft_is_distruptive_candidate(struct raft *r);
  */
 RAFT_API int raft_set_snapshot_sample_span(struct raft *r, unsigned span);
 
+/**
+ * Change raft's current role
+ */
+RAFT_API void raft_set_role(struct raft *r, int role);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

@@ -405,3 +405,20 @@ int raft_set_snapshot_sample_span(struct raft *r, unsigned span)
     return snapshotSamplerInit(&r->sampler, span, SNAPSHOT_SAMPLE_PERIOD,
         r->io->time(r->io));
 }
+
+void raft_set_role(struct raft *r, int role)
+{
+    assert(role == RAFT_STANDBY || role == RAFT_SPARE || role == RAFT_VOTER
+        || role == RAFT_LOGGER);
+    struct raft_server *s;
+
+    r->role = role;
+    s = (struct raft_server *)configurationGet(&r->configuration, r->id);
+    assert(s);
+    s->role = role;
+    if (s->group & RAFT_GROUP_NEW) {
+        assert(r->configuration.phase == RAFT_CONF_JOINT);
+        s->role_new = role;
+    }
+    evtNoticef("raft(%llx) group %x change role to %d ", r->id, s->group, role);
+}

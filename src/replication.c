@@ -1557,6 +1557,9 @@ static void applyCommandCb(struct raft_fsm_apply *req,
         return;
     }
     r->last_applied = index;
+    if (r->nr_applying == 0) {
+        r->last_applying = r->last_applied;
+    }
 
     if (r->last_applied == r->last_applying) {
         if (r->state == RAFT_LEADER ||

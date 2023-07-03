@@ -34,6 +34,7 @@
 #define RAFT_UNAUTHORIZED 21 /* No access to a resource */
 #define RAFT_NOSPACE 22      /* Not enough space on disk */
 #define RAFT_TOOMANY 23      /* Some system or raft limit was hit */
+#define RAFT_RETRY 24
 
 /**
  * Size of human-readable error message buffers.

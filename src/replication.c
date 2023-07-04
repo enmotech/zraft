@@ -1876,6 +1876,12 @@ int replicationApply(struct raft *r)
                     r->last_applying -= 1;
                     r->nr_applying -= 1;
                 }
+
+                if (rv == RAFT_RETRY) {
+                    evtInfof("raft(llx) apply %llu failed with retry",
+                        r->id, index);
+                    return 0;
+                }
                 break;
             case RAFT_BARRIER:
                 if (r->last_applying > r->last_applied)

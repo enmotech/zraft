@@ -86,6 +86,7 @@ int raft_init(struct raft *r,
     r->enable_dynamic_trailing = false;
     r->enable_free_trailing = false;
     r->enable_election_at_start = true;
+    r->pkt_id = 0;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {

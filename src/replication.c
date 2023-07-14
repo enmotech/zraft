@@ -37,6 +37,9 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+#define PKT_TERM_BITS 16
+#define PKT_ID_BITS 32
+
 /* Callback invoked after request to send an AppendEntries RPC has completed. */
 static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 {
@@ -60,6 +63,18 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
     raft_free(req);
 }
 
+static raft_index nextPktId(struct raft *r)
+{
+    assert(RAFT_PKT_BITS == (PKT_TERM_BITS + PKT_ID_BITS));
+    raft_index pkt = 0;
+
+    r->pkt_id += 1;
+    pkt = r->pkt_id & (((raft_index)1 << PKT_ID_BITS) - 1);
+    pkt |= (r->current_term & ((1 << PKT_TERM_BITS) - 1)) << PKT_ID_BITS;
+
+    return pkt;
+}
+
 /* Send an AppendEntries message to the i'th server, including all log entries
  * from the given point onwards. */
 static int sendAppendEntries(struct raft *r,
@@ -76,6 +91,7 @@ static int sendAppendEntries(struct raft *r,
     int rv;
     unsigned j;
 
+    args->pkt = nextPktId(r);
     args->term = r->current_term;
     args->prev_log_index = prev_index;
     args->prev_log_term = prev_term;

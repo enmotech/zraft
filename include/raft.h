@@ -42,6 +42,11 @@
 #define RAFT_ERRMSG_BUF_SIZE 256
 
 /**
+ * Bits used for packet id
+ */
+#define RAFT_PKT_BITS 48
+
+/**
  * Return the error message describing the given error code.
  */
 RAFT_API const char *raft_strerror(int errnum);
@@ -892,6 +897,7 @@ struct raft
     /* Flag for raft free log trailing buffer */
     bool enable_free_trailing;
     struct raft_snapshot_sampler sampler;
+    raft_index pkt_id;
 };
 
 RAFT_API int raft_init(struct raft *r,

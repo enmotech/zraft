@@ -243,6 +243,7 @@ static int tickLeader(struct raft *r)
             r->leader_state.round_index = 0;
             r->leader_state.round_number = 0;
             r->leader_state.round_start = 0;
+            r->leader_state.remove_id = 0;
 
             change = r->leader_state.change;
             r->leader_state.change = NULL;

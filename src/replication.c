@@ -790,7 +790,7 @@ int replicationUpdate(struct raft *r,
     assert(r->state == RAFT_LEADER);
     assert(i < r->configuration.n);
 
-    progressMarkRecentRecv(r, i);
+    progressMarkRecentRecv(r, i, result->rejected == 0);
     p = &r->leader_state.progress[i];
 
     /* If the RPC failed because of a log mismatch, retry.

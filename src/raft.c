@@ -368,6 +368,18 @@ void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs)
 	r->sync_replication_timeout = msecs;
 }
 
+raft_index raft_min_sync_match_index(struct raft *r)
+{
+    assert(r->state == RAFT_LEADER);
+    return r->leader_state.min_sync_match_index;
+}
+
+raft_id raft_min_sync_match_replica(struct raft *r)
+{
+    assert(r->state == RAFT_LEADER);
+    return r->leader_state.min_sync_match_replica;
+}
+
 void raft_set_non_voter_grant_vote(struct raft *r, bool grant)
 {
 	r->non_voter_grant_vote = grant;

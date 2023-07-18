@@ -8,6 +8,7 @@
 #include "replication.h"
 #include "tracing.h"
 #include "event.h"
+#include "snapshot_sampler.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -194,6 +195,11 @@ static int tickLeader(struct raft *r)
     if (r->state != RAFT_LEADER) {
         evtNoticef("raft(%llx) step down after replication apply", r->id);
         return 0;
+    }
+
+    snapshotSamplerTake(&r->sampler, r->last_applied, r->io->time(r->io));
+    if (r->sync_replication) {
+        progressUpdateMinMatch(r);
     }
 
     /* Possibly send heartbeats.

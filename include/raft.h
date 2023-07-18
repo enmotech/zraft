@@ -616,6 +616,7 @@ struct raft_progress
     raft_time snapshot_last_send; /* Timestamp of last InstallSnaphot RPC. */
     bool recent_recv;             /* A msg was received within election timeout. */
     raft_time recent_recv_time;   /* Timestamp of last AppendEntriesResult RPC.*/
+    raft_time recent_match_time;  /* Timestamp of last matched AppendEntriesResult RPC.*/
 };
 
 struct raft; /* Forward declaration. */
@@ -811,8 +812,10 @@ struct raft
             raft_time round_start;          /* Start of current round. */
             struct request_registry reg;    /* Outstanding client requests. */
             raft_index min_match_index;     /* The minimum match index */
-            raft_id slowest_replica_id;     /* The slowest replica id */
-            bool removed_from_cluster;      /* Removed from cluster */
+            raft_id min_match_replica;      /* The minimum replica */
+            raft_index min_sync_match_index;/* The minimum sync match index. */
+            raft_index min_sync_match_replica; /* The minimum sync replica. */
+            bool removed_from_cluster;         /* Removed from cluster */
         } leader_state;
     };
 
@@ -1381,6 +1384,16 @@ RAFT_API void raft_set_sync_snapshot(struct raft *r , bool sync);
  * Set sync replication time out
  */
 RAFT_API void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs);
+
+/**
+ * Get min sync match index
+ */
+RAFT_API raft_index raft_min_sync_match_index(struct raft *r);
+
+/**
+ * Get min sync match replica id
+ */
+RAFT_API raft_id raft_min_sync_match_replica(struct raft *r);
 
 /**
  * Set whether nonvoter can grant vote

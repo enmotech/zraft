@@ -50,6 +50,7 @@ static void loggerTransfer(struct raft *r, const raft_id id)
 
     rv = raft_transfer(r, req, id, loggerLeadershipTransferCb);
     if (rv != 0) {
+        raft_free(req);
         tracef("transfer leader to %llx faild %d", id, rv);
     }
 }

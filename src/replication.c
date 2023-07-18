@@ -371,11 +371,11 @@ int replicationProgress(struct raft *r, unsigned i)
         if (snapshot_index > 0 && !progress_state_is_snapshot) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
-	    evtNoticef("raft(%llx) send %llx snapshot %llu/%llu/%llu recent %d",
-		       r->id, server->id, next_index,
-		       r->leader_state.min_match_index,
-		       snapshot_index,
-		       progressGetRecentRecv(r, i));
+            evtNoticef(
+            "raft(%llx) send %llx snapshot %llu recent %d next 1 first %llu/%llu last %llu/%llu",
+                r->id, server->id, snapshot_index, progressGetRecentRecv(r, i),
+                logStartIndex(r), logStartTerm(r),
+                logLastIndex(&r->log), logLastTerm(&r->log));
             goto send_snapshot;
         }
         prev_index = 0;
@@ -390,13 +390,11 @@ int replicationProgress(struct raft *r, unsigned i)
         if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
-	    evtNoticef(
-	    "raft(%llx) send %llx snapshot %llu/%llu/%llu/%llu recent %d",
-		       r->id, server->id, next_index,
-		       r->leader_state.min_match_index,
-		       snapshot_index,
-		       logLastIndex(&r->log),
-		       progressGetRecentRecv(r, i));
+            evtNoticef(
+            "raft(%llx) send %llx snapshot %llu recent %d next %llu first %llu/%llu last %llu/%llu",
+                r->id, server->id, snapshot_index, progressGetRecentRecv(r, i),
+                next_index, logStartIndex(r), logStartTerm(r),
+                logLastIndex(&r->log), logLastTerm(&r->log));
             goto send_snapshot;
         }
     }

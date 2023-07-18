@@ -901,6 +901,7 @@ struct raft
     bool enable_free_trailing;
     struct raft_snapshot_sampler sampler;
     raft_index pkt_id;
+
 };
 
 RAFT_API int raft_init(struct raft *r,

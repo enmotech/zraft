@@ -1774,13 +1774,12 @@ out:
     r->snapshot.pending.term = 0;
 }
 
-static int takeSnapshot(struct raft *r)
+static int doSnapshot(struct raft *r, raft_index snapshot_index,
+                      unsigned trailing)
 {
-    raft_index index;
     struct raft_snapshot *snapshot;
     unsigned i;
     int rv;
-    raft_index snapshot_index = nextSnapshotIndex(r);
 
     tracef("take snapshot at %lld", snapshot_index);
 
@@ -1807,23 +1806,7 @@ static int takeSnapshot(struct raft *r)
         goto abort_after_config_copy;
     }
 
-    if (r->enable_dynamic_trailing) {
-        if (r->state == RAFT_LEADER) {
-            index = snapshotSamplerFirstIndex(&r->sampler);
-            if (index == 0)
-                index = logStartIndex(r);
-            progressUpdateMinMatch(r);
-            index = max(r->leader_state.min_match_index, index);
-            if (index <= snapshot->index)
-                r->snapshot.trailing =
-                    (unsigned int)(snapshot->index - index) + 1;
-            else
-                r->snapshot.trailing = 0;
-        } else {
-            r->snapshot.trailing = r->follower_state.current_leader.trailing;
-        }
-    }
-
+    r->snapshot.trailing = trailing;
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = r;
     rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
@@ -1834,7 +1817,6 @@ static int takeSnapshot(struct raft *r)
     }
 
     return 0;
-
 abort_after_fsm_snapshot:
     for (i = 0; i < snapshot->n_bufs; i++) {
         raft_free(snapshot->bufs[i].base);
@@ -1846,6 +1828,71 @@ abort:
     r->snapshot.pending.term = 0;
     r->snapshot.put.data = NULL;
     return rv;
+}
+
+static int takeSnapshot(struct raft *r)
+{
+    unsigned trailing;
+    raft_index index;
+    raft_index snapshot_index = nextSnapshotIndex(r);
+
+    trailing = r->snapshot.trailing;
+    if (!r->enable_dynamic_trailing) {
+        goto err_do_snapshot;
+    }
+
+    if (r->state == RAFT_LEADER) {
+        index = snapshotSamplerFirstIndex(&r->sampler);
+        if (index == 0)
+            index = logStartIndex(r);
+        progressUpdateMinMatch(r);
+        index = max(r->leader_state.min_match_index, index);
+        if (index <= snapshot_index)
+            trailing = (unsigned int)(snapshot_index - index) + 1;
+        else
+            trailing = 0;
+    } else {
+        trailing = r->follower_state.current_leader.trailing;
+    }
+
+err_do_snapshot:
+    return doSnapshot(r, snapshot_index, trailing);
+}
+
+void replicationRemoveTrailing(struct raft *r)
+{
+    assert(r->enable_dynamic_trailing);
+    assert(r->state == RAFT_LEADER);
+    raft_index index;
+    unsigned trailing;
+
+    /* If a snapshot is already in progress or we're installing a snapshot, we
+     * don't want to start another one. */
+    if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
+        return;
+    }
+
+    if (r->log.snapshot.last_index == 0) {
+        return;
+    }
+
+    index = snapshotSamplerFirstIndex(&r->sampler);
+    if (index == 0)
+        index = logStartIndex(r);
+    progressUpdateMinMatch(r);
+    index = max(r->leader_state.min_match_index, index);
+
+    if (index <= logStartIndex(r)) {
+        return;
+    }
+
+    if (index > r->log.snapshot.last_index) {
+        return;
+    }
+
+    trailing = (unsigned int)(r->log.snapshot.last_index - index) + 1;
+
+    doSnapshot(r, r->log.snapshot.last_index, trailing);
 }
 
 int replicationApply(struct raft *r)

@@ -295,7 +295,12 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
     r->leader_state.remove_id = 0;
+    r->leader_state.min_match_index = 0;
+    r->leader_state.min_match_replica = 0;
+    r->leader_state.min_sync_match_index = 0;
+    r->leader_state.min_sync_match_replica = 0;
     r->leader_state.removed_from_cluster = false;
+
 
     if (r->state_change_cb)
 		r->state_change_cb(r, RAFT_LEADER);

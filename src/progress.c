@@ -43,13 +43,13 @@ int progressBuildArray(struct raft *r)
     }
     for (i = 0; i < r->configuration.n; i++) {
         initProgress(&progress[i], last_index);
-	progress[i].recent_recv_time = r->io->time(r->io);
+        progress[i].recent_recv_time = r->io->time(r->io);
+        progress[i].recent_match_time = r->io->time(r->io);
         if (r->configuration.servers[i].id == r->id) {
             progress[i].match_index = r->last_stored;
         }
     }
     r->leader_state.progress = progress;
-    r->leader_state.min_match_index = 0;
     return 0;
 }
 
@@ -94,7 +94,8 @@ int progressRebuildArray(struct raft *r,
         }
         assert(j == r->configuration.n);
         initProgress(&progress[i], last_index);
-	progress[i].recent_recv_time = r->io->time(r->io);
+        progress[i].recent_recv_time = r->io->time(r->io);
+        progress[i].recent_match_time = r->io->time(r->io);
     }
 
     raft_free(r->leader_state.progress);
@@ -192,10 +193,13 @@ bool progressResetRecentRecv(struct raft *r, const unsigned i)
     return prev;
 }
 
-void progressMarkRecentRecv(struct raft *r, const unsigned i)
+void progressMarkRecentRecv(struct raft *r, const unsigned i, bool match)
 {
     r->leader_state.progress[i].recent_recv = true;
     r->leader_state.progress[i].recent_recv_time = r->io->time(r->io);
+    if (match) {
+        r->leader_state.progress[i].recent_match_time = r->io->time(r->io);
+    }
 }
 
 bool progressGetRecentRecv(const struct raft *r, const unsigned i)
@@ -346,8 +350,12 @@ void progressUpdateMinMatch(struct raft *r)
 	unsigned i;
 	struct raft_server *s;
 	struct raft_progress *p;
-	raft_index tmp = logLastIndex(&r->log);
-	raft_id id = 0;
+    raft_time now = r->io->time(r->io);
+
+    r->leader_state.min_match_index = logLastIndex(&r->log);
+    r->leader_state.min_match_replica = 0;
+    r->leader_state.min_sync_match_index = logLastIndex(&r->log);
+    r->leader_state.min_sync_match_replica = 0;
 
 	assert(r->sync_replication);
 	for (i = 0; i < r->configuration.n; ++i) {
@@ -356,14 +364,26 @@ void progressUpdateMinMatch(struct raft *r)
 			s->id != r->leader_state.promotee_id) {
 			continue;
 		}
+
+        if (s->id == r->id) {
+            continue;
+        }
+
 		p = &r->leader_state.progress[i];
-		if (p->match_index <= tmp) {
-			tmp = p->match_index;
-			id = s->id;
+		if (p->match_index <= r->leader_state.min_match_index) {
+			r->leader_state.min_match_index = p->match_index;
+			r->leader_state.min_match_replica = s->id;
 		}
+
+        if (p->recent_match_time + r->sync_replication_timeout < now) {
+            continue;
+        }
+
+        if (p->match_index <= r->leader_state.min_sync_match_index) {
+            r->leader_state.min_sync_match_index = p->match_index;
+            r->leader_state.min_sync_match_replica = s->id;
+        }
 	}
-	r->leader_state.min_match_index = tmp;
-	r->leader_state.slowest_replica_id = id;
 }
 
 #undef tracef

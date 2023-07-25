@@ -15,6 +15,7 @@
 #include "hook.h"
 #include "event.h"
 #include "snapshot_sampler.h"
+#include "request.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -434,4 +435,10 @@ void raft_set_role(struct raft *r, int role)
         s->role_new = role;
     }
     evtNoticef("raft(%llx) group %x change role to %d ", r->id, s->group, role);
+}
+
+struct request *raft_first_request(struct raft *r)
+{
+    assert(r->state == RAFT_LEADER);
+    return requestRegFirst(&r->leader_state.reg);
 }

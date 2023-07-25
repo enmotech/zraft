@@ -155,3 +155,34 @@ TEST(request, dequeue, setUp, tearDown, 0, NULL)
     munit_assert_uint64(r->index, ==, 8);
     return MUNIT_OK;
 }
+
+TEST(request, first, setUp, tearDown, 0, NULL)
+{
+    struct request *r;
+    struct fixture *f = data;
+    struct request r1 = {.index = 1};
+    struct request r2 = {.index = 2};
+    struct request r8 = {.index = 8};
+
+    requestRegEnqueue(&f->reg, &r1);
+    requestRegEnqueue(&f->reg, &r2);
+    munit_assert_uint64(2, ==, requestRegNumRequests(&f->reg));
+    requestRegEnqueue(&f->reg, &r8);
+    munit_assert_uint64(8, ==, requestRegNumRequests(&f->reg));
+
+    r = requestRegFirst(&f->reg);
+    munit_assert_not_null(r);
+    munit_assert_uint64(r->index, ==, 1);
+
+    requestRegDequeue(&f->reg);
+    r = requestRegFirst(&f->reg);
+    munit_assert_not_null(r);
+    munit_assert_uint64(r->index, ==, 2);
+
+    requestRegDequeue(&f->reg);
+    r = requestRegFirst(&f->reg);
+    munit_assert_not_null(r);
+    munit_assert_uint64(r->index, ==, 8);
+
+    return MUNIT_OK;
+}

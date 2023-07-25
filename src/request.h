@@ -25,4 +25,7 @@ struct request *requestRegDequeue(struct request_registry *reg);
 /* Number of requests */
 size_t requestRegNumRequests(struct request_registry *reg);
 
+/* First request*/
+struct request *requestRegFirst(struct request_registry *reg);
+
 #endif /* REQUEST_H_ */

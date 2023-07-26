@@ -645,6 +645,7 @@ struct request
 {
     /* Must be kept in sync with RAFT__REQUEST in raft.h */
     void *data;
+    raft_time time;
     int type;
     raft_index index;
     void *queue[2];
@@ -1068,6 +1069,7 @@ RAFT_API raft_index raft_last_applied(struct raft *r);
 /* Common fields across client request types. */
 #define RAFT__REQUEST \
     void *data;       \
+    raft_time time;   \
     int type;         \
     raft_index index; \
     void *queue[2]
@@ -1435,6 +1437,11 @@ RAFT_API int raft_set_snapshot_sample_span(struct raft *r, unsigned span);
  * Change raft's current role
  */
 RAFT_API void raft_set_role(struct raft *r, int role);
+
+/**
+ * Get the first request.
+ */
+RAFT_API struct request *raft_first_request(struct raft *r);
 
 #undef RAFT__REQUEST
 

@@ -184,3 +184,15 @@ struct request *requestRegDequeue(struct request_registry *reg)
         return NULL;
     return requestRegDel(reg, slotAt(reg, 0)->index);
 }
+
+struct request *requestRegFirst(struct request_registry *reg)
+{
+    struct request_slot *slot;
+    size_t n = requestRegNumRequests(reg);
+
+    if (n == 0)
+        return NULL;
+    slot = slotAt(reg, 0);
+    assert(slot->index && slot->req);
+    return requestRegFind(reg, slot->index);
+}

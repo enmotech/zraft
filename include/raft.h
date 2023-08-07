@@ -631,6 +631,10 @@ typedef void (*raft_close_cb)(struct raft *raft);
 
 typedef void (*raft_state_change_cb)(struct raft *raft, int state);
 
+#define RAFT_TICK_STEPDOWN 1
+
+typedef void (*raft_leader_stepdown_cb)(struct raft *raft, int reason);
+
 struct raft_change;   /* Forward declaration */
 struct raft_transfer; /* Forward declaration */
 
@@ -846,6 +850,8 @@ struct raft
     } snapshot;
 
     raft_state_change_cb state_change_cb;
+
+    raft_leader_stepdown_cb stepdown_cb;
     /*
      * Callback to invoke once a close request has completed.
      */
@@ -1442,6 +1448,12 @@ RAFT_API void raft_set_role(struct raft *r, int role);
  * Get the first request.
  */
 RAFT_API struct request *raft_first_request(struct raft *r);
+
+/**
+ *  Set leader stepdown cb
+ */
+RAFT_API void raft_set_leader_stepdown_cb(struct raft *r,
+                                          raft_leader_stepdown_cb cb);
 
 #undef RAFT__REQUEST
 

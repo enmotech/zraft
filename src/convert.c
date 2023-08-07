@@ -128,10 +128,6 @@ static void convertClear(struct raft *r)
 
 void convertToFollower(struct raft *r)
 {
-    if (r->state == RAFT_LEADER) {
-        evtNoticef("raft(%llx) leader step down", r->id);
-    }
-
     convertClear(r);
     convertSetState(r, RAFT_FOLLOWER);
 

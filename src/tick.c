@@ -180,6 +180,8 @@ static int tickLeader(struct raft *r)
         if (!checkContactQuorum(r)) {
             tracef("unable to contact majority of cluster -> step down");
             evtNoticef("raft(%llx) leader step down", r->id);
+            if (r->stepdown_cb)
+                r->stepdown_cb(r, RAFT_TICK_STEPDOWN);
             convertToFollower(r);
             return 0;
         }

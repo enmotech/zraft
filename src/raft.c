@@ -442,3 +442,8 @@ struct request *raft_first_request(struct raft *r)
     assert(r->state == RAFT_LEADER);
     return requestRegFirst(&r->leader_state.reg);
 }
+
+void raft_set_leader_stepdown_cb(struct raft *r, raft_leader_stepdown_cb cb)
+{
+    r->stepdown_cb = cb;
+}

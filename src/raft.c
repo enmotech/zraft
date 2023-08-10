@@ -101,6 +101,8 @@ int raft_init(struct raft *r,
         evtErrf("raft(%llx) init snapshot sampler failed %d", r->id, rv);
         goto err_after_address_alloc;
     }
+
+    r->latest_entry_time = r->io->time(r->io);
     return 0;
 
 err_after_address_alloc:
@@ -446,4 +448,9 @@ struct request *raft_first_request(struct raft *r)
 void raft_set_leader_stepdown_cb(struct raft *r, raft_leader_stepdown_cb cb)
 {
     r->stepdown_cb = cb;
+}
+
+raft_time raft_latest_entry_time(struct raft *r)
+{
+    return r->latest_entry_time;
 }

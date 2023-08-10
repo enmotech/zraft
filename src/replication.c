@@ -828,6 +828,9 @@ int replicationUpdate(struct raft *r,
     }
 
     prev_match_index = progressMatchIndex(r, i);
+    if (prev_match_index == 0 && r->sync_replication) {
+        progressUpdateMinMatch(r);
+    }
     /* If the RPC succeeded, update our counters for this server.
      *
      * From Figure 3.1:

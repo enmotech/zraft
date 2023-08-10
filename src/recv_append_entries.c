@@ -140,6 +140,11 @@ int recvAppendEntries(struct raft *r,
     /* Reset the election timer. */
     r->election_timer_start = r->io->time(r->io);
 
+    /* Reset lastest entry time */
+    if (args->n_entries) {
+        r->latest_entry_time = r->election_timer_start;
+    }
+
     if (hookHackAppendEntries(r, args, result, &discard)) {
         if (discard)
             goto err_free_args;

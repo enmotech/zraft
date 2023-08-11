@@ -908,7 +908,7 @@ struct raft
     bool enable_free_trailing;
     struct raft_snapshot_sampler sampler;
     raft_index pkt_id;
-
+    raft_time latest_entry_time;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1454,6 +1454,11 @@ RAFT_API struct request *raft_first_request(struct raft *r);
  */
 RAFT_API void raft_set_leader_stepdown_cb(struct raft *r,
                                           raft_leader_stepdown_cb cb);
+
+/**
+ * Get the latest entry time.
+ */
+RAFT_API raft_time raft_latest_entry_time(struct raft *r);
 
 #undef RAFT__REQUEST
 

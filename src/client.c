@@ -56,6 +56,7 @@ int raft_apply(struct raft *r,
         goto err;
     }
 
+    r->latest_entry_time = req->time;
     rv = requestRegEnqueue(&r->leader_state.reg, (struct request *) req);
     if (rv != 0) {
         evtErrf("raft(%llx) append to registry failed %d", r->id, rv);
@@ -117,6 +118,8 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
         evtErrf("raft(%llx) append barrier failed %d", r->id, rv);
         goto err_after_buf_alloc;
     }
+
+    r->latest_entry_time = req->time;
     rv = requestRegEnqueue(&r->leader_state.reg, (struct request *) req);
     if (rv != 0) {
 	    evtErrf("raft(%llx) append to registry failed %d", r->id, rv);

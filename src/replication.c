@@ -1056,12 +1056,6 @@ respond:
     sendAppendEntriesResult(r, &result);
 
 out:
-    if (r->prev_append_status != 0 && status == 0) {
-        evtErrf("raft(%llx) previous append status %d", r->id,
-		r->prev_append_status);
-       abort();
-    }
-
     logRelease(&r->log, request->index, request->args.entries,
 	    request->args.n_entries);
 

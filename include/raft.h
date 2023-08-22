@@ -1363,7 +1363,8 @@ enum raft_event_level {
 /* User-definable event recorder for record events */
 struct raft_event_recorder {
 	void *data;
-	void (*record)(void *data, enum raft_event_level level, const char* fn,
+	bool (*is_id_allowed)(void *data, raft_id id);
+	void (*record)(void *data, enum raft_event_level level, const char *fn,
 		       const char *file, int line, const char *fmt, ...);
 };
 

@@ -355,7 +355,7 @@ RAFT_API int raft_replace_configuration(struct raft *r,
         r->role = configurationServerRole(&r->configuration, r->id);
     }
 
-	evtNoticef("raft(%llx) conf replace", r->id);
+	evtIdNoticef(r->id, "raft(%llx) conf replace", r->id);
 	evtDumpConfiguration(r, &conf);
     hookConfChange(r, &conf);
 	return 0;

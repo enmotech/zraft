@@ -1756,8 +1756,8 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
         goto out;
     }
 
-    evtInfof("raft(%llx) take snapshot at %llu %u enable %d", r->id, snapshot->index,
-	     r->snapshot.trailing, r->enable_free_trailing);
+    evtIdInfof(r->id, "raft(%llx) take snapshot at %llu %u enable %d", r->id,
+	       snapshot->index, r->snapshot.trailing, r->enable_free_trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
     if (r->enable_free_trailing) {
         unfreed_index = logUnFreedIndex(&r->log);

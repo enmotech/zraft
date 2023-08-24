@@ -90,6 +90,12 @@ AM_CONDITIONAL(SANITIZE_ENABLED, test x"$enable_sanitize" = x"yes")
 # Whether to enable .
 AC_ARG_ENABLE(lto, AS_HELP_STRING([--enable-lto[=ARG]], [enable link time optimization [default=no]]))
 AM_CONDITIONAL(LTO_ENABLED, test x"$enable_lto" = x"yes")
+if test "x$enable_lto" = "xyes"; then
+    AR=gcc-ar
+    RANLIB=gcc-ranlib
+    AC_SUBST([AR])
+    AC_SUBST([RANLIB])
+fi
 
 # Whether to enable code coverage.
 AX_CODE_COVERAGE

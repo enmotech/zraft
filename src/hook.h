@@ -19,4 +19,6 @@ bool hookHackAppendEntries(struct raft *r,
                            struct raft_append_entries_result *result,
                            bool *discard);
 
+bool hookEntryShouldApply(struct raft *r, raft_index index,
+			  const struct raft_entry *entry);
 #endif //HOOK_H

@@ -2678,10 +2678,18 @@ static void raft_fixture_record(void *data, enum raft_event_level level,
             buf);
 }
 
+static bool raft_fixture_id_allowed(void *data, raft_id id)
+{
+    (void)data;
+    (void)id;
+
+    return true;
+}
 
 void raft_fixture_enable_recorder(struct raft_fixture *f)
 {
     f->recorder.data   = f;
+    f->recorder.is_id_allowed = raft_fixture_id_allowed;
     f->recorder.record = raft_fixture_record;
 
     raft_set_event_recorder(&f->recorder);

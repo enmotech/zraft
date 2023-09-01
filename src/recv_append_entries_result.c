@@ -50,6 +50,7 @@ static void loggerTransfer(struct raft *r, const raft_id id)
 
     rv = raft_transfer(r, req, id, loggerLeadershipTransferCb);
     if (rv != 0) {
+        raft_free(req);
         tracef("transfer leader to %llx faild %d", id, rv);
     }
 }
@@ -108,8 +109,7 @@ int recvAppendEntriesResult(struct raft *r,
         return rv;
     }
 
-    //如果logger收到了voter的AER且result->last_log_index >= logLastIndex(&r->log), logger就让权给该voter
-    if (r->role == RAFT_LOGGER && r->configuration.phase == RAFT_CONF_NORMAL) {
+    if (r->role == RAFT_LOGGER) {
         loggerTransfer(r, id);
     }
 

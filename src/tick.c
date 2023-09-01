@@ -8,6 +8,7 @@
 #include "replication.h"
 #include "tracing.h"
 #include "event.h"
+#include "snapshot_sampler.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -31,6 +32,13 @@ static int tickFollower(struct raft *r)
     if (server == NULL) {
         evtWarnf("raft(%llx) have been remove from conf", r->id);
         return 0;
+    }
+
+    /* Try to apply and take snapshot*/
+    rv = replicationApply(r);
+    if (rv != 0) {
+        evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+        return rv;
     }
 
     /* Check if we need to start an election.
@@ -172,6 +180,8 @@ static int tickLeader(struct raft *r)
         if (!checkContactQuorum(r)) {
             tracef("unable to contact majority of cluster -> step down");
             evtNoticef("raft(%llx) leader step down", r->id);
+            if (r->stepdown_cb)
+                r->stepdown_cb(r, RAFT_TICK_STEPDOWN);
             convertToFollower(r);
             return 0;
         }
@@ -187,6 +197,15 @@ static int tickLeader(struct raft *r)
     if (r->state != RAFT_LEADER) {
         evtNoticef("raft(%llx) step down after replication apply", r->id);
         return 0;
+    }
+
+    snapshotSamplerTake(&r->sampler, r->last_applied, r->io->time(r->io));
+    if (r->sync_replication) {
+        progressUpdateMinMatch(r);
+    }
+
+    if (r->enable_dynamic_trailing) {
+        replicationRemoveTrailing(r);
     }
 
     /* Possibly send heartbeats.
@@ -236,6 +255,7 @@ static int tickLeader(struct raft *r)
             r->leader_state.round_index = 0;
             r->leader_state.round_number = 0;
             r->leader_state.round_start = 0;
+            r->leader_state.remove_id = 0;
 
             change = r->leader_state.change;
             r->leader_state.change = NULL;

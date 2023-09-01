@@ -34,11 +34,17 @@
 #define RAFT_UNAUTHORIZED 21 /* No access to a resource */
 #define RAFT_NOSPACE 22      /* Not enough space on disk */
 #define RAFT_TOOMANY 23      /* Some system or raft limit was hit */
+#define RAFT_RETRY 24
 
 /**
  * Size of human-readable error message buffers.
  */
 #define RAFT_ERRMSG_BUF_SIZE 256
+
+/**
+ * Bits used for packet id
+ */
+#define RAFT_PKT_BITS 48
 
 /**
  * Return the error message describing the given error code.
@@ -610,6 +616,7 @@ struct raft_progress
     raft_time snapshot_last_send; /* Timestamp of last InstallSnaphot RPC. */
     bool recent_recv;             /* A msg was received within election timeout. */
     raft_time recent_recv_time;   /* Timestamp of last AppendEntriesResult RPC.*/
+    raft_time recent_match_time;  /* Timestamp of last matched AppendEntriesResult RPC.*/
 };
 
 struct raft; /* Forward declaration. */
@@ -623,6 +630,10 @@ struct raft; /* Forward declaration. */
 typedef void (*raft_close_cb)(struct raft *raft);
 
 typedef void (*raft_state_change_cb)(struct raft *raft, int state);
+
+#define RAFT_TICK_STEPDOWN 1
+
+typedef void (*raft_leader_stepdown_cb)(struct raft *raft, int reason);
 
 struct raft_change;   /* Forward declaration */
 struct raft_transfer; /* Forward declaration */
@@ -638,6 +649,7 @@ struct request
 {
     /* Must be kept in sync with RAFT__REQUEST in raft.h */
     void *data;
+    raft_time time;
     int type;
     raft_index index;
     void *queue[2];
@@ -805,8 +817,10 @@ struct raft
             raft_time round_start;          /* Start of current round. */
             struct request_registry reg;    /* Outstanding client requests. */
             raft_index min_match_index;     /* The minimum match index */
-            raft_id slowest_replica_id;     /* The slowest replica id */
-            bool removed_from_cluster;      /* Removed from cluster */
+            raft_id min_match_replica;      /* The minimum replica */
+            raft_index min_sync_match_index;/* The minimum sync match index. */
+            raft_index min_sync_match_replica; /* The minimum sync replica. */
+            bool removed_from_cluster;         /* Removed from cluster */
         } leader_state;
     };
 
@@ -836,6 +850,8 @@ struct raft
     } snapshot;
 
     raft_state_change_cb state_change_cb;
+
+    raft_leader_stepdown_cb stepdown_cb;
     /*
      * Callback to invoke once a close request has completed.
      */
@@ -891,6 +907,8 @@ struct raft
     /* Flag for raft free log trailing buffer */
     bool enable_free_trailing;
     struct raft_snapshot_sampler sampler;
+    raft_index pkt_id;
+    raft_time latest_entry_time;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -940,17 +958,6 @@ RAFT_API int raft_recover(struct raft *r,
                           const struct raft_configuration *conf);
 
 RAFT_API int raft_start(struct raft *r);
-
-RAFT_API int raft_restore(struct raft *r, struct raft_snapshot *snapshot,
-                          raft_index start_index, struct raft_entry *entries,
-                          size_t n_entries);
-
-RAFT_API int restoreEntriesAndSnapshotInfo(struct raft *r,
-                                           struct raft_snapshot *snapshot,
-                                           raft_index start_index,
-                                           struct raft_entry *entries,
-                                           size_t n_entries);
-
 
 struct raft_start;
 typedef void (*raft_start_cb)(struct raft_start *req, int status);
@@ -1068,6 +1075,7 @@ RAFT_API raft_index raft_last_applied(struct raft *r);
 /* Common fields across client request types. */
 #define RAFT__REQUEST \
     void *data;       \
+    raft_time time;   \
     int type;         \
     raft_index index; \
     void *queue[2]
@@ -1316,6 +1324,12 @@ struct raft_hook
 				      raft_index index, raft_term term);
 	void (*entry_after_apply_fn)(struct raft_hook *h, raft_index index,
 				     const struct raft_entry *entry);
+    /**
+     * Check entry at @index should apply now.
+     * @return false entry couldn't apply, try later.
+     */
+    bool (*entry_should_apply)(struct raft_hook *h, raft_index index,
+                               const struct raft_entry *entry);
 	void (*request_accept)(struct raft_hook *h, struct request *req);
 	void (*request_append)(struct raft_hook *h, struct request *req);
 	void (*request_append_done)(struct raft_hook *h, struct request *req);
@@ -1349,7 +1363,8 @@ enum raft_event_level {
 /* User-definable event recorder for record events */
 struct raft_event_recorder {
 	void *data;
-	void (*record)(void *data, enum raft_event_level level, const char* fn,
+	bool (*is_id_allowed)(void *data, raft_id id);
+	void (*record)(void *data, enum raft_event_level level, const char *fn,
 		       const char *file, int line, const char *fmt, ...);
 };
 
@@ -1379,6 +1394,16 @@ RAFT_API void raft_set_sync_snapshot(struct raft *r , bool sync);
  * Set sync replication time out
  */
 RAFT_API void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs);
+
+/**
+ * Get min sync match index
+ */
+RAFT_API raft_index raft_min_sync_match_index(struct raft *r);
+
+/**
+ * Get min sync match replica id
+ */
+RAFT_API raft_id raft_min_sync_match_replica(struct raft *r);
 
 /**
  * Set whether nonvoter can grant vote
@@ -1414,6 +1439,27 @@ RAFT_API bool raft_is_distruptive_candidate(struct raft *r);
  * Return 0 or RAFT_NOMEM
  */
 RAFT_API int raft_set_snapshot_sample_span(struct raft *r, unsigned span);
+
+/**
+ * Change raft's current role
+ */
+RAFT_API void raft_set_role(struct raft *r, int role);
+
+/**
+ * Get the first request.
+ */
+RAFT_API struct request *raft_first_request(struct raft *r);
+
+/**
+ *  Set leader stepdown cb
+ */
+RAFT_API void raft_set_leader_stepdown_cb(struct raft *r,
+                                          raft_leader_stepdown_cb cb);
+
+/**
+ * Get the latest entry time.
+ */
+RAFT_API raft_time raft_latest_entry_time(struct raft *r);
 
 #undef RAFT__REQUEST
 

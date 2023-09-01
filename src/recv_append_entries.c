@@ -45,8 +45,9 @@ static void recvUpdateLeaderSnapshot(struct raft *r,
 	if (r->follower_state.current_leader.snapshot_index == snapshot_index)
 		return;
 
-	evtInfof("raft(%llx) update leader snapshot index %llu trailing %u",
-		 r->id, snapshot_index, trailing);
+	evtIdInfof(r->id,
+		   "raft(%llx) update leader snapshot index %llu trailing %u",
+		   r->id, snapshot_index, trailing);
 	r->follower_state.current_leader.snapshot_index = snapshot_index;
     r->follower_state.current_leader.trailing = trailing;
 }
@@ -139,6 +140,11 @@ int recvAppendEntries(struct raft *r,
 
     /* Reset the election timer. */
     r->election_timer_start = r->io->time(r->io);
+
+    /* Reset lastest entry time */
+    if (args->n_entries) {
+        r->latest_entry_time = r->election_timer_start;
+    }
 
     if (hookHackAppendEntries(r, args, result, &discard)) {
         if (discard)

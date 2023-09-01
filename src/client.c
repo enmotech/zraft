@@ -44,6 +44,7 @@ int raft_apply(struct raft *r,
     /* Index of the first entry being appended. */
     index = logLastIndex(&r->log) + 1;
     tracef("%u commands starting at %lld", n, index);
+    req->time = r->io->time(r->io);
     req->type = RAFT_COMMAND;
     req->index = index;
     req->cb = cb;
@@ -55,6 +56,7 @@ int raft_apply(struct raft *r,
         goto err;
     }
 
+    r->latest_entry_time = req->time;
     rv = requestRegEnqueue(&r->leader_state.reg, (struct request *) req);
     if (rv != 0) {
         evtErrf("raft(%llx) append to registry failed %d", r->id, rv);
@@ -106,6 +108,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     /* Index of the barrier entry being appended. */
     index = logLastIndex(&r->log) + 1;
     tracef("barrier starting at %lld", index);
+    req->time = r->io->time(r->io);
     req->type = RAFT_BARRIER;
     req->index = index;
     req->cb = cb;
@@ -115,6 +118,8 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
         evtErrf("raft(%llx) append barrier failed %d", r->id, rv);
         goto err_after_buf_alloc;
     }
+
+    r->latest_entry_time = req->time;
     rv = requestRegEnqueue(&r->leader_state.reg, (struct request *) req);
     if (rv != 0) {
 	    evtErrf("raft(%llx) append to registry failed %d", r->id, rv);
@@ -331,8 +336,7 @@ int raft_joint_promote(struct raft *r,
     /* If we are not promoting to the voter role or if the log of this server is
      * already up-to-date, we can submit the configuration change
      * immediately. */
-    if (role != RAFT_VOTER ||
-        progressMatchIndex(r, server_index) == last_index) {
+    if (progressMatchIndex(r, server_index) == last_index) {
         configurationJointRemove(&r->configuration, remove);
         r->configuration.servers[server_index].role_new = role;
 
@@ -601,7 +605,8 @@ static raft_id clientSelectTransferee(struct raft *r)
 
     for (i = 0; i < r->configuration.n; i++) {
         const struct raft_server *server = &r->configuration.servers[i];
-        if (server->id == r->id || server->role != RAFT_VOTER) {
+        if (server->id == r->id ||
+            !configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
             continue;
         }
         transferee = server;
@@ -644,12 +649,17 @@ int raft_transfer(struct raft *r,
     }
 
     server = configurationGet(&r->configuration, id);
-    if (server == NULL || server->id == r->id || server->role != RAFT_VOTER) {
+    if (server == NULL || server->id == r->id
+        || !configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
         rv = RAFT_BADID;
         ErrMsgFromCode(r->errmsg, rv);
-        evtErrf("raft(%llx) get conf failed %d", r->id, rv);
+        evtErrf("raft(%llx) get transferee %lu failed %d", r->id,
+            server == NULL ? 0 : server->id, rv);
         goto err;
     }
+
+    evtNoticef("raft(%llx) transfer leader to %llx role %d %d group %d", r->id,
+        server->id, server->role, server->role_new, server->group);
 
     /* If this follower is up-to-date, we can send it the TimeoutNow message
      * right away. */

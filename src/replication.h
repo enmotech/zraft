@@ -107,4 +107,9 @@ int replicationApply(struct raft *r);
  *   matchIndex[i] >= N, and log[N].term == currentTerm: set commitIndex = N */
 void replicationQuorum(struct raft *r, const raft_index index);
 
+/**
+ * Remove snapshot trailing
+ */
+void replicationRemoveTrailing(struct raft *r);
+
 #endif /* REPLICATION_H_ */

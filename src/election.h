@@ -78,4 +78,18 @@ void electionVote(struct raft *r,
  * votes and won elections. */
 bool electionTally(struct raft *r, size_t voter_index);
 
+struct raft_election_meta_update;
+typedef void (*raft_election_meta_update_cb)(
+        struct raft_election_meta_update *update, int status);
+struct raft_election_meta_update {
+        void *data;
+        raft_term term;
+        raft_id vote_for;
+        raft_election_meta_update_cb cb;
+};
+
+int electionUpdateMeta(struct raft *r, struct raft_election_meta_update *update,
+                       raft_term term, raft_id vote_for,
+                       raft_election_meta_update_cb cb);
+
 #endif /* ELECTION_H_ */

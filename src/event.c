@@ -14,8 +14,17 @@ static void defaultRecord(void *data, enum raft_event_level level,
 	(void)fmt;
 }
 
+static bool defaultIsIdAllowed(void *data, raft_id id)
+{
+	(void)data;
+	(void)id;
+
+	return true;
+}
+
 static struct raft_event_recorder defaultRecoder = {
 	NULL,
+	defaultIsIdAllowed,
 	defaultRecord,
 };
 
@@ -36,10 +45,12 @@ void evtDumpConfiguration(struct raft *r, const struct raft_configuration *c)
 {
 	unsigned i;
 
+	if (!evtIdAllowed(r->id))
+		return;
 	for (i = 0; i < c->n; ++i)
 		evtNoticef(
-		"phase %d raft(%llx) member %u %llx role %u %lu group %d",
-		c->phase, r->id, i, c->servers[i].id, c->servers[i].role,
-		c->servers[i].role_new, c->servers[i].group);
-
+			"phase %d raft(%llx) member %u %llx role %d %d group %d",
+			c->phase, r->id, i, c->servers[i].id,
+			c->servers[i].role, c->servers[i].role_new,
+			c->servers[i].group);
 }

@@ -37,6 +37,9 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+#define PKT_TERM_BITS 16
+#define PKT_ID_BITS 32
+
 /* Callback invoked after request to send an AppendEntries RPC has completed. */
 static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
 {
@@ -60,6 +63,18 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
     raft_free(req);
 }
 
+static raft_index nextPktId(struct raft *r)
+{
+    assert(RAFT_PKT_BITS == (PKT_TERM_BITS + PKT_ID_BITS));
+    raft_index pkt = 0;
+
+    r->pkt_id += 1;
+    pkt = r->pkt_id & (((raft_index)1 << PKT_ID_BITS) - 1);
+    pkt |= (r->current_term & ((1 << PKT_TERM_BITS) - 1)) << PKT_ID_BITS;
+
+    return pkt;
+}
+
 /* Send an AppendEntries message to the i'th server, including all log entries
  * from the given point onwards. */
 static int sendAppendEntries(struct raft *r,
@@ -76,6 +91,7 @@ static int sendAppendEntries(struct raft *r,
     int rv;
     unsigned j;
 
+    args->pkt = nextPktId(r);
     args->term = r->current_term;
     args->prev_log_index = prev_index;
     args->prev_log_term = prev_term;
@@ -355,11 +371,11 @@ int replicationProgress(struct raft *r, unsigned i)
         if (snapshot_index > 0 && !progress_state_is_snapshot) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
-	    evtNoticef("raft(%llx) send %llx snapshot %llu/%llu/%llu recent %d",
-		       r->id, server->id, next_index,
-		       r->leader_state.min_match_index,
-		       snapshot_index,
-		       progressGetRecentRecv(r, i));
+            evtNoticef(
+            "raft(%llx) send %llx snapshot %llu recent %d next 1 first %llu/%llu last %llu/%llu",
+                r->id, server->id, snapshot_index, progressGetRecentRecv(r, i),
+                logStartIndex(r), logStartTerm(r),
+                logLastIndex(&r->log), logLastTerm(&r->log));
             goto send_snapshot;
         }
         prev_index = 0;
@@ -374,13 +390,11 @@ int replicationProgress(struct raft *r, unsigned i)
         if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
-	    evtNoticef(
-	    "raft(%llx) send %llx snapshot %llu/%llu/%llu/%llu recent %d",
-		       r->id, server->id, next_index,
-		       r->leader_state.min_match_index,
-		       snapshot_index,
-		       logLastIndex(&r->log),
-		       progressGetRecentRecv(r, i));
+            evtNoticef(
+            "raft(%llx) send %llx snapshot %llu recent %d next %llu first %llu/%llu last %llu/%llu",
+                r->id, server->id, snapshot_index, progressGetRecentRecv(r, i),
+                next_index, logStartIndex(r), logStartTerm(r),
+                logLastIndex(&r->log), logLastTerm(&r->log));
             goto send_snapshot;
         }
     }
@@ -527,7 +541,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
             }
         }
 
-        if (r->state == RAFT_LEADER) {
+        if (r->state != RAFT_FOLLOWER) {
             convertToFollower(r);
             evtNoticef("raft(%llx) convert from leader to follower",
 			    r->id, status);
@@ -560,9 +574,6 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      */
     if (server_index < r->configuration.n) {
         r->leader_state.progress[server_index].match_index = r->last_stored;
-    } else {
-        const struct raft_entry *entry = logGet(&r->log, r->last_stored);
-        assert(entry->type == RAFT_CHANGE);
     }
 
     /* Check if we can commit some new entries. */
@@ -587,6 +598,12 @@ out:
     if (status != 0 && r->prev_append_status == 0) {
         logTruncate(&r->log, request->index);
         evtErrf("raft(%llx) truncate log from %llu", r->id, request->index);
+        if (r->configuration_uncommitted_index >= request->index) {
+                rv = membershipRollback(r);
+                if (rv != 0) {
+                    evtErrf("raft(%llx) rollback failed %d", r->id, rv);
+                }
+        }
     }
 
     r->prev_append_status = status;
@@ -764,6 +781,7 @@ int replicationUpdate(struct raft *r,
     raft_index prev_match_index;
     raft_index match_index;
     struct raft_progress *p;
+    bool updated;
     unsigned i;
     int rv;
 
@@ -772,7 +790,7 @@ int replicationUpdate(struct raft *r,
     assert(r->state == RAFT_LEADER);
     assert(i < r->configuration.n);
 
-    progressMarkRecentRecv(r, i);
+    progressMarkRecentRecv(r, i, result->rejected == 0);
     p = &r->leader_state.progress[i];
 
     /* If the RPC failed because of a log mismatch, retry.
@@ -810,6 +828,9 @@ int replicationUpdate(struct raft *r,
     }
 
     prev_match_index = progressMatchIndex(r, i);
+    if (prev_match_index == 0 && r->sync_replication) {
+        progressUpdateMinMatch(r);
+    }
     /* If the RPC succeeded, update our counters for this server.
      *
      * From Figure 3.1:
@@ -818,9 +839,8 @@ int replicationUpdate(struct raft *r,
      *
      *   If successful update nextIndex and matchIndex for follower.
      */
-    if (!progressMaybeUpdate(r, i, last_index)) {
-        return 0;
-    }
+    updated = progressMaybeUpdate(r, i, last_index);
+
     match_index = progressMatchIndex(r, i);
     if(match_index > prev_match_index)
         hookRequestMatch(r, prev_match_index + 1,
@@ -836,6 +856,10 @@ int replicationUpdate(struct raft *r,
         case PROGRESS__PROBE:
             /* Transition to pipeline */
             progressToPipeline(r, i);
+    }
+
+    if (!updated) {
+        return 0;
     }
 
     /* If the server is currently being promoted and is catching with logs,
@@ -1010,7 +1034,8 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
      *   commitIndex, set commitIndex = min(leaderCommit, index of last new
      *   entry).
      */
-    if (args->leader_commit > r->commit_index) {
+    if (args->leader_commit > r->commit_index
+        && r->last_stored >= r->commit_index) {
         r->commit_index = min(args->leader_commit, r->last_stored);
         rv = replicationApply(r);
         if (rv != 0) {
@@ -1031,12 +1056,6 @@ respond:
     sendAppendEntriesResult(r, &result);
 
 out:
-    if (r->prev_append_status != 0 && status == 0) {
-        evtErrf("raft(%llx) previous append status %d", r->id,
-		r->prev_append_status);
-       abort();
-    }
-
     logRelease(&r->log, request->index, request->args.entries,
 	    request->args.n_entries);
 
@@ -1213,8 +1232,9 @@ int replicationAppend(struct raft *r,
         evtNoticef("raft(%llx) recv term %llu entries %lu %llu %llu %llu",
 		   r->id, args->term, args->n_entries, args->prev_log_index,
 		   args->prev_log_term, args->leader_commit);
-        evtNoticef("raft(%llx) snapshot %llu last log %llu",
-		   r->id, r->log.snapshot.last_index, logLastIndex(&r->log));
+        evtNoticef("raft(%llx) snapshot %llu log %llu/%llu/%llu",
+		   r->id, r->log.snapshot.last_index, logStartIndex(r), logStartTerm(r),
+           logNumEntries(&r->log));
     }
 
     /* Check the log matching property. */
@@ -1256,6 +1276,7 @@ int replicationAppend(struct raft *r,
      */
     if (n == 0) {
         if ((args->leader_commit > r->commit_index)
+             && r->last_stored >= r->commit_index
              && !replicationInstallSnapshotBusy(r)) {
             r->commit_index = min(args->leader_commit, r->last_stored);
             rv = replicationApply(r);
@@ -1549,6 +1570,9 @@ static void applyCommandCb(struct raft_fsm_apply *req,
         return;
     }
     r->last_applied = index;
+    if (r->nr_applying == 0) {
+        r->last_applying = r->last_applied;
+    }
 
     if (r->last_applied == r->last_applying) {
         if (r->state == RAFT_LEADER ||
@@ -1732,8 +1756,8 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
         goto out;
     }
 
-    evtInfof("raft(%llx) take snapshot at %llu %u enable %d", r->id, snapshot->index,
-	     r->snapshot.trailing, r->enable_free_trailing);
+    evtIdInfof(r->id, "raft(%llx) take snapshot at %llu %u enable %d", r->id,
+	       snapshot->index, r->snapshot.trailing, r->enable_free_trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
     if (r->enable_free_trailing) {
         unfreed_index = logUnFreedIndex(&r->log);
@@ -1747,13 +1771,12 @@ out:
     r->snapshot.pending.term = 0;
 }
 
-static int takeSnapshot(struct raft *r)
+static int doSnapshot(struct raft *r, raft_index snapshot_index,
+                      unsigned trailing)
 {
-    raft_index index;
     struct raft_snapshot *snapshot;
     unsigned i;
     int rv;
-    raft_index snapshot_index = nextSnapshotIndex(r);
 
     tracef("take snapshot at %lld", snapshot_index);
 
@@ -1780,23 +1803,7 @@ static int takeSnapshot(struct raft *r)
         goto abort_after_config_copy;
     }
 
-    if (r->enable_dynamic_trailing) {
-        if (r->state == RAFT_LEADER) {
-            index = snapshotSamplerFirstIndex(&r->sampler);
-            if (index == 0)
-                index = logStartIndex(r);
-            progressUpdateMinMatch(r);
-            index = max(r->leader_state.min_match_index, index);
-            if (index <= snapshot->index)
-                r->snapshot.trailing =
-                    (unsigned int)(snapshot->index - index) + 1;
-            else
-                r->snapshot.trailing = 0;
-        } else {
-            r->snapshot.trailing = r->follower_state.current_leader.trailing;
-        }
-    }
-
+    r->snapshot.trailing = trailing;
     assert(r->snapshot.put.data == NULL);
     r->snapshot.put.data = r;
     rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
@@ -1807,7 +1814,6 @@ static int takeSnapshot(struct raft *r)
     }
 
     return 0;
-
 abort_after_fsm_snapshot:
     for (i = 0; i < snapshot->n_bufs; i++) {
         raft_free(snapshot->bufs[i].base);
@@ -1819,6 +1825,71 @@ abort:
     r->snapshot.pending.term = 0;
     r->snapshot.put.data = NULL;
     return rv;
+}
+
+static int takeSnapshot(struct raft *r)
+{
+    unsigned trailing;
+    raft_index index;
+    raft_index snapshot_index = nextSnapshotIndex(r);
+
+    trailing = r->snapshot.trailing;
+    if (!r->enable_dynamic_trailing) {
+        goto err_do_snapshot;
+    }
+
+    if (r->state == RAFT_LEADER) {
+        index = snapshotSamplerFirstIndex(&r->sampler);
+        if (index == 0)
+            index = logStartIndex(r);
+        progressUpdateMinMatch(r);
+        index = max(r->leader_state.min_match_index, index);
+        if (index <= snapshot_index)
+            trailing = (unsigned int)(snapshot_index - index) + 1;
+        else
+            trailing = 0;
+    } else {
+        trailing = r->follower_state.current_leader.trailing;
+    }
+
+err_do_snapshot:
+    return doSnapshot(r, snapshot_index, trailing);
+}
+
+void replicationRemoveTrailing(struct raft *r)
+{
+    assert(r->enable_dynamic_trailing);
+    assert(r->state == RAFT_LEADER);
+    raft_index index;
+    unsigned trailing;
+
+    /* If a snapshot is already in progress or we're installing a snapshot, we
+     * don't want to start another one. */
+    if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
+        return;
+    }
+
+    if (r->log.snapshot.last_index == 0) {
+        return;
+    }
+
+    index = snapshotSamplerFirstIndex(&r->sampler);
+    if (index == 0)
+        index = logStartIndex(r);
+    progressUpdateMinMatch(r);
+    index = max(r->leader_state.min_match_index, index);
+
+    if (index <= logStartIndex(r)) {
+        return;
+    }
+
+    if (index > r->log.snapshot.last_index) {
+        return;
+    }
+
+    trailing = (unsigned int)(r->log.snapshot.last_index - index) + 1;
+
+    doSnapshot(r, r->log.snapshot.last_index, trailing);
 }
 
 int replicationApply(struct raft *r)
@@ -1846,6 +1917,12 @@ int replicationApply(struct raft *r)
             return 0;
         }
 
+        if (!hookEntryShouldApply(r, index, entry)) {
+            evtInfof("raft(%llx) entry at index %llu should apply later",
+                r->id, index);
+            break;
+        }
+
         assert(entry->type == RAFT_COMMAND || entry->type == RAFT_BARRIER ||
                entry->type == RAFT_CHANGE);
 
@@ -1858,6 +1935,12 @@ int replicationApply(struct raft *r)
                     assert(r->nr_applying);
                     r->last_applying -= 1;
                     r->nr_applying -= 1;
+                }
+
+                if (rv == RAFT_RETRY) {
+                    evtInfof("raft(llx) apply %llu failed with retry",
+                        r->id, index);
+                    return 0;
                 }
                 break;
             case RAFT_BARRIER:

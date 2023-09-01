@@ -15,6 +15,7 @@
 #include "hook.h"
 #include "event.h"
 #include "snapshot_sampler.h"
+#include "request.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -86,6 +87,7 @@ int raft_init(struct raft *r,
     r->enable_dynamic_trailing = false;
     r->enable_free_trailing = false;
     r->enable_election_at_start = true;
+    r->pkt_id = 0;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -99,6 +101,8 @@ int raft_init(struct raft *r,
         evtErrf("raft(%llx) init snapshot sampler failed %d", r->id, rv);
         goto err_after_address_alloc;
     }
+
+    r->latest_entry_time = r->io->time(r->io);
     return 0;
 
 err_after_address_alloc:
@@ -351,7 +355,7 @@ RAFT_API int raft_replace_configuration(struct raft *r,
         r->role = configurationServerRole(&r->configuration, r->id);
     }
 
-	evtNoticef("raft(%llx) conf replace", r->id);
+	evtIdNoticef(r->id, "raft(%llx) conf replace", r->id);
 	evtDumpConfiguration(r, &conf);
     hookConfChange(r, &conf);
 	return 0;
@@ -365,6 +369,18 @@ void raft_set_sync_snapshot(struct raft *r , bool sync)
 void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs)
 {
 	r->sync_replication_timeout = msecs;
+}
+
+raft_index raft_min_sync_match_index(struct raft *r)
+{
+    assert(r->state == RAFT_LEADER);
+    return r->leader_state.min_sync_match_index;
+}
+
+raft_id raft_min_sync_match_replica(struct raft *r)
+{
+    assert(r->state == RAFT_LEADER);
+    return r->leader_state.min_sync_match_replica;
 }
 
 void raft_set_non_voter_grant_vote(struct raft *r, bool grant)
@@ -404,4 +420,37 @@ int raft_set_snapshot_sample_span(struct raft *r, unsigned span)
 
     return snapshotSamplerInit(&r->sampler, span, SNAPSHOT_SAMPLE_PERIOD,
         r->io->time(r->io));
+}
+
+void raft_set_role(struct raft *r, int role)
+{
+    assert(role == RAFT_STANDBY || role == RAFT_SPARE || role == RAFT_VOTER
+        || role == RAFT_LOGGER);
+    struct raft_server *s;
+
+    r->role = role;
+    s = (struct raft_server *)configurationGet(&r->configuration, r->id);
+    assert(s);
+    s->role = role;
+    if (s->group & RAFT_GROUP_NEW) {
+        assert(r->configuration.phase == RAFT_CONF_JOINT);
+        s->role_new = role;
+    }
+    evtNoticef("raft(%llx) group %x change role to %d ", r->id, s->group, role);
+}
+
+struct request *raft_first_request(struct raft *r)
+{
+    assert(r->state == RAFT_LEADER);
+    return requestRegFirst(&r->leader_state.reg);
+}
+
+void raft_set_leader_stepdown_cb(struct raft *r, raft_leader_stepdown_cb cb)
+{
+    r->stepdown_cb = cb;
+}
+
+raft_time raft_latest_entry_time(struct raft *r)
+{
+    return r->latest_entry_time;
 }

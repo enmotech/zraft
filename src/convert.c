@@ -128,10 +128,6 @@ static void convertClear(struct raft *r)
 
 void convertToFollower(struct raft *r)
 {
-    if (r->state == RAFT_LEADER) {
-        evtNoticef("raft(%llx) leader step down", r->id);
-    }
-
     convertClear(r);
     convertSetState(r, RAFT_FOLLOWER);
 
@@ -143,6 +139,71 @@ void convertToFollower(struct raft *r)
     r->follower_state.current_leader.trailing = r->snapshot.trailing;
     if (r->state_change_cb)
 		r->state_change_cb(r, RAFT_FOLLOWER);
+}
+
+static void convertToLeaderUpdateCb(struct raft_election_meta_update *update,
+                                    int status)
+{
+    struct raft *r = update->data;
+    int rv;
+
+    if (status != 0) {
+        evtErrf("raft(%llx) convert to leader update meta term %llu failed %d",
+            r->id, update->term, status);
+        goto err_free_request;
+    }
+
+    if (r->state != RAFT_CANDIDATE) {
+        evtErrf("raft(%llx) isn't candidate, state %d", r->id, r->state);
+        goto err_free_request;
+    }
+
+    evtNoticef("raft(%llx) convert to leader update meta term %llu succeed",
+        r->id, update->term);
+    r->current_term = update->term;
+    r->voted_for = update->vote_for;
+    rv = convertToLeader(r);
+    if (rv != 0) {
+        evtErrf("raft(%llx) convert to leader failed %d", r->id, rv);
+        goto err_free_request;
+    }
+    /* Check if we can commit some new entries. */
+    replicationQuorum(r, r->last_stored);
+
+    rv = replicationApply(r);
+    if (rv != 0) {
+        evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+        convertToUnavailable(r);
+    }
+err_free_request:
+    raft_free(update);
+}
+
+static int convertToLeaderUpdate(struct raft *r)
+{
+    int rv;
+    struct raft_election_meta_update *update;
+
+    update = raft_malloc(sizeof(*update));
+    if (update == NULL) {
+        rv = RAFT_NOMEM;
+        evtErrf("raft(%llx) malloc failed %d", r->id, rv);
+        goto err_return;
+    }
+    update->data = r;
+
+    rv = electionUpdateMeta(r, update, r->current_term + 1, r->id,
+                            convertToLeaderUpdateCb);
+    if (rv != 0) {
+        evtErrf("raft(%llx) vote self update meta term %llu failed %d",
+            r->id, r->current_term + 1, rv);
+        goto err_free_update;
+    }
+    return 0;
+err_free_update:
+    raft_free(update);
+err_return:
+    return rv;
 }
 
 int convertToCandidate(struct raft *r, bool disrupt_leader)
@@ -176,20 +237,11 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
     if (n_voters == 1) {
         tracef("self elect and convert to leader");
         evtInfof("raft(%llx) self elect and convert to leader", r->id);
-        rv =  convertToLeader(r);
+        rv = convertToLeaderUpdate(r);
         if (rv != 0) {
-            evtErrf("raft(%llx) convert to leader failed %d", r->id, rv);
-            return rv;
+            evtErrf("raft(%llx) convert to leader update failed %d", r->id, rv);
         }
-        /* Check if we can commit some new entries. */
-        replicationQuorum(r, r->last_stored);
 
-        rv = replicationApply(r);
-        if (rv != 0) {
-            /* TODO: just log the error? */
-	    evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
-            convertToUnavailable(r);
-        }
         return rv;
     }
 
@@ -239,7 +291,12 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
     r->leader_state.remove_id = 0;
+    r->leader_state.min_match_index = 0;
+    r->leader_state.min_match_replica = 0;
+    r->leader_state.min_sync_match_index = 0;
+    r->leader_state.min_sync_match_replica = 0;
     r->leader_state.removed_from_cluster = false;
+
 
     if (r->state_change_cb)
 		r->state_change_cb(r, RAFT_LEADER);

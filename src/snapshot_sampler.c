@@ -44,6 +44,10 @@ snapshotSamplerTake(struct raft_snapshot_sampler *s, raft_index snapshot_index,
 	size_t i;
 	size_t idx;
 
+	if (snapshot_index < s->samples[s->last].index) {
+		return;
+	}
+
 	diff = min(diff, s->size);
 	for (i = 1; i < diff; ++i) {
 		idx			= (s->last + i) % s->size;

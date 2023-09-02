@@ -454,3 +454,48 @@ raft_time raft_latest_entry_time(struct raft *r)
 {
     return r->latest_entry_time;
 }
+
+static void raft_dump_progress(struct raft *r, raft_dump_fn dump)
+{
+	uint32_t i;
+	assert(r->state == RAFT_LEADER);
+
+	for (i = 0; i < r->configuration.n; i++) {
+		dump(
+		"raft(%lx) member %u %lx role %d state %u index %llu/%llu/%llu last_send %llu/%llu recent_recv %u/%llu ms\n",
+		     r->id, i,
+		     r->configuration.servers[i].id,
+		     r->configuration.servers[i].role,
+		     r->leader_state.progress[i].state,
+		     r->leader_state.progress[i].match_index,
+		     r->leader_state.progress[i].next_index,
+		     r->leader_state.progress[i].snapshot_index,
+		     r->leader_state.progress[i].last_send,
+		     r->leader_state.progress[i].snapshot_last_send,
+		     r->leader_state.progress[i].recent_recv,
+		     r->leader_state.progress[i].recent_recv_time);
+	}
+}
+
+void raft_dump(struct raft *r, raft_dump_fn dump)
+{
+    unsigned i;
+    struct raft_server *s;
+
+    dump("raft(%lx) role %d state %u term %lu voted_for %lx\n", r->id, r->role,
+	 r->state, r->current_term, r->voted_for);
+    dump("raft(%lx) index %lu/%lu/%lu/%lu\n", r->id, r->last_stored,
+	 r->commit_index, r->last_applying, r->last_applied);
+    dump("raft(%lx) configuration %lu/%lu phase %d\n", r->id, r->configuration_index,
+	 r->configuration_uncommitted_index, r->configuration.phase);
+
+    for (i = 0; i < r->configuration.n; ++i) {
+        s = &r->configuration.servers[i];
+        dump("raft(%lx) configuration member %u %llx role %d/%d group %d\n",
+            r->id, i, s->id, s->role, s->role_new, s->group);
+    }
+
+    if (r->state == RAFT_LEADER) {
+        raft_dump_progress(r, dump);
+    }
+}

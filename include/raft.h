@@ -1461,6 +1461,12 @@ RAFT_API void raft_set_leader_stepdown_cb(struct raft *r,
  */
 RAFT_API raft_time raft_latest_entry_time(struct raft *r);
 
+typedef int (raft_dump_fn)(char *fmt, ...);
+/**
+ * Dump raft's internal status
+ */
+RAFT_API void raft_dump(struct raft *r, raft_dump_fn dump);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

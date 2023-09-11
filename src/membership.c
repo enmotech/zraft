@@ -100,8 +100,8 @@ bool membershipUpdateCatchUpRound(struct raft *r)
         r->leader_state.round_index = 0;
         r->leader_state.round_start = 0;
 
-        evtNoticef("raft(%llx) promotee %llx catch up with leader", r->id,
-		   r->leader_state.promotee_id);
+        evtIdNoticef(r->id, "raft(%llx) promotee %llx catch up with leader",
+            r->id, r->leader_state.promotee_id);
         return true;
     }
 
@@ -112,8 +112,8 @@ bool membershipUpdateCatchUpRound(struct raft *r)
     r->leader_state.round_index = last_index;
     r->leader_state.round_start = now;
 
-    evtNoticef("raft(%llx) promotee %llx round %u round_index %llu", r->id,
-	       r->leader_state.promotee_id, r->leader_state.round_number,
+    evtIdNoticef(r->id, "raft(%llx) promotee %llx round %u round_index %llu",
+           r->id, r->leader_state.promotee_id, r->leader_state.round_number,
 	       r->leader_state.round_index);
 
     return false;
@@ -148,7 +148,7 @@ int membershipUncommittedChange(struct raft *r,
     }
     r->configuration_uncommitted_index = index;
 
-    evtNoticef("raft(%llx) conf received at index %lu", r->id, index);
+    evtIdNoticef(r->id, "raft(%llx) conf received at index %lu", r->id, index);
     evtDumpConfiguration(r, &configuration);
     hookConfChange(r, &configuration);
 

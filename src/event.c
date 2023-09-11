@@ -48,7 +48,7 @@ void evtDumpConfiguration(struct raft *r, const struct raft_configuration *c)
 	if (!evtIdAllowed(r->id))
 		return;
 	for (i = 0; i < c->n; ++i)
-		evtNoticef(
+		evtIdNoticef(r->id,
 			"phase %d raft(%llx) member %u %llx role %d %d group %d",
 			c->phase, r->id, i, c->servers[i].id,
 			c->servers[i].role, c->servers[i].role_new,

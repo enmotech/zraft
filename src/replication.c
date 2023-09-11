@@ -804,7 +804,7 @@ int replicationUpdate(struct raft *r,
      */
     if (result->rejected > 0) {
         if (p->state != PROGRESS__SNAPSHOT)
-            evtNoticef("raft(%llx) %llx %d rejected %lu %lu %lu %lu",
+            evtIdNoticef(r->id, "raft(%llx) %llx %d rejected %lu %lu %lu %lu",
                 r->id, id, i, result->rejected, result->last_log_index,
                 result->term, result->pkt);
         bool retry;
@@ -813,7 +813,7 @@ int replicationUpdate(struct raft *r,
         if (retry) {
             /* Retry, ignoring errors. */
 	        tracef("log mismatch -> send old entries to %llu", id);
-            evtNoticef("raft(%llx) send old entries to %llx", r->id, id);
+            evtIdNoticef(r->id, "raft(%llx) send old entries to %llx", r->id, id);
             replicationProgress(r, i);
         }
         return 0;

@@ -356,7 +356,7 @@ static void loadCb(struct raft_io_load *req,
 
     if (r->enable_free_trailing && snapshot_index) {
         unfreed_index = logUnFreedIndex(&r->log);
-        logFreeEntriesBufForward(&r->log, snapshot_index);
+        logFreeEntriesBufForward(&r->log, snapshot_index - 1);
         evtInfof("raft(%llx) free entries %llu %u %llu->%llu", r->id,
             logStartIndex(r), logNumEntries(&r->log), unfreed_index,
             logUnFreedIndex(&r->log));

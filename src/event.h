@@ -9,6 +9,11 @@
 #define EVT_PER_SEC (200)
 
 const struct raft_event_recorder *eventRecorder(void);
+#define evtIdAllowed(id) \
+	eventRecorder()->is_id_allowed(eventRecorder()->data, id)
+
+#define evtLevelAllowed(level) \
+	((level) <= eventRecorder()->get_level(eventRecorder()->data))
 
 #define evtRecordf(level, fmt, ...)                                           \
 	do {                                                                  \
@@ -29,14 +34,26 @@ const struct raft_event_recorder *eventRecorder(void);
 						fmt, __VA_ARGS__);            \
 	} while (0)
 
-#define evtErrf(fmt, ...)    evtRecordf(RAFT_ERROR, fmt, __VA_ARGS__)
-#define evtWarnf(fmt, ...)   evtRecordf(RAFT_WARN, fmt, __VA_ARGS__)
-#define evtNoticef(fmt, ...) evtRecordf(RAFT_NOTICE, fmt, __VA_ARGS__)
-#define evtInfof(fmt, ...)   evtRecordf(RAFT_INFO, fmt, __VA_ARGS__)
-#define evtDebugf(fmt, ...)  evtRecordf(RAFT_DEBUG, fmt, __VA_ARGS__)
+#define evtErrf(fmt, ...)  evtRecordf(RAFT_ERROR, fmt, __VA_ARGS__)
+#define evtWarnf(fmt, ...) evtRecordf(RAFT_WARN, fmt, __VA_ARGS__)
 
-#define evtIdAllowed(id) \
-	eventRecorder()->is_id_allowed(eventRecorder()->data, id)
+#define evtNoticef(fmt, ...)                                       \
+	do {                                                       \
+		if (evtLevelAllowed(RAFT_NOTICE))                  \
+			evtRecordf(RAFT_NOTICE, fmt, __VA_ARGS__); \
+	} while (0)
+
+#define evtInfof(fmt, ...)                                       \
+	do {                                                     \
+		if (evtLevelAllowed(RAFT_INFO))                  \
+			evtRecordf(RAFT_INFO, fmt, __VA_ARGS__); \
+	} while (0)
+
+#define evtDebugf(fmt, ...)                                       \
+	do {                                                      \
+		if (evtLevelAllowed(RAFT_DEBUG))                  \
+			evtRecordf(RAFT_DEBUG, fmt, __VA_ARGS__); \
+	} while (0)
 
 #define evtIdRecordf(id, level, fmt, ...)                                     \
 	do {                                                                  \
@@ -59,10 +76,24 @@ const struct raft_event_recorder *eventRecorder(void);
 
 #define evtIdErrf(id, fmt, ...)	 evtIdRecordf(id, RAFT_ERROR, fmt, __VA_ARGS__)
 #define evtIdWarnf(id, fmt, ...) evtIdRecordf(id, RAFT_WARN, fmt, __VA_ARGS__)
-#define evtIdNoticef(id, fmt, ...) \
-	evtIdRecordf(id, RAFT_NOTICE, fmt, __VA_ARGS__)
-#define evtIdInfof(id, fmt, ...)  evtIdRecordf(id, RAFT_INFO, fmt, __VA_ARGS__)
-#define evtIdDebugf(id, fmt, ...) evtIdRecordf(id, RAFT_DEBUG, fmt, __VA_ARGS__)
+
+#define evtIdNoticef(id, fmt, ...)                                       \
+	do {                                                             \
+		if (evtLevelAllowed(RAFT_NOTICE))                        \
+			evtIdRecordf(id, RAFT_NOTICE, fmt, __VA_ARGS__); \
+	} while (0)
+
+#define evtIdInfof(id, fmt, ...)                                       \
+	do {                                                           \
+		if (evtLevelAllowed(RAFT_INFO))                        \
+			evtIdRecordf(id, RAFT_INFO, fmt, __VA_ARGS__); \
+	} while (0)
+
+#define evtIdDebugf(id, fmt, ...)                                       \
+	do {                                                            \
+		if (evtLevelAllowed(RAFT_DEBUG))                        \
+			evtIdRecordf(id, RAFT_DEBUG, fmt, __VA_ARGS__); \
+	} while (0)
 
 void evtDumpConfiguration(struct raft *r, const struct raft_configuration *c);
 

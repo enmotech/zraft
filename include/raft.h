@@ -1366,6 +1366,7 @@ struct raft_event_recorder {
 	bool (*is_id_allowed)(void *data, raft_id id);
 	void (*record)(void *data, enum raft_event_level level, const char *fn,
 		       const char *file, int line, const char *fmt, ...);
+    int  (*get_level)(void *data);
 };
 
 /* set user defined event recoder */

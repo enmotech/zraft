@@ -22,10 +22,18 @@ static bool defaultIsIdAllowed(void *data, raft_id id)
 	return true;
 }
 
+static int defaultGetLevel(void *data)
+{
+	(void)data;
+
+	return RAFT_DEBUG;
+}
+
 static struct raft_event_recorder defaultRecoder = {
 	NULL,
 	defaultIsIdAllowed,
 	defaultRecord,
+	defaultGetLevel,
 };
 
 static struct raft_event_recorder *currentRecorder = &defaultRecoder;

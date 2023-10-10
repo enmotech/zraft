@@ -18,7 +18,7 @@ const struct raft_event_recorder *eventRecorder(void);
 #define evtRecordf(level, fmt, ...)                                           \
 	do {                                                                  \
 		bool			 _skip = false;                       \
-		static __thread uint16_t _log_count;                          \
+		static __thread uint32_t _log_count;                          \
 		static __thread time_t	 _log_time;                           \
 		time_t			 _now = time(NULL);                   \
 		if (_log_time == _now) {                                      \
@@ -58,7 +58,7 @@ const struct raft_event_recorder *eventRecorder(void);
 #define evtIdRecordf(id, level, fmt, ...)                                     \
 	do {                                                                  \
 		bool			 _skip = false;                       \
-		static __thread uint16_t _log_count;                          \
+		static __thread uint32_t _log_count;                          \
 		static __thread time_t	 _log_time;                           \
 		time_t			 _now = time(NULL);                   \
 		if (_log_time == _now) {                                      \

@@ -1366,6 +1366,7 @@ struct raft_event_recorder {
 	bool (*is_id_allowed)(void *data, raft_id id);
 	void (*record)(void *data, enum raft_event_level level, const char *fn,
 		       const char *file, int line, const char *fmt, ...);
+    int  (*get_level)(void *data);
 };
 
 /* set user defined event recoder */
@@ -1460,6 +1461,12 @@ RAFT_API void raft_set_leader_stepdown_cb(struct raft *r,
  * Get the latest entry time.
  */
 RAFT_API raft_time raft_latest_entry_time(struct raft *r);
+
+typedef int (raft_dump_fn)(char *fmt, ...);
+/**
+ * Dump raft's internal status
+ */
+RAFT_API void raft_dump(struct raft *r, raft_dump_fn dump);
 
 #undef RAFT__REQUEST
 

@@ -96,7 +96,7 @@ static int tickCandidate(struct raft *r)
      */
     if (electionTimerExpired(r)) {
         tracef("start new election");
-        evtInfof("raft(%llx) start new election", r->id);
+        evtIdInfof(r->id, "raft(%llx) start new election", r->id);
         r->candidate_state.in_pre_vote = r->pre_vote;
         r->candidate_state.disrupt_leader = false;
         return electionStart(r);
@@ -179,7 +179,7 @@ static int tickLeader(struct raft *r)
     if (now - r->election_timer_start >= (r->election_timeout - r->heartbeat_timeout)) {
         if (!checkContactQuorum(r)) {
             tracef("unable to contact majority of cluster -> step down");
-            evtNoticef("raft(%llx) leader step down", r->id);
+            evtIdNoticef(r->id, "raft(%llx) leader step down", r->id);
             if (r->stepdown_cb)
                 r->stepdown_cb(r, RAFT_TICK_STEPDOWN);
             convertToFollower(r);

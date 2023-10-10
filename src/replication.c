@@ -804,7 +804,7 @@ int replicationUpdate(struct raft *r,
      */
     if (result->rejected > 0) {
         if (p->state != PROGRESS__SNAPSHOT)
-            evtNoticef("raft(%llx) %llx %d rejected %lu %lu %lu %lu",
+            evtIdNoticef(r->id, "raft(%llx) %llx %d rejected %lu %lu %lu %lu",
                 r->id, id, i, result->rejected, result->last_log_index,
                 result->term, result->pkt);
         bool retry;
@@ -813,7 +813,7 @@ int replicationUpdate(struct raft *r,
         if (retry) {
             /* Retry, ignoring errors. */
 	        tracef("log mismatch -> send old entries to %llu", id);
-            evtNoticef("raft(%llx) send old entries to %llx", r->id, id);
+            evtIdNoticef(r->id, "raft(%llx) send old entries to %llx", r->id, id);
             replicationProgress(r, i);
         }
         return 0;
@@ -1729,7 +1729,6 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 {
     struct raft *r = req->data;
     struct raft_snapshot *snapshot;
-    raft_index unfreed_index;
 
     r->snapshot.put.data = NULL;
     snapshot = &r->snapshot.pending;
@@ -1756,15 +1755,9 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
         goto out;
     }
 
-    evtIdInfof(r->id, "raft(%llx) take snapshot at %llu %u enable %d", r->id,
-	       snapshot->index, r->snapshot.trailing, r->enable_free_trailing);
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
-    if (r->enable_free_trailing) {
-        unfreed_index = logUnFreedIndex(&r->log);
-        logFreeEntriesBufForward(&r->log, snapshot->index);
-        evtInfof("raft(%llx) free entries %llu %u %llu->%llu", r->id,
-            logStartIndex(r), logNumEntries(&r->log), unfreed_index,
-            logUnFreedIndex(&r->log));
+    if (r->enable_free_trailing && snapshot->index) {
+        logFreeEntriesBufForward(&r->log, snapshot->index - 1);
     }
 out:
     snapshotClose(&r->snapshot.pending);

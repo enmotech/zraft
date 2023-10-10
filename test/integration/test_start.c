@@ -204,3 +204,18 @@ TEST(raft_start, singleVotingNotUs, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
     return MUNIT_OK;
 }
+
+static int dumpStatusFn(char *fmt, ...)
+{
+    (void)fmt;
+
+    return 0;
+}
+
+TEST(raft_start, dumpStatus, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    CLUSTER_START;
+    raft_dump(CLUSTER_RAFT(0), dumpStatusFn);
+    return MUNIT_OK;
+}

@@ -279,9 +279,9 @@ int convertToLeader(struct raft *r)
         return rv;
     }
     if (r->enable_free_trailing) {
-        logResetUnFreedIndex(&r->log);
-        evtInfof("raft(%llx) reset unfreed index %llu", r->id,
-            logUnFreedIndex(&r->log));
+        logResetLastBufFreeIndex(&r->log);
+        evtInfof("raft(%llx) reset buf free index %llu", r->id,
+            logLastBufFreeIndex(&r->log));
     }
 
     r->leader_state.change = NULL;

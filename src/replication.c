@@ -112,7 +112,7 @@ static int sendAppendEntries(struct raft *r,
         if (args->entries_reload && j != 0) {
             evtInfof("raft(%llx) not first index freed %llu %u %u %llu", r->id,
                 args->prev_log_index, args->n_entries, j,
-                logUnFreedIndex(&r->log));
+                logLastBufFreeIndex(&r->log));
         }
     }
 
@@ -1757,7 +1757,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
     if (r->enable_free_trailing && snapshot->index) {
-        logFreeEntriesBufForward(&r->log, snapshot->index - 1);
+        logFreeEntryBuf(&r->log, snapshot->index - 1);
     }
 out:
     snapshotClose(&r->snapshot.pending);

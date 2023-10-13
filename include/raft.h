@@ -257,7 +257,8 @@ struct raft_log
         raft_index last_index; /* Snapshot replaces all entries up to here. */
         raft_term last_term;   /* Term of last index. */
     } snapshot;
-    raft_index unfreed_index;        /* 从这个index开始释放，初始化为1 */
+    raft_index last_buf_free_index; /* Index of last freed buf entry. */
+    struct raft_log_hook *hook;  /* Hook functions for log.  */
 };
 
 /**
@@ -681,6 +682,29 @@ struct raft_snapshot_sampler {
 	raft_time		     last_time;
 };
 
+struct raft_log_hook {
+	void *data;
+	/**
+     * Called after log close.
+     */
+	void (*log_close)(struct raft_log_hook *h);
+	/**
+     * Called after entry add to queue.
+     */
+	void (*entry_add)(struct raft_log_hook *h, const struct raft_entry *entry,
+			  raft_index index);
+	/**
+     * Called after entry remove from queue.
+     */
+	void (*entry_remove)(struct raft_log_hook *h,
+                         const struct raft_entry *entry, raft_index index);
+	/**
+     * Called before release entry's buf. the entry is still in the queue.
+     */
+	void (*entry_release)(struct raft_log_hook *h,
+                          const struct raft_entry *entry, raft_index index);
+};
+
 /**
  * Hold and drive the state of a single raft server in a cluster.
  */
@@ -1071,6 +1095,11 @@ RAFT_API raft_index raft_last_index(struct raft *r);
  * Return the index of the last entry that was applied to the local FSM.
  */
 RAFT_API raft_index raft_last_applied(struct raft *r);
+
+/**
+ * Return the index of the last entry that was commited.
+ */
+RAFT_API raft_index raft_commit_index(struct raft *r);
 
 /* Common fields across client request types. */
 #define RAFT__REQUEST \
@@ -1467,6 +1496,8 @@ typedef int (raft_dump_fn)(char *fmt, ...);
  * Dump raft's internal status
  */
 RAFT_API void raft_dump(struct raft *r, raft_dump_fn dump);
+
+RAFT_API void raft_set_log_hook(struct raft *r, struct raft_log_hook *hook);
 
 #undef RAFT__REQUEST
 

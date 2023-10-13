@@ -499,3 +499,8 @@ void raft_dump(struct raft *r, raft_dump_fn dump)
         raft_dump_progress(r, dump);
     }
 }
+
+void raft_set_log_hook(struct raft *r, struct raft_log_hook *hook)
+{
+    logSetHook(&r->log, hook);
+}

@@ -840,10 +840,10 @@ struct raft
             raft_index round_index;         /* Target of the current round. */
             raft_time round_start;          /* Start of current round. */
             struct request_registry reg;    /* Outstanding client requests. */
-            raft_index min_match_index;     /* The minimum match index */
-            raft_id min_match_replica;      /* The minimum replica */
             raft_index min_sync_match_index;/* The minimum sync match index. */
             raft_index min_sync_match_replica; /* The minimum sync replica. */
+            /* Replica between min and max timeout*/
+            unsigned short replica_sync_between_min_max_timeout;
             bool removed_from_cluster;         /* Removed from cluster */
         } leader_state;
     };
@@ -911,7 +911,8 @@ struct raft
     };
     bool sync_replication;
     bool sync_snapshot;
-    unsigned sync_replication_timeout;
+    unsigned sync_replica_timeout_min;
+    unsigned sync_replica_timeout_max;
 
     /* Fields for cope with append */
     unsigned nr_appending_requests;
@@ -928,11 +929,17 @@ struct raft
     bool enable_election_at_start;
     /* Flag for raft dynamic change log trailing */
     bool enable_dynamic_trailing;
+    unsigned max_dynamic_trailing;
     /* Flag for raft free log trailing buffer */
     bool enable_free_trailing;
     struct raft_snapshot_sampler sampler;
     raft_index pkt_id;
     raft_time latest_entry_time;
+    struct {
+	    bool     enable;    /* Flag for enable aggressive snapshot */
+	    unsigned threshold; /* N. of entries before snapshot */
+	    unsigned trailing;  /* N. of trailing entries to retain */
+    } aggressive_snapshot;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1423,7 +1430,9 @@ RAFT_API void raft_set_sync_snapshot(struct raft *r , bool sync);
 /**
  * Set sync replication time out
  */
-RAFT_API void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs);
+RAFT_API void raft_set_sync_replica_timeout_min(struct raft *r, unsigned msecs);
+
+RAFT_API void raft_set_sync_replica_timeout_max(struct raft *r, unsigned msecs);
 
 /**
  * Get min sync match index
@@ -1449,6 +1458,11 @@ RAFT_API void raft_enable_request_hook(struct raft *r, bool enable);
  * Set enable dynamic trailing @enable
  */
 RAFT_API void raft_enable_dynamic_trailing(struct raft *r, bool enable);
+
+/**
+ * Set max dynamic trailing
+ */
+RAFT_API void raft_set_max_dynamic_trailing(struct raft *r, unsigned trailing);
 
 /**
  * Set enable free trailing @enable
@@ -1497,7 +1511,16 @@ typedef int (raft_dump_fn)(char *fmt, ...);
  */
 RAFT_API void raft_dump(struct raft *r, raft_dump_fn dump);
 
+/**
+ * Set log hook.
+ */
 RAFT_API void raft_set_log_hook(struct raft *r, struct raft_log_hook *hook);
+
+/**
+ * Set aggressive snapshot.
+ */
+RAFT_API void raft_set_aggressive_snapshot(struct raft *r, bool enable,
+					   unsigned threshold, unsigned trailing);
 
 #undef RAFT__REQUEST
 

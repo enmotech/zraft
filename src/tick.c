@@ -41,6 +41,8 @@ static int tickFollower(struct raft *r)
         return rv;
     }
 
+    replicationRemoveTrailing(r);
+
     /* Check if we need to start an election.
      *
      * From Section 3.3:
@@ -204,9 +206,7 @@ static int tickLeader(struct raft *r)
         progressUpdateMinMatch(r);
     }
 
-    if (r->enable_dynamic_trailing) {
-        replicationRemoveTrailing(r);
-    }
+    replicationRemoveTrailing(r);
 
     /* Possibly send heartbeats.
      *

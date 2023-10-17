@@ -20,11 +20,13 @@
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
 #define DEFAULT_INSTALL_SNAPSHOT_TIMEOUT 30000 /* 30 seconds */
+#define DEFAULT_DYNAMIC_MAX_TRAILING 128
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 #define DEFAULT_SNAPSHOT_TRAILING 2048
 #define DEFAULT_MESSAGE_LOG_THRESHOLD 32
 #define DEFAULT_INFLIGHT_LOG_THRESHOLD 0
-#define DEFAULT_SYNC_REPLICATION_TIMEOUT 3000
+#define DEFAULT_SYNC_REPLICATION_TIMEOUT_MIN 1000
+#define DEFAULT_SYNC_REPLICATION_TIMEOUT_MAX 7000
 #define SNAPSHOT_SAMPLE_SPAN 10000 /* Snapshot sample span in ms */
 #define SNAPSHOT_SAMPLE_SPAN_MIN 1000 /* Snapshot sample min span in ms */
 #define SNAPSHOT_SAMPLE_PERIOD 100 /* Snapshot sample period in ms */
@@ -78,16 +80,19 @@ int raft_init(struct raft *r,
     r->hook = &defaultHook;
     r->sync_replication = false;
     r->sync_snapshot = false;
-    r->sync_replication_timeout = DEFAULT_SYNC_REPLICATION_TIMEOUT;
+    r->sync_replica_timeout_min = DEFAULT_SYNC_REPLICATION_TIMEOUT_MIN;
+    r->sync_replica_timeout_max = DEFAULT_SYNC_REPLICATION_TIMEOUT_MAX;
     r->nr_appending_requests = 0;
     r->prev_append_status = 0;
     r->quorum = RAFT_MAJORITY;
     r->non_voter_grant_vote = false;
     r->enable_request_hook = false;
     r->enable_dynamic_trailing = false;
+    r->max_dynamic_trailing = DEFAULT_DYNAMIC_MAX_TRAILING;
     r->enable_free_trailing = false;
     r->enable_election_at_start = true;
     r->pkt_id = 0;
+    r->aggressive_snapshot.enable = false;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -366,9 +371,14 @@ void raft_set_sync_snapshot(struct raft *r , bool sync)
 	r->sync_snapshot = sync;
 }
 
-void raft_set_sync_replication_timeout(struct raft *r, unsigned msecs)
+void raft_set_sync_replica_timeout_min(struct raft *r, unsigned msecs)
 {
-	r->sync_replication_timeout = msecs;
+	r->sync_replica_timeout_min = msecs;
+}
+
+void raft_set_sync_replica_timeout_max(struct raft *r, unsigned msecs)
+{
+    r->sync_replica_timeout_max = msecs;
 }
 
 raft_index raft_min_sync_match_index(struct raft *r)
@@ -395,6 +405,11 @@ void raft_enable_request_hook(struct raft *r, bool enable)
 
 void raft_enable_dynamic_trailing(struct raft *r, bool enable){
     r->enable_dynamic_trailing = enable;
+}
+
+void raft_set_max_dynamic_trailing(struct raft *r, unsigned trailing)
+{
+    r->max_dynamic_trailing = trailing;
 }
 
 void raft_enable_free_trailing(struct raft *r, bool enable){
@@ -479,28 +494,45 @@ static void raft_dump_progress(struct raft *r, raft_dump_fn dump)
 
 void raft_dump(struct raft *r, raft_dump_fn dump)
 {
-    unsigned i;
-    struct raft_server *s;
+	unsigned	    i;
+	struct raft_server *s;
 
-    dump("raft(%lx) role %d state %u term %lu voted_for %lx\n", r->id, r->role,
-	 r->state, r->current_term, r->voted_for);
-    dump("raft(%lx) index %lu/%lu/%lu/%lu\n", r->id, r->last_stored,
-	 r->commit_index, r->last_applying, r->last_applied);
-    dump("raft(%lx) configuration %lu/%lu phase %d\n", r->id, r->configuration_index,
-	 r->configuration_uncommitted_index, r->configuration.phase);
+	dump("raft(%lx) role %d state %u term %lu voted_for %lx\n", r->id,
+	     r->role, r->state, r->current_term, r->voted_for);
+	dump("raft(%lx) index %lu/%lu/%lu/%lu\n", r->id, r->last_stored,
+	     r->commit_index, r->last_applying, r->last_applied);
+	dump("raft(%lx) configuration %lu/%lu phase %d\n", r->id,
+	     r->configuration_index, r->configuration_uncommitted_index,
+	     r->configuration.phase);
+	dump("raft(%lx) snapshot index %lu term %lu threshold %u trailing %u\n",
+	     r->id, r->log.snapshot.last_index, r->log.snapshot.last_term,
+	     r->snapshot.threshold, r->snapshot.trailing);
+	if (r->state == RAFT_FOLLOWER) {
+		dump("raft(%lx) leader snapshot index %u trailing %u\n",
+		     r->id, r->follower_state.current_leader.snapshot_index,
+		     r->follower_state.current_leader.trailing);
+	}
 
-    for (i = 0; i < r->configuration.n; ++i) {
-        s = &r->configuration.servers[i];
-        dump("raft(%lx) configuration member %u %llx role %d/%d group %d\n",
-            r->id, i, s->id, s->role, s->role_new, s->group);
-    }
+	for (i = 0; i < r->configuration.n; ++i) {
+		s = &r->configuration.servers[i];
+		dump("raft(%lx) configuration member %u %llx role %d/%d group %d\n",
+		     r->id, i, s->id, s->role, s->role_new, s->group);
+	}
 
-    if (r->state == RAFT_LEADER) {
-        raft_dump_progress(r, dump);
-    }
+	if (r->state == RAFT_LEADER) {
+		raft_dump_progress(r, dump);
+	}
 }
 
 void raft_set_log_hook(struct raft *r, struct raft_log_hook *hook)
 {
     logSetHook(&r->log, hook);
+}
+
+void raft_set_aggressive_snapshot(struct raft *r, bool enable,
+                                  unsigned threshold, unsigned trailing)
+{
+    r->aggressive_snapshot.enable = enable;
+    r->aggressive_snapshot.threshold = threshold;
+    r->aggressive_snapshot.trailing = trailing;
 }

@@ -353,10 +353,9 @@ void progressUpdateMinMatch(struct raft *r)
 	struct raft_progress *p;
     raft_time now = r->io->time(r->io);
 
-    r->leader_state.min_match_index = logLastIndex(&r->log);
-    r->leader_state.min_match_replica = 0;
     r->leader_state.min_sync_match_index = logLastIndex(&r->log);
     r->leader_state.min_sync_match_replica = 0;
+    r->leader_state.replica_sync_between_min_max_timeout = 0;
 
 	assert(r->sync_replication);
 	for (i = 0; i < r->configuration.n; ++i) {
@@ -371,18 +370,16 @@ void progressUpdateMinMatch(struct raft *r)
         }
 
 		p = &r->leader_state.progress[i];
-		if (p->match_index <= r->leader_state.min_match_index) {
-			r->leader_state.min_match_index = p->match_index;
-			r->leader_state.min_match_replica = s->id;
-		}
-
-        if (p->recent_match_time + r->sync_replication_timeout < now) {
-            continue;
+        if (p->recent_match_time + r->sync_replica_timeout_min >= now) {
+            if (p->match_index <= r->leader_state.min_sync_match_index) {
+                r->leader_state.min_sync_match_index = p->match_index;
+                r->leader_state.min_sync_match_replica = s->id;
+            }
         }
 
-        if (p->match_index <= r->leader_state.min_sync_match_index) {
-            r->leader_state.min_sync_match_index = p->match_index;
-            r->leader_state.min_sync_match_replica = s->id;
+        if (p->recent_match_time + r->sync_replica_timeout_min < now
+            && p->recent_match_time + r->sync_replica_timeout_max >= now) {
+            r->leader_state.replica_sync_between_min_max_timeout += 1;
         }
 	}
 }

@@ -388,7 +388,8 @@ void logInit(struct raft_log *l)
     l->refs_size = 0;
     l->snapshot.last_index = 0;
     l->snapshot.last_term = 0;
-    l->unfreed_index = 1;
+    l->last_buf_free_index = 0;
+    l->hook = NULL;
 }
 
 /* Return the index of the i'th entry in the log. */
@@ -411,6 +412,45 @@ static struct raft_entry *entryAt(struct raft_log *l, size_t i)
     return &l->entries[positionAt(l, i)];
 }
 
+static void hookClose(struct raft_log *l)
+{
+    struct raft_log_hook *hook = l->hook;
+
+    if (!hook || !hook->log_close)
+        return;
+    hook->log_close(hook);
+}
+
+static void hookEntryAdd(struct raft_log *l, struct raft_entry *entry,
+                             raft_index index)
+{
+    struct raft_log_hook *hook = l->hook;
+
+    if (!hook || !hook->entry_add)
+        return;
+    hook->entry_add(hook, entry, index);
+}
+
+static void hookEntryRemove(struct raft_log *l, struct raft_entry *entry,
+                                raft_index index)
+{
+    struct raft_log_hook *hook = l->hook;
+
+    if (!hook || !hook->entry_remove)
+        return;
+    hook->entry_remove(hook, entry, index);
+}
+
+static void hookEntryRelease(struct raft_log *l, struct raft_entry *entry,
+                                raft_index index)
+{
+    struct raft_log_hook *hook = l->hook;
+
+    if (!hook || !hook->entry_release)
+        return;
+    hook->entry_release(hook, entry, index);
+}
+
 void logClose(struct raft_log *l)
 {
     void *batch = NULL; /* Last batch that has been freed */
@@ -427,6 +467,7 @@ void logClose(struct raft_log *l)
             size_t key = refsKey(index, l->refs_size);
             struct raft_entry_ref *slot = &l->refs[key];
 
+            hookEntryRemove(l, entry, index);
             /* We require that there are no outstanding references to active
              * entries. */
             assert(slot->count == 1);
@@ -456,6 +497,7 @@ void logClose(struct raft_log *l)
     if (l->refs != NULL) {
         raft_free(l->refs);
     }
+    hookClose(l);
 }
 
 void logStart(struct raft_log *l,
@@ -556,6 +598,8 @@ int logAppend(struct raft_log *l,
     assert((l->size & (l->size - 1)) == 0);
     l->back += 1;
     l->back = l->back & (l->size - 1);
+
+    hookEntryAdd(l, entry, index);
 
     return 0;
 }
@@ -899,6 +943,8 @@ static void removeSuffix(struct raft_log *l,
         }
 
         entry = &l->entries[l->back];
+
+        hookEntryRemove(l, entry, start + n - i - 1);
         unref = refsDecr(l, entry->term, start + n - i - 1);
 
         if (unref && destroy) {
@@ -927,6 +973,7 @@ static void removePrefix(struct raft_log *l, const raft_index index)
 {
     size_t i;
     size_t n;
+    raft_index rindex;
 
     assert(l != NULL);
     assert(index > 0);
@@ -939,6 +986,7 @@ static void removePrefix(struct raft_log *l, const raft_index index)
         struct raft_entry *entry;
         bool unref;
 
+        rindex = indexAt(l, 0);
         entry = &l->entries[l->front];
 
         if (l->front == l->size - 1) {
@@ -948,6 +996,7 @@ static void removePrefix(struct raft_log *l, const raft_index index)
         }
         l->offset++;
 
+        hookEntryRemove(l, entry, rindex);
         unref = refsDecr(l, entry->term, l->offset);
 
         if (unref) {
@@ -977,7 +1026,7 @@ void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
     removePrefix(l, last_index - trailing);
 }
 
-void logFreeEntriesBufForward(struct raft_log *l, raft_index last_index)
+void logFreeEntryBuf(struct raft_log *l, raft_index last_index)
 {
     struct raft_entry *entry;
     unsigned short n_refs;
@@ -986,7 +1035,7 @@ void logFreeEntriesBufForward(struct raft_log *l, raft_index last_index)
 
     if (logNumEntries(l) == 0)
         return;
-    for (idx = max(l->unfreed_index, indexAt(l, 0)); idx <= last_index; idx++) {
+    for (idx = max(l->last_buf_free_index + 1, indexAt(l, 0)); idx <= last_index; idx++) {
         i = locateEntry(l, idx);
         if(i == l->size)
             break;
@@ -996,20 +1045,20 @@ void logFreeEntriesBufForward(struct raft_log *l, raft_index last_index)
         n_refs = refsCount(l, entry->term, idx);
         if (n_refs > 1)
             break;
+        hookEntryRelease(l, entry, idx);
         destroyEntry(l, entry);
+        l->last_buf_free_index = idx;
     }
-    assert(idx >= l->unfreed_index);
-    l->unfreed_index = idx;
 }
 
-void logResetUnFreedIndex(struct raft_log *l)
+void logResetLastBufFreeIndex(struct raft_log *l)
 {
-    l->unfreed_index = 1;
+    l->last_buf_free_index = 0;
 }
 
-raft_index logUnFreedIndex(struct raft_log *l)
+raft_index logLastBufFreeIndex(struct raft_log *l)
 {
-    return l->unfreed_index;
+    return l->last_buf_free_index;
 }
 
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)
@@ -1037,4 +1086,9 @@ raft_term logStartTerm(struct raft *r)
     if (logStartIndex(r) == 0)
         return 0;
     return r->log.entries[r->log.front].term;
+}
+
+void logSetHook(struct raft_log *l, struct raft_log_hook *hook)
+{
+    l->hook = hook;
 }

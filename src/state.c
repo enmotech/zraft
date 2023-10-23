@@ -44,3 +44,8 @@ raft_index raft_last_applied(struct raft *r)
 {
     return r->last_applied;
 }
+
+raft_index raft_commit_index(struct raft *r)
+{
+    return r->commit_index;
+}

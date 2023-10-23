@@ -279,9 +279,9 @@ int convertToLeader(struct raft *r)
         return rv;
     }
     if (r->enable_free_trailing) {
-        logResetUnFreedIndex(&r->log);
-        evtInfof("raft(%llx) reset unfreed index %llu", r->id,
-            logUnFreedIndex(&r->log));
+        logResetLastBufFreeIndex(&r->log);
+        evtInfof("raft(%llx) reset buf free index %llu", r->id,
+            logLastBufFreeIndex(&r->log));
     }
 
     r->leader_state.change = NULL;
@@ -292,11 +292,10 @@ int convertToLeader(struct raft *r)
     r->leader_state.round_index = 0;
     r->leader_state.round_start = 0;
     r->leader_state.remove_id = 0;
-    r->leader_state.min_match_index = 0;
-    r->leader_state.min_match_replica = 0;
     r->leader_state.min_sync_match_index = 0;
     r->leader_state.min_sync_match_replica = 0;
     r->leader_state.removed_from_cluster = false;
+    r->leader_state.replica_sync_between_min_max_timeout = 0;
 
 
     if (r->state_change_cb)

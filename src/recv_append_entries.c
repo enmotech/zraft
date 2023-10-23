@@ -42,7 +42,8 @@ static void recvUpdateLeaderSnapshot(struct raft *r,
 					  raft_index snapshot_index, unsigned trailing)
 {
 	assert(r->state == RAFT_FOLLOWER);
-	if (r->follower_state.current_leader.snapshot_index == snapshot_index)
+	if (r->follower_state.current_leader.snapshot_index == snapshot_index &&
+	    r->follower_state.current_leader.trailing == trailing)
 		return;
 
 	evtIdInfof(r->id,

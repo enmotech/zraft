@@ -1233,3 +1233,137 @@ TEST(logRestore, wipe, setUp, tearDown, 0, NULL)
     munit_assert_int(LAST_INDEX, ==, 2);
     return MUNIT_OK;
 }
+
+/******************************************************************************
+ *
+ * logHook
+ *
+ *****************************************************************************/
+SUITE(logHook)
+
+static struct raft_log_hook g_hook;
+
+/* Close hook. */
+static bool g_hook_close_called;
+static void hookClose(struct raft_log_hook *hook)
+{
+    (void)hook;
+    g_hook_close_called = true;
+}
+
+static uint64_t g_hook_entry_close_remove_num;
+static void hookEntryCloseRemove(struct raft_log_hook *hook,
+                                 const struct raft_entry *entry,
+                                 raft_index index)
+{
+    (void)hook;
+    (void)entry;
+    (void)index;
+
+    g_hook_entry_close_remove_num += 1;
+}
+
+static void hookCloseTearDown(void *data)
+{
+    tearDown(data);
+    munit_assert_true(g_hook_close_called);
+    munit_assert_uint64(g_hook_entry_close_remove_num, ==, 128);
+}
+
+TEST(logHook, close, setUp, hookCloseTearDown, 0, NULL)
+{
+    struct fixture *f = data;
+
+    g_hook.log_close = hookClose;
+    g_hook.entry_remove = hookEntryCloseRemove;
+    logSetHook(&f->log, &g_hook);
+    APPEND_MANY(1, 128);
+    return MUNIT_OK;
+}
+
+/* Entry add hook.  */
+static uint64_t g_hook_entry_add_num;
+static void hookEntryAdd(struct raft_log_hook *hook,
+                         const struct raft_entry *entry, raft_index index)
+{
+    (void)hook;
+    (void)entry;
+    (void)index;
+
+    g_hook_entry_add_num += 1;
+}
+
+TEST(logHook, add, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    int nr_entries = 128;
+
+    g_hook.entry_add = hookEntryAdd;
+    logSetHook(&f->log, &g_hook);
+
+    APPEND_MANY(1, nr_entries);
+    munit_assert_uint64(g_hook_entry_add_num, ==, nr_entries);
+    return MUNIT_OK;
+}
+
+/* Entry remove hook.  */
+static uint64_t g_hook_entry_remove_num;
+static void hookEntryRemove(struct raft_log_hook *hook,
+                            const struct raft_entry *entry, raft_index index)
+{
+    (void)hook;
+    (void)entry;
+    (void)index;
+
+    g_hook_entry_remove_num += 1;
+}
+
+TEST(logHook, remove, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    int nr_entries = 128;
+
+    g_hook.entry_remove = hookEntryRemove;
+    logSetHook(&f->log, &g_hook);
+    APPEND_MANY(1, nr_entries);
+
+    logTruncate(&f->log, 121);
+    logFreeEntryBuf(&f->log, 120);
+    munit_assert_uint64(logLastBufFreeIndex(&f->log), ==, 120);
+    logDiscard(&f->log, 101);
+
+    munit_assert_uint64(g_hook_entry_remove_num, ==, 28);
+    return MUNIT_OK;
+}
+
+/* Entry release hook. */
+static uint64_t g_hook_entry_release_num;
+static void hookEntryRelease(struct raft_log_hook *hook,
+                             const struct raft_entry *entry, raft_index index)
+{
+    (void)hook;
+    (void)entry;
+    (void)index;
+
+    g_hook_entry_release_num += 1;
+}
+
+TEST(logHook, release, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    int nr_entries = 128;
+
+    g_hook.entry_release = hookEntryRelease;
+    logSetHook(&f->log, &g_hook);
+    APPEND_MANY(1, nr_entries);
+
+    logFreeEntryBuf(&f->log, 120);
+    munit_assert_uint64(logLastBufFreeIndex(&f->log), ==, 120);
+    logResetLastBufFreeIndex(&f->log);
+    logFreeEntryBuf(&f->log, 128);
+    munit_assert_uint64(logLastBufFreeIndex(&f->log), ==, 128);
+
+    munit_assert_uint64(g_hook_entry_release_num, ==, 128);
+    return MUNIT_OK;
+
+}

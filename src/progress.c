@@ -379,8 +379,8 @@ void progressUpdateMinMatch(struct raft *r)
 
         if (p->recent_match_time + r->sync_replica_timeout_min < now
             && p->recent_match_time + r->sync_replica_timeout_max >= now) {
-            r->leader_state.replica_sync_between_min_max_timeout += 1;
-        }
+	        r->leader_state.replica_sync_between_min_max_timeout++;
+	    }
 	}
 }
 

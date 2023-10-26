@@ -1542,6 +1542,8 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     struct raft *r = request->raft;
     raft_index index = request->index;
     struct raft_apply *creq;
+    const struct raft_entry *entry;
+    bool skip = false;
 
     assert(r->nr_applying);
     r->nr_applying -= 1;
@@ -1567,8 +1569,21 @@ static void applyCommandCb(struct raft_fsm_apply *req,
                 r->last_applying, r->last_applied);
             r->last_applying = r->last_applied;
         }
+
+        entry = logGet(&r->log, index);
+        assert(entry);
+        if (r->hook->entry_skip_on_apply_fail && r->last_applied + 1 == index)
+            skip = r->hook->entry_skip_on_apply_fail(r->hook, index, entry);
+
+        if (skip) {
+            evtNoticef("raft(%llx) skip apply index %llu on failed, %d",
+                r->id, index, status);
+            goto err_skip_failed;
+        }
         return;
     }
+err_skip_failed:
+    assert(r->last_applied + 1 == index);
     r->last_applied = index;
     if (r->nr_applying == 0) {
         r->last_applying = r->last_applied;

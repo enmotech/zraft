@@ -163,6 +163,32 @@ static bool checkContactQuorum(struct raft *r)
     return ret;
 }
 
+static void checkChangeOnMatch(struct raft *r)
+{
+    unsigned i;
+    raft_index index;
+    struct raft_change *change;
+
+    assert(r->state == RAFT_LEADER);
+    change = r->leader_state.change;
+    if (!change->cb_on_match || !r->enable_change_cb_on_match)
+        return;
+
+    i = configurationIndexOf(&r->configuration, change->match_id);
+    if (i == r->configuration.n)
+        return;
+    index = progressMatchIndex(r, i);
+    if (index < change->index)
+        return;
+
+    evtNoticef("raft(%llx) change on match, match_id %llx index %llu",
+               r->id, change->match_id, change->index);
+    r->leader_state.change = NULL;
+    if (change != NULL && change->cb != NULL) {
+        change->cb(change, 0);
+    }
+}
+
 /* Apply time-dependent rules for leaders (Figure 3.1). */
 static int tickLeader(struct raft *r)
 {
@@ -263,6 +289,10 @@ static int tickLeader(struct raft *r)
                 change->cb(change, RAFT_NOCONNECTION);
             }
         }
+    }
+
+    if (r->leader_state.change) {
+        checkChangeOnMatch(r);
     }
 
     return 0;

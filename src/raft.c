@@ -93,6 +93,7 @@ int raft_init(struct raft *r,
     r->enable_election_at_start = true;
     r->pkt_id = 0;
     r->aggressive_snapshot.enable = false;
+    r->enable_change_cb_on_match = false;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -535,4 +536,10 @@ void raft_set_aggressive_snapshot(struct raft *r, bool enable,
     r->aggressive_snapshot.enable = enable;
     r->aggressive_snapshot.threshold = threshold;
     r->aggressive_snapshot.trailing = trailing;
+}
+
+void raft_enable_change_cb_on_match(struct raft *r, bool enable)
+{
+    r->enable_change_cb_on_match = enable;
+    evtNoticef("raft(%llx) set change on match %d", r->id, enable);
 }

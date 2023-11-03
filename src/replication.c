@@ -738,6 +738,10 @@ static int triggerActualPromotion(struct raft *r)
         goto err;
     }
 
+    if (r->leader_state.change) {
+        r->leader_state.change->index = index;
+    }
+
     entry = logGet(&r->log, index);
     assert(entry);
     assert(entry->type == RAFT_CHANGE);

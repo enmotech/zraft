@@ -160,8 +160,6 @@ static int clientChangeConfiguration(
     const struct raft_entry *entry;
     unsigned server_index;
 
-    (void)req;
-
     /* Index of the entry being appended. */
     index = logLastIndex(&r->log) + 1;
 
@@ -172,6 +170,7 @@ static int clientChangeConfiguration(
         goto err;
     }
 
+    req->index = index;
     evtIdNoticef(r->id, "raft(%llx) conf append at index %lu", r->id, index);
     evtDumpConfiguration(r, configuration);
 
@@ -232,6 +231,8 @@ int raft_add(struct raft *r,
     struct raft_configuration configuration;
     int rv;
 
+    req->cb_on_match = false;
+    req->match_id = 0;
     rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
         evtNoticef("raft(%llx) change conf failed %d", r->id, rv);
@@ -539,6 +540,8 @@ int raft_remove(struct raft *r,
     int rv;
     bool joint = r->configuration.phase == RAFT_CONF_JOINT;
 
+    req->cb_on_match = false;
+    req->match_id = 0;
     rv = membershipCanChangeConfiguration(r, joint);
     if (rv != 0) {
         evtErrf("raft(%llx) change conf failed %d", r->id, rv);

@@ -278,12 +278,6 @@ int convertToLeader(struct raft *r)
         evtErrf("raft(%llx) build array failed %d", r->id, rv);
         return rv;
     }
-    if (r->enable_free_trailing) {
-        logResetLastBufFreeIndex(&r->log);
-        evtInfof("raft(%llx) reset buf free index %llu", r->id,
-            logLastBufFreeIndex(&r->log));
-    }
-
     r->leader_state.change = NULL;
 
     /* Reset promotion state. */

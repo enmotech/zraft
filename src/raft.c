@@ -89,7 +89,6 @@ int raft_init(struct raft *r,
     r->enable_request_hook = false;
     r->enable_dynamic_trailing = false;
     r->max_dynamic_trailing = DEFAULT_DYNAMIC_MAX_TRAILING;
-    r->enable_free_trailing = false;
     r->enable_election_at_start = true;
     r->pkt_id = 0;
     r->aggressive_snapshot.enable = false;
@@ -411,10 +410,6 @@ void raft_enable_dynamic_trailing(struct raft *r, bool enable){
 void raft_set_max_dynamic_trailing(struct raft *r, unsigned trailing)
 {
     r->max_dynamic_trailing = trailing;
-}
-
-void raft_enable_free_trailing(struct raft *r, bool enable){
-    r->enable_free_trailing = enable;
 }
 
 void raft_enable_election_at_start(struct raft *r, bool enable)

@@ -22,14 +22,6 @@ void logStart(struct raft_log *l,
               raft_term snapshot_term,
               raft_index start_index);
 
-void logFreeEntryBuf(struct raft_log *l, raft_index last_index);
-
-/* Reset freed entry index */
-void logResetLastBufFreeIndex(struct raft_log *l);
-
-/* Get the unfreed index. */
-raft_index logLastBufFreeIndex(struct raft_log *l);
-
 /* Get the number of entries the log currently contains. */
 size_t logNumEntries(struct raft_log *l);
 

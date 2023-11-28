@@ -1327,43 +1327,7 @@ TEST(logHook, remove, setUp, tearDown, 0, NULL)
     logSetHook(&f->log, &g_hook);
     APPEND_MANY(1, nr_entries);
 
-    logTruncate(&f->log, 121);
-    logFreeEntryBuf(&f->log, 120);
-    munit_assert_uint64(logLastBufFreeIndex(&f->log), ==, 120);
-    logDiscard(&f->log, 101);
-
+    logTruncate(&f->log, 101);
     munit_assert_uint64(g_hook_entry_remove_num, ==, 28);
     return MUNIT_OK;
-}
-
-/* Entry release hook. */
-static uint64_t g_hook_entry_release_num;
-static void hookEntryRelease(struct raft_log_hook *hook,
-                             const struct raft_entry *entry, raft_index index)
-{
-    (void)hook;
-    (void)entry;
-    (void)index;
-
-    g_hook_entry_release_num += 1;
-}
-
-TEST(logHook, release, setUp, tearDown, 0, NULL)
-{
-    struct fixture *f = data;
-    int nr_entries = 128;
-
-    g_hook.entry_release = hookEntryRelease;
-    logSetHook(&f->log, &g_hook);
-    APPEND_MANY(1, nr_entries);
-
-    logFreeEntryBuf(&f->log, 120);
-    munit_assert_uint64(logLastBufFreeIndex(&f->log), ==, 120);
-    logResetLastBufFreeIndex(&f->log);
-    logFreeEntryBuf(&f->log, 128);
-    munit_assert_uint64(logLastBufFreeIndex(&f->log), ==, 128);
-
-    munit_assert_uint64(g_hook_entry_release_num, ==, 128);
-    return MUNIT_OK;
-
 }

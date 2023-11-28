@@ -257,7 +257,6 @@ struct raft_log
         raft_index last_index; /* Snapshot replaces all entries up to here. */
         raft_term last_term;   /* Term of last index. */
     } snapshot;
-    raft_index last_buf_free_index; /* Index of last freed buf entry. */
     struct raft_log_hook *hook;  /* Hook functions for log.  */
 };
 
@@ -302,7 +301,6 @@ struct raft_append_entries
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n_entries;         /* Size of the log entries array. */
     raft_index snapshot_index;  /* Index of current snapshot */
-    bool entries_reload;
     unsigned trailing;
 };
 
@@ -930,8 +928,6 @@ struct raft
     /* Flag for raft dynamic change log trailing */
     bool enable_dynamic_trailing;
     unsigned max_dynamic_trailing;
-    /* Flag for raft free log trailing buffer */
-    bool enable_free_trailing;
     struct raft_snapshot_sampler sampler;
     raft_index pkt_id;
     raft_time latest_entry_time;
@@ -1473,10 +1469,6 @@ RAFT_API void raft_enable_dynamic_trailing(struct raft *r, bool enable);
  */
 RAFT_API void raft_set_max_dynamic_trailing(struct raft *r, unsigned trailing);
 
-/**
- * Set enable free trailing @enable
- */
-RAFT_API void raft_enable_free_trailing(struct raft *r, bool enable);
 /*
 * Set the only voter elect as leader at start
 */

@@ -513,6 +513,31 @@ static struct request *getRequest(struct raft *r,
     return requestRegDel(&r->leader_state.reg, index);
 }
 
+static void fireRequestCb(struct raft *r, raft_index index, int status)
+{
+    struct request	*req = getRequest(r, index);
+    struct raft_apply	*apply;
+    struct raft_barrier *barrier;
+
+    if (!req) {
+	    evtWarnf("raft(%llx) get request for index %lu not exist", index);
+	    return;
+    }
+    assert(req->type == RAFT_COMMAND || req->type == RAFT_BARRIER);
+    switch (req->type) {
+        case RAFT_COMMAND:
+            apply = (struct raft_apply *)req;
+            if (apply->cb)
+                apply->cb(apply, status, NULL);
+	    break;
+        case RAFT_BARRIER:
+            barrier = (struct raft_barrier *)req;
+            if (barrier->cb)
+                barrier->cb(barrier, status);
+	    break;
+    };
+}
+
 /* Invoked once a disk write request for new entries has been completed. */
 static void appendLeaderCb(struct raft_io_append *req, int status)
 {
@@ -532,15 +557,8 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      * these entries to it) and fire the request callback. */
     if (status != 0) {
         evtErrf("raft(%llx) append leader failed %d", r->id, status);
-        struct raft_apply *apply;
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        apply = (struct raft_apply *)getRequest(r, request->index);
-        if (apply != NULL) {
-            if (apply->cb != NULL) {
-                apply->cb(apply, status, NULL);
-            }
-        }
-
+        fireRequestCb(r, request->index, status);
         if (r->state != RAFT_FOLLOWER) {
             convertToFollower(r);
             evtNoticef("raft(%llx) convert from leader to follower",

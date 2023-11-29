@@ -85,7 +85,6 @@ static bool refsDecrTest(struct raft_log *l,
         unsigned i;                                              \
         for (i = 0; i < CLUSTER_N; i++) {                        \
             raft_enable_dynamic_trailing(CLUSTER_RAFT(i), true); \
-            raft_enable_free_trailing(CLUSTER_RAFT(i), true);    \
         }                                                        \
     }
 /* Set the snapshot threshold on all servers of the cluster */

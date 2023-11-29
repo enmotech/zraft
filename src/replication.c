@@ -89,33 +89,16 @@ static int sendAppendEntries(struct raft *r,
     raft_index next_index = prev_index + 1;
     raft_index optimistic_next_index;
     int rv;
-    unsigned j;
 
     args->pkt = nextPktId(r);
     args->term = r->current_term;
     args->prev_log_index = prev_index;
     args->prev_log_term = prev_term;
     args->snapshot_index = r->log.snapshot.last_index;
-    args->entries_reload = false;
     args->trailing = r->snapshot.trailing;
 
     rv = logAcquireWithMax(&r->log, next_index, &args->entries,
 			   &args->n_entries, r->message_log_threshold);
-    if(r->enable_free_trailing){
-        for (j = 0; j < args->n_entries; ++j) {
-            if (args->entries[j].buf.base == NULL) {
-                args->entries_reload = true;
-                break;
-            }
-        }
-
-        if (args->entries_reload && j != 0) {
-            evtInfof("raft(%llx) not first index freed %llu %u %u %llu", r->id,
-                args->prev_log_index, args->n_entries, j,
-                logLastBufFreeIndex(&r->log));
-        }
-    }
-
     if (rv != 0) {
         evtErrf("raft(%llx) log acquire failed %d", r->id, rv);
         goto err;
@@ -1797,9 +1780,6 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     }
 
     logSnapshot(&r->log, snapshot->index, r->snapshot.trailing);
-    if (r->enable_free_trailing && snapshot->index) {
-        logFreeEntryBuf(&r->log, snapshot->index - 1);
-    }
 out:
     snapshotClose(&r->snapshot.pending);
     r->snapshot.pending.term = 0;

@@ -1276,9 +1276,6 @@ static void checkLeaderAppendOnly(struct raft_fixture *f)
     }
 
     raft = raft_fixture_get(f, (unsigned)f->leader_id - 1);
-
-    if(raft->enable_free_trailing)
-        return;
     last = logLastIndex(&f->log);
 
     for (index = 1; index <= last; index++) {

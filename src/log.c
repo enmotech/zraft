@@ -27,36 +27,6 @@ static size_t refsKey(const raft_index index, const size_t size)
     return (size_t)((index - 1) & (size - 1));
 }
 
-static unsigned short refsCount(struct raft_log *l,
-                    const raft_term term,
-                    const raft_index index)
-{
-    size_t key;                       /* Hash table key for the given index. */
-    struct raft_entry_ref *slot;      /* Slot for the given term/index */
-
-    assert(l != NULL);
-    assert(term > 0);
-    assert(index > 0);
-    key = refsKey(index, l->refs_size);
-
-    /* Lookup the slot associated with the given term/index, keeping track of
-     * its previous slot in the bucket list. */
-    slot = &l->refs[key];
-
-    while (1) {
-        if(slot == NULL) {
-            return 0;
-        }
-        assert(slot != NULL);
-        assert(slot->index == index);
-        if (slot->term == term) {
-            break;
-        }
-        slot = slot->next;
-    }
-    return slot->count;
-}
-
 /* Try to insert a new reference count item for the given log entry index into
  * the given reference count hash table.
  *
@@ -388,7 +358,6 @@ void logInit(struct raft_log *l)
     l->refs_size = 0;
     l->snapshot.last_index = 0;
     l->snapshot.last_term = 0;
-    l->last_buf_free_index = 0;
     l->hook = NULL;
 }
 
@@ -439,16 +408,6 @@ static void hookEntryRemove(struct raft_log *l, struct raft_entry *entry,
     if (!hook || !hook->entry_remove)
         return;
     hook->entry_remove(hook, entry, index);
-}
-
-static void hookEntryRelease(struct raft_log *l, struct raft_entry *entry,
-                                raft_index index)
-{
-    struct raft_log_hook *hook = l->hook;
-
-    if (!hook || !hook->entry_release)
-        return;
-    hook->entry_release(hook, entry, index);
 }
 
 void logClose(struct raft_log *l)
@@ -1024,41 +983,6 @@ void logSnapshot(struct raft_log *l, raft_index last_index, unsigned trailing)
     l->snapshot.last_term = last_term;
 
     removePrefix(l, last_index - trailing);
-}
-
-void logFreeEntryBuf(struct raft_log *l, raft_index last_index)
-{
-    struct raft_entry *entry;
-    unsigned short n_refs;
-    raft_index idx;
-    size_t i;
-
-    if (logNumEntries(l) == 0)
-        return;
-    for (idx = max(l->last_buf_free_index + 1, indexAt(l, 0)); idx <= last_index; idx++) {
-        i = locateEntry(l, idx);
-        if(i == l->size)
-            break;
-        entry = &l->entries[i];
-        if(entry->buf.base == NULL)
-            continue;
-        n_refs = refsCount(l, entry->term, idx);
-        if (n_refs > 1)
-            break;
-        hookEntryRelease(l, entry, idx);
-        destroyEntry(l, entry);
-        l->last_buf_free_index = idx;
-    }
-}
-
-void logResetLastBufFreeIndex(struct raft_log *l)
-{
-    l->last_buf_free_index = 0;
-}
-
-raft_index logLastBufFreeIndex(struct raft_log *l)
-{
-    return l->last_buf_free_index;
 }
 
 void logRestore(struct raft_log *l, raft_index last_index, raft_term last_term)

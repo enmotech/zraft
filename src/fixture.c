@@ -1311,26 +1311,36 @@ static void copyLeaderLog(struct raft_fixture *f)
     struct raft *raft = raft_fixture_get(f, (unsigned)f->leader_id - 1);
     struct raft_entry *entries;
     unsigned n;
+    unsigned total;
     size_t i;
     int rv;
     logClose(&f->log);
     logInit(&f->log);
-    rv = logAcquire(&raft->log, 1, &entries, &n);
+    total = (unsigned)logNumEntriesFromIndex(&raft->log, 1);
+    if (total == 0) {
+        return;
+    }
+    entries = raft_calloc(total, sizeof(*entries));
+    assert(entries);
+    rv = logAcquire(&raft->log, 1, &entries, &n, total);
     assert(rv == 0);
+    assert(n == total);
     for (i = 0; i < n; i++) {
         struct raft_entry *entry = &entries[i];
         struct raft_buffer buf;
         buf.len = entry->buf.len;
-	if (buf.len > 0) {
-		buf.base = raft_entry_malloc(buf.len);
-		assert(buf.base != NULL);
-		memcpy(buf.base, entry->buf.base, buf.len);
-	} else
-		buf.base = NULL;
-	rv = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
+	    if (buf.len > 0) {
+		    buf.base = raft_entry_malloc(buf.len);
+		    assert(buf.base != NULL);
+		    memcpy(buf.base, entry->buf.base, buf.len);
+	    } else {
+		    buf.base = NULL;
+        }
+        rv = logAppend(&f->log, entry->term, entry->type, &buf, NULL);
         assert(rv == 0);
     }
     logRelease(&raft->log, 1, entries, n);
+    raft_free(entries);
 }
 
 /* Update the commit index to match the one from the current leader. */

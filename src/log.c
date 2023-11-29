@@ -720,7 +720,19 @@ const struct raft_entry *logGet(struct raft_log *l, const raft_index index)
     return &l->entries[i];
 }
 
-int logAcquireWithMax(struct raft_log *l,
+size_t logNumEntriesFromIndex(struct raft_log *l, raft_index index)
+{
+    size_t i;
+
+    i = locateEntry(l, index);
+    if (i == l->size) {
+        return 0;
+    }
+
+    return i < l->back ? l->back - i : l->size - i + l->back;
+}
+
+int logAcquire(struct raft_log *l,
 		      const raft_index index,
 		      struct raft_entry *entries[],
 		      unsigned *n,
@@ -739,7 +751,6 @@ int logAcquireWithMax(struct raft_log *l,
 
     if (i == l->size || max == 0) {
         *n = 0;
-        *entries = NULL;
         return 0;
     }
 
@@ -755,13 +766,8 @@ int logAcquireWithMax(struct raft_log *l,
     }
 
     assert(*n > 0);
-    if (*n > max)
+    if (*n > max) {
 	    *n = max;
-
-    *entries = raft_calloc(*n, sizeof **entries);
-    if (*entries == NULL) {
-        evtErrf("%s", "calloc");
-        return RAFT_NOMEM;
     }
 
     assert((l->size & (l->size - 1)) == 0);
@@ -773,14 +779,6 @@ int logAcquireWithMax(struct raft_log *l,
     }
 
     return 0;
-}
-
-int logAcquire(struct raft_log *l,
-               const raft_index index,
-               struct raft_entry *entries[],
-               unsigned *n)
-{
-	return logAcquireWithMax(l, index, entries, n, UINT32_MAX);
 }
 
 /* Return true if the given batch is referenced by any entry currently in the
@@ -836,10 +834,6 @@ void logRelease(struct raft_log *l,
                 }
             }
         }
-    }
-
-    if (entries != NULL) {
-        raft_free(entries);
     }
 }
 

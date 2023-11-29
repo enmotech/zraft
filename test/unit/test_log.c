@@ -83,14 +83,25 @@ struct fixture
         }                                                          \
     }
 
-#define ACQUIRE(INDEX)                                  \
-    {                                                   \
-        int rv2;                                        \
-        rv2 = logAcquire(&f->log, INDEX, &entries, &n); \
-        munit_assert_int(rv2, ==, 0);                   \
-    }
+#define ACQUIRE(INDEX)                                               \
+	{                                                                \
+		int rv2;                                                     \
+		n = logNumEntriesFromIndex(&f->log, INDEX);                  \
+		if (n == 0) {                                                \
+			entries = NULL;                                          \
+		} else {                                                     \
+			entries = raft_calloc(n, sizeof(struct raft_entry));     \
+			munit_assert_not_null(entries);                          \
+		}                                                            \
+		rv2 = logAcquire(&f->log, INDEX, &entries, &n, n);           \
+		munit_assert_int(rv2, ==, 0);                                \
+	}
 
-#define RELEASE(INDEX) logRelease(&f->log, INDEX, entries, n);
+#define RELEASE(INDEX)                          \
+	{                                           \
+		logRelease(&f->log, INDEX, entries, n); \
+		raft_free(entries);                     \
+	}
 
 #define TRUNCATE(N) logTruncate(&f->log, N)
 #define SNAPSHOT(INDEX, TRAILING) logSnapshot(&f->log, INDEX, TRAILING)
@@ -802,17 +813,14 @@ TEST(logAcquire, oom, setUp, tearDown, 0, NULL)
 {
     struct fixture *f = data;
     struct raft_entry *entries;
-    unsigned n;
-    int rv;
 
     APPEND(1 /* term */);
 
     HeapFaultConfig(&f->heap, 0, 1);
     HeapFaultEnable(&f->heap);
 
-    rv = logAcquire(&f->log, 1, &entries, &n);
-    munit_assert_int(rv, ==, RAFT_NOMEM);
-
+    entries = raft_calloc(logNumEntries(&f->log), sizeof(*entries));
+    munit_assert_null(entries);
     return MUNIT_OK;
 }
 

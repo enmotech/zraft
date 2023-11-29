@@ -25,6 +25,9 @@ void logStart(struct raft_log *l,
 /* Get the number of entries the log currently contains. */
 size_t logNumEntries(struct raft_log *l);
 
+/* Get the number fo entries from index. */
+size_t logNumEntriesFromIndex(struct raft_log *l, raft_index index);
+
 /* Get the index of the last entry in the log. Return #0 if the log is empty. */
 raft_index logLastIndex(struct raft_log *l);
 
@@ -68,16 +71,10 @@ int logAppendConfiguration(struct raft_log *l,
  * memory referenced by the @buf attribute of the returned entries is guaranteed
  * to be valid until logRelease() is called. */
 int logAcquire(struct raft_log *l,
-               raft_index index,
+               const raft_index index,
                struct raft_entry *entries[],
-               unsigned *n);
-
-/* It's Same with logAcquire, except the max threshold*/
-int logAcquireWithMax(struct raft_log *l,
-                      const raft_index index,
-                      struct raft_entry *entries[],
-                      unsigned *n,
-                      unsigned max);
+               unsigned *n,
+               unsigned max);
 
 /* Release a previously acquired array of entries. */
 void logRelease(struct raft_log *l,

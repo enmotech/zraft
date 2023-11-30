@@ -59,7 +59,9 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
     }
 
     /* Tell the log that we're done referencing these entries. */
-    logRelease(&r->log, req->index, req->entries, req->n);
+    if (req->n) {
+        logRelease(&r->log, req->index, req->entries, req->n);
+    }
     raft_free(req);
 }
 
@@ -97,11 +99,20 @@ static int sendAppendEntries(struct raft *r,
     args->snapshot_index = r->log.snapshot.last_index;
     args->trailing = r->snapshot.trailing;
 
-    rv = logAcquireWithMax(&r->log, next_index, &args->entries,
-			   &args->n_entries, r->message_log_threshold);
+    req = raft_malloc(sizeof(*req) +
+		      sizeof(*req->entries) * r->message_log_threshold);
+    if (req == NULL) {
+        rv = RAFT_NOMEM;
+        evtErrf("%s", "malloc");
+        goto err_req_alloc;
+    }
+
+    args->entries = req->entries;
+    rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries,
+                   r->message_log_threshold);
     if (rv != 0) {
         evtErrf("raft(%llx) log acquire failed %d", r->id, rv);
-        goto err;
+        goto err_after_req_alloc;
     }
 
     /* From Section 3.5:
@@ -127,15 +138,9 @@ static int sendAppendEntries(struct raft *r,
     message.type = RAFT_IO_APPEND_ENTRIES;
     message.server_id = server->id;
 
-    req = raft_malloc(sizeof *req);
-    if (req == NULL) {
-        rv = RAFT_NOMEM;
-        evtErrf("%s", "malloc");
-        goto err_after_entries_acquired;
-    }
+
     req->raft = r;
     req->index = args->prev_log_index + 1;
-    req->entries = args->entries;
     req->n = args->n_entries;
     req->server_id = server->id;
     req->send.data = req;
@@ -145,7 +150,7 @@ static int sendAppendEntries(struct raft *r,
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
             evtErrf("raft(%llx) send failed %d", r->id, rv);
-        goto err_after_req_alloc;
+        goto err_after_entries_acquired;
     }
 
     if (progressState(r, i) == PROGRESS__PIPELINE) {
@@ -155,12 +160,11 @@ static int sendAppendEntries(struct raft *r,
 
     progressUpdateLastSend(r, i);
     return 0;
-
-err_after_req_alloc:
-    raft_free(req);
 err_after_entries_acquired:
     logRelease(&r->log, next_index, args->entries, args->n_entries);
-err:
+err_after_req_alloc:
+    raft_free(req);
+err_req_alloc:
     assert(rv != 0);
     return rv;
 }
@@ -448,9 +452,9 @@ struct appendLeader
 {
     struct raft *raft;          /* Instance that has submitted the request */
     raft_index index;           /* Index of the first entry in the request. */
-    struct raft_entry *entries; /* Entries referenced in the request. */
     unsigned n;                 /* Length of the entries array. */
     struct raft_io_append req;
+    struct raft_entry entries[]; /* Entries referenced in the request. */
 };
 
 /* Called after a successful append entries I/O request to update the index of
@@ -591,7 +595,7 @@ out:
     if (r->prev_append_status != 0 && status == 0) {
         evtErrf("raft(%llx) previous append status %d", r->id,
 		r->prev_append_status);
-	abort();
+        abort();
     }
 
     /* Tell the log that we're done referencing these entries. */
@@ -635,27 +639,28 @@ static int appendLeader(struct raft *r, raft_index index)
         return r->prev_append_status;
     }
 
+    n = (unsigned)logNumEntriesFromIndex(&r->log, index);
+    /* Allocate a new request. */
+    request = raft_malloc(sizeof(*request) + sizeof(*request->entries) * n);
+    if (request == NULL) {
+        rv = RAFT_NOMEM;
+        evtErrf("%s", "malloc");
+        goto err_request_alloc;
+    }
+
+    entries = request->entries;
     /* Acquire all the entries from the given index onwards. */
-    rv = logAcquire(&r->log, index, &entries, &n);
+    rv = logAcquire(&r->log, index, &entries, &n, n);
     if (rv != 0) {
         evtErrf("raft(%llx) log acquire failed %d", r->id, rv);
-        goto err;
+        goto err_after_request_alloc;
     }
 
     /* We expect this function to be called only when there are actually
      * some entries to write. */
-    assert(n > 0);
-
-    /* Allocate a new request. */
-    request = raft_malloc(sizeof *request);
-    if (request == NULL) {
-        rv = RAFT_NOMEM;
-        evtErrf("%s", "malloc");
-        goto err_after_entries_acquired;
-    }
+    assert(n > 0 && n >=logNumEntriesFromIndex(&r->log, index));
     request->raft = r;
     request->index = index;
-    request->entries = entries;
     request->n = n;
     request->req.data = request;
 
@@ -665,16 +670,14 @@ static int appendLeader(struct raft *r, raft_index index)
         r->nr_appending_requests -= 1;
         evtErrf("raft(%llx) append failed %d", r->id, rv);
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        goto err_after_request_alloc;
+        goto err_after_entries_acquired;
     }
-
     return 0;
-
-err_after_request_alloc:
-    raft_free(request);
 err_after_entries_acquired:
     logRelease(&r->log, index, entries, n);
-err:
+err_after_request_alloc:
+    raft_free(request);
+err_request_alloc:
     assert(rv != 0);
     return rv;
 }
@@ -963,6 +966,7 @@ struct appendFollower
     raft_index index;  /* Index of the first entry in the request. */
     struct raft_append_entries args;
     struct raft_io_append req;
+    struct raft_entry entries[];
 };
 
 static void appendFollowerCb(struct raft_io_append *req, int status)
@@ -1075,7 +1079,6 @@ out:
         r->prev_append_status = 0;
         evtWarnf("raft(%llx) reset previous append status", r->id);
     }
-
     raft_free(request);
 }
 
@@ -1296,7 +1299,7 @@ int replicationAppend(struct raft *r,
 
     *async = true;
 
-    request = raft_malloc(sizeof *request);
+    request = raft_malloc(sizeof(*request) + sizeof(*request->entries) * n);
     if (request == NULL) {
         rv = RAFT_NOMEM;
         evtErrf("%s", "malloc");
@@ -1318,16 +1321,17 @@ int replicationAppend(struct raft *r,
           * However, this would lead to memory spikes in certain edge cases.
           * https://github.com/canonical/dqlite/issues/276
           */
-	rv = logAppend(&r->log, entry->term, entry->type, &entry->buf, entry->batch);
+        rv = logAppend(&r->log, entry->term, entry->type, &entry->buf, entry->batch);
         if (rv != 0) {
             evtErrf("raft(%llx) log append failed %d", r->id, rv);
             goto err_after_request_alloc;
         }
     }
 
+    request->args.entries = request->entries;
     /* Acquire the relevant entries from the log. */
     rv = logAcquire(&r->log, request->index, &request->args.entries,
-                    &request->args.n_entries);
+                    &request->args.n_entries, (unsigned)n);
     if (rv != 0) {
         evtErrf("raft(%llx) log acquire failed %d", r->id, rv);
         goto err_after_request_alloc;
@@ -1358,12 +1362,10 @@ int replicationAppend(struct raft *r,
     entryNonBatchDestroyPrefix(args->entries, args->n_entries, i);
     raft_free(args->entries);
     return 0;
-
 err_after_acquire_entries:
     /* Release the entries related to the IO request */
     logRelease(&r->log, request->index, request->args.entries,
                request->args.n_entries);
-
 err_after_request_alloc:
     /* Release all entries added to the in-memory log, making
      * sure the in-memory log and disk don't diverge, leading
@@ -1373,7 +1375,6 @@ err_after_request_alloc:
         logDiscard(&r->log, request->index);
     }
     raft_free(request);
-
 err:
     assert(rv != 0);
     return rv;

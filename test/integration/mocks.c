@@ -59,10 +59,11 @@ int __wrap_configurationCopy(const struct raft_configuration *src,
 }
 
 extern int __real_logAcquire(struct raft_log *l, const raft_index index,
-                             struct raft_entry *entries[], unsigned *n);
+                             struct raft_entry *entries[], unsigned *n,
+                             unsigned max);
 
 int __wrap_logAcquire(struct raft_log *l, const raft_index index,
-                      struct raft_entry *entries[], unsigned *n)
+                      struct raft_entry *entries[], unsigned *n, unsigned max)
 {
-    return mock_type_args(int, logAcquire, l, index, entries, n);
+    return mock_type_args(int, logAcquire, l, index, entries, n, max);
 }

@@ -12,9 +12,9 @@ struct sendAppendEntries
     struct raft *raft;          /* Instance sending the entries. */
     struct raft_io_send send;   /* Underlying I/O send request. */
     raft_index index;           /* Index of the first entry in the request. */
-    struct raft_entry *entries; /* Entries referenced in the request. */
     unsigned n;                 /* Length of the entries array. */
     raft_id server_id;          /* Destination server. */
+    struct raft_entry entries[]; /* Entries referenced in the request. */
 };
 /* Send AppendEntries RPC messages to all followers to which no AppendEntries
  * was sent in the last heartbeat interval. */

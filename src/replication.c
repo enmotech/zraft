@@ -663,6 +663,7 @@ static int appendLeader(struct raft *r, raft_index index)
     request->index = index;
     request->n = n;
     request->req.data = request;
+    request->req.index = index;
 
     r->nr_appending_requests += 1;
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
@@ -1350,6 +1351,7 @@ int replicationAppend(struct raft *r,
     }
     r->nr_appending_requests += 1;
     request->req.data = request;
+    request->req.index = request->index;
     rv = r->io->append(r->io, &request->req, request->args.entries,
                        request->args.n_entries, appendFollowerCb);
     if (rv != 0) {

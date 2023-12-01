@@ -411,6 +411,7 @@ struct raft_io_append
 {
     void *data;           /* User data */
     raft_io_append_cb cb; /* Request callback */
+    raft_index index;
 };
 
 /**

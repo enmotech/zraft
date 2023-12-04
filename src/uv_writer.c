@@ -160,9 +160,6 @@ static void uvWriterPollCb(uv_poll_t *poller, int status, int events)
         return;
     }
 
-    /* TODO: this assertion fails in unit tests */
-    /* assert(completed == 1); */
-
     /* Try to fetch the write responses.
      *
      * If we got here at least one write should have completed and io_events

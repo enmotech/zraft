@@ -148,7 +148,5 @@ TEST(liveness, networkDisconnect, setup, tear_down, 0, _params)
         }
     }
 
-    // munit_assert_int(CLUSTER_LAST_APPLIED(CLUSTER_LEADER), >=, 2);
-
     return MUNIT_OK;
 }

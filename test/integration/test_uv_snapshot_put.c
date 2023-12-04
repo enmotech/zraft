@@ -101,7 +101,6 @@ static void snapshotGetCbAssertResult(struct raft_io_snapshot_get *req,
 #define SNAPSHOT_PUT_ERROR(SNAPSHOT, TRAILING, RV, ERRMSG)           \
     do {                                                             \
         SNAPSHOT_PUT_REQ(SNAPSHOT, TRAILING, RV, 0 /* status */);    \
-        /* munit_assert_string_equal(f->transport.errmsg, ERRMSG);*/ \
     } while (0)
 
 /* Submit a snapshot put request and wait for the operation to fail with the
@@ -110,7 +109,6 @@ static void snapshotGetCbAssertResult(struct raft_io_snapshot_get *req,
     do {                                                            \
         SNAPSHOT_PUT_REQ(0 /* rv */, STATUS);                       \
         LOOP_RUN_UNTIL(&_result.done);                              \
-        /*munit_assert_string_equal(f->transport.errmsg, ERRMSG);*/ \
     } while (0)
 
 /* Use raft_io->snapshot_get to load the last snapshot and compare it with the

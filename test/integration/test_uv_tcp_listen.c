@@ -105,7 +105,6 @@ static void *setUp(const MunitParameter params[], void *user_data)
     struct fixture *f = setUpDeps(params, user_data);
     void *cursor;
     int rv;
-    /* test_tcp_listen(&f->tcp); */
     INIT;
     f->accepted = false;
     f->handshake.offset = 0;

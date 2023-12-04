@@ -454,12 +454,7 @@ int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c,
         s->group = byteGet8(&buf);
 
         /* Compare server version for new field */
-        // if (meta.server_version < CONF_SERVER_VERSION_V2)
-        //      continue;
-
         /* Decode v2 field */
-        // s->v2_field = byteGet(&buf);
-
         /* Skip unknown unknown field */
         assert(meta.server_size >= CONF_SERVER_SIZE);
         buf = (const uint8_t *)buf + (meta.server_size - CONF_SERVER_SIZE);

@@ -380,7 +380,6 @@ static void ioFlushSend(struct io *io, struct send *send)
             break;
     }
 
-    /* tracef("io: flush: %s", describeMessage(&send->message)); */
     io->n_send[send->message.type]++;
     status = g_fixture_errno;
     if (src->type == RAFT_IO_APPEND_ENTRIES) {
@@ -554,34 +553,6 @@ static int ioMethodRecover(struct raft_io *io,
     return RAFT_IOERR;
 }
 
-//static int ioMethodSetTerm(struct raft_io *raft_io, const raft_term term)
-//{
-//    struct io *io = raft_io->impl;
-
-//    if (ioFaultTick(io)) {
-//        return RAFT_IOERR;
-//    }
-
-//    io->term = term;
-//    io->voted_for = 0;
-
-//    return 0;
-//}
-
-//static int ioMethodSetVote(struct raft_io *raft_io, const raft_id server_id)
-//{
-//    struct io *io = raft_io->impl;
-
-//    if (ioFaultTick(io)) {
-//        return RAFT_IOERR;
-//    }
-
-//    /* tracef("io: set vote: %d %d", server_id, io->index); */
-//    io->voted_for = server_id;
-
-//    return 0;
-//}
-
 static int ioMethodSetMeta(struct raft_io *raft_io,
                            struct raft_io_set_meta *req,
                            raft_term term,
@@ -752,9 +723,6 @@ static int ioMethodSend(struct raft_io *raft_io,
         return RAFT_IOERR;
     }
 
-    /* tracef("io: send: %s to server %d", describeMessage(message),
-       message->server_id); */
-
     r = raft_malloc(sizeof *r);
     assert(r != NULL);
 
@@ -774,8 +742,6 @@ static int ioMethodSend(struct raft_io *raft_io,
 
 static void ioReceive(struct io *io, struct raft_message *message)
 {
-    /* tracef("io: recv: %s from server %d", describeMessage(message),
-       message->server_id); */
     io->recv_cb(io->io, message);
     io->n_recv[message->type]++;
 }
@@ -864,7 +830,6 @@ static void ioSaturate(struct raft_io *io, struct raft_io *other)
     s = io->impl;
     s_other = other->impl;
     peer = ioGetPeer(s, s_other->id);
-    // assert(peer != NULL && peer->connected);
     peer->saturated = true;
 }
 

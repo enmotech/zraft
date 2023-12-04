@@ -2053,7 +2053,6 @@ void replicationQuorum(struct raft *r, const raft_index index)
     if (index <= r->commit_index) {
         return;
     }
-    // assert(logTermOf(&r->log, index) > 0);
     assert(logTermOf(&r->log, index) <= r->current_term);
     /*
      * From section 3.6.2:

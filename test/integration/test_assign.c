@@ -261,9 +261,6 @@ TEST(raft_assign, promoteNewRound, setUp, tearDown, 0, NULL)
     CLUSTER_APPLY_ADD_X(0, req, 1, NULL);
     CLUSTER_STEP_UNTIL_ELAPSED(election_timeout + 100);
 
-    // FIXME: unstable with 0xcf1f25b6
-    // ASSERT_CATCH_UP_ROUND(0, 3, 1, election_timeout + 100);
-
     /* The leader eventually receives the AppendEntries result from the
      * promotee, acknowledging all entries except the last one. The first round
      * has completes and a new one has starts. */

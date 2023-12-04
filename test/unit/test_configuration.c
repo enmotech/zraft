@@ -213,7 +213,6 @@ TEST(configurationGet, match, setUp, tearDown, 0, NULL)
     server = GET(2);
     munit_assert_ptr_not_null(server);
     munit_assert_int(server->id, ==, 2);
-   // munit_assert_string_equal(server->address, "192.168.1.2:666");
     return MUNIT_OK;
 }
 
@@ -299,15 +298,6 @@ TEST(configurationAdd, duplicateId, setUp, tearDown, 0, NULL)
     ADD_ERROR(RAFT_DUPLICATEID, 1, RAFT_STANDBY);
     return MUNIT_OK;
 }
-
-///* Add a server with an address which is already in use. */
-//TEST(configurationAdd, duplicateAddress, setUp, tearDown, 0, NULL)
-//{
-//    struct fixture *f = data;
-//    ADD(1, "127.0.0.1:666", RAFT_VOTER);
-//    ADD_ERROR(RAFT_DUPLICATEADDRESS, 2, "127.0.0.1:666", RAFT_STANDBY);
-//    return MUNIT_OK;
-//}
 
 /* Add a server with an invalid role. */
 TEST(configurationAdd, invalidRole, setUp, tearDown, 0, NULL)
@@ -663,17 +653,3 @@ TEST(configurationDecode, badVersion, setUp, tearDown, 0, NULL)
     return MUNIT_OK;
 }
 
-///* The address of a server is not a nul-terminated string. */
-//TEST(configurationDecode, badAddress, setUp, tearDown, 0, NULL)
-//{
-//    struct fixture *f = data;
-//    uint8_t bytes[] = {1,                            /* Version */
-//                       1,   0,   0,   0, 0, 0, 0, 0, /* Number of servers */
-//                       5,   0,   0,   0, 0, 0, 0, 0, /* Server ID */
-//                       1};                           /* Voting flag */
-//    struct raft_buffer buf;
-//    buf.base = bytes;
-//    buf.len = sizeof bytes;
-//    DECODE_ERROR(RAFT_MALFORMED, &buf);
-//    return MUNIT_OK;
-//}

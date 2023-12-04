@@ -128,9 +128,6 @@
 #  define MUNIT_THREAD_LOCAL __declspec(thread)
 #endif
 
-/* MSVC 12.0 will emit a warning at /W4 for code like 'do { ... }
- * while (0)', or 'do { ... } while (true)'.  I'm pretty sure nobody
- * at Microsoft compiles with /W4. */
 #if defined(_MSC_VER) && (_MSC_VER <= 1800)
 #pragma warning(disable: 4127)
 #endif

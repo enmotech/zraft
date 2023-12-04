@@ -503,20 +503,6 @@ static int uvSetTerm(struct raft_io *io, const raft_term term)
     return 0;
 }
 
-///* Implementation of raft_io->set_term. */
-//static int uvSetVote(struct raft_io *io, const raft_id server_id)
-//{
-//    struct uv *uv;
-//    int rv;
-//    uv = io->impl;
-//    uv->metadata.version++;
-//    uv->metadata.voted_for = server_id;
-//    rv = uvMetadataStore(uv, &uv->metadata);
-//    if (rv != 0) {
-//        return rv;
-//    }
-//    return 0;
-//}
 /* Implementation of raft_io->set_meta. */
 static int uvSetMeta(struct raft_io *io,
                      struct raft_io_set_meta *req,

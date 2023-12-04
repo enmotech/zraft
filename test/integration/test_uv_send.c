@@ -68,7 +68,6 @@ static void sendCbAssertResult(struct raft_io_send *req, int status)
 #define SEND_ERROR(I, RV, ERRMSG)                                    \
     do {                                                             \
         SEND_SUBMIT(I, RV, 0 /* status */);                          \
-        /* munit_assert_string_equal(f->transport.errmsg, ERRMSG);*/ \
     } while (0)
 
 /* Submit a send request and wait for the operation to fail with the given code
@@ -77,7 +76,6 @@ static void sendCbAssertResult(struct raft_io_send *req, int status)
     do {                                                            \
         SEND_SUBMIT(I, 0 /* rv */, STATUS);                         \
         SEND_WAIT(I);                                               \
-        /*munit_assert_string_equal(f->transport.errmsg, ERRMSG);*/ \
     } while (0)
 
 /******************************************************************************

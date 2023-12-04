@@ -72,7 +72,6 @@ static void appendCbAssertResult(struct raft_io_append *req, int status)
         ENTRIES(0, N_ENTRIES, ENTRY_SIZE);                             \
         _rv = f->io.append(&f->io, &_req, _entries0, N_ENTRIES, NULL); \
         munit_assert_int(_rv, ==, RV);                                 \
-        /* munit_assert_string_equal(f->io.errmsg, ERRMSG);*/          \
     } while (0)
 
 #define APPEND_EXPECT(I, STATUS) _result##I.status = STATUS

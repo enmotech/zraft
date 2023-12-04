@@ -726,7 +726,6 @@ TEST(snapshot, sendAeFromDisk0, setUp, tearDown, 0, NULL)
 
     ENABLE_CHANGE_AND_FREE_TRAILING;
 
-    // CLUSTER_SATURATE_BOTHWAYS(0, 2);
     CLUSTER_DISCONNECT(0, 2);
     CLUSTER_DISCONNECT(2, 0);
 
@@ -740,7 +739,6 @@ TEST(snapshot, sendAeFromDisk0, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
     CLUSTER_STEP_UNTIL_APPLIED(0, 5, 5000);
     /* Reconnect the follower and wait for it to catch up */
-    // CLUSTER_DESATURATE_BOTHWAYS(0, 2);
     CLUSTER_RECONNECT(0, 2);
     CLUSTER_RECONNECT(2, 0);
     CLUSTER_STEP_UNTIL_APPLIED(2, 5, 5000);
@@ -772,7 +770,6 @@ TEST(snapshot, sendAeFromDisk, setUp, tearDown, 0, NULL)
     CLUSTER_MAKE_PROGRESS;
 
     CLUSTER_STEP_UNTIL_APPLIED(2,5,2000);
-    // CLUSTER_SATURATE_BOTHWAYS(0, 2);
     CLUSTER_DISCONNECT(0, 2);
     CLUSTER_DISCONNECT(2, 0);
 
@@ -787,7 +784,6 @@ TEST(snapshot, sendAeFromDisk, setUp, tearDown, 0, NULL)
     CLUSTER_STEP_UNTIL_APPLIED(0, 9, 5000);
     /* Reconnect the follower and wait for it to catch up */
     munit_assert_uint(leader->snapshot.trailing, ==, 6);
-    // CLUSTER_DESATURATE_BOTHWAYS(0, 2);
     CLUSTER_RECONNECT(0, 2);
     CLUSTER_RECONNECT(2, 0);
     CLUSTER_STEP_UNTIL_APPLIED(2, 9, 5000);

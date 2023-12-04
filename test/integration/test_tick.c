@@ -254,8 +254,5 @@ TEST(tick,
     CLUSTER_STEP_UNTIL_ELAPSED(
         raft->follower_state.randomized_election_timeout);
 
-    /* We have sent vote requests only to the voting server */
-    //__assert_request_vote(f, 2, 2, 1, 1);
-
     return MUNIT_OK;
 }

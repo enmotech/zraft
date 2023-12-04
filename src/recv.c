@@ -205,8 +205,6 @@ static int recvMessage(struct raft *r, struct raft_message *message)
         return rv;
     }
     assert(r->io->state == RAFT_IO_AVAILABLE);
-    /* tracef("%s from server %ld", message_descs[message->type - 1],
-       message->server_id); */
 
     switch (message->type) {
         case RAFT_IO_APPEND_ENTRIES:
@@ -248,8 +246,6 @@ static int recvMessage(struct raft *r, struct raft_message *message)
     };
 
     if (rv != 0 && rv != RAFT_NOCONNECTION) {
-        /* tracef("recv: %s: %s", message_descs[message->type - 1],
-                 raft_strerror(rv)); */
         evtErrf("raft(%llx) recv message %d failed %d",
 		r->id, message->type, rv);
         return rv;

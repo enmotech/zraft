@@ -1541,6 +1541,8 @@ struct applyCmd
     struct raft *raft;          	/* Instance that has submitted the request */
     raft_index index;           	/* Index of the first entry in the request. */
     struct raft_fsm_apply req;
+    struct raft_entry entry;
+    bool incRef;
 };
 static void applyCommandCb(struct raft_fsm_apply *req,
                            void *result,
@@ -1553,6 +1555,8 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     const struct raft_entry *entry;
     bool skip = false;
 
+    if (request->incRef)
+        logRelease(&r->log, request->index, &request->entry, 1);
     assert(r->nr_applying);
     r->nr_applying -= 1;
     if (r->last_applied + 1 != index) {
@@ -1612,7 +1616,7 @@ err_skip_failed:
 /* Apply a RAFT_COMMAND entry that has been committed. */
 static int applyCommand(struct raft *r,
                         const raft_index index,
-                        const struct raft_buffer *buf)
+                        const struct raft_entry *entry)
 {
     struct applyCmd *request;
     int rv;
@@ -1628,13 +1632,21 @@ static int applyCommand(struct raft *r,
     request->raft = r;
     request->index = index;
     request->req.data = request;
+    request->incRef = r->state == RAFT_LEADER && r->quorum != RAFT_FULL;
+
+    if (request->incRef) {
+        request->entry = *entry;
+        logAddRef(&r->log, entry, index);
+    }
 
     rv = r->fsm->apply(r->fsm,
                        &request->req,
-                       buf,
+                       &entry->buf,
                        applyCommandCb);
     if (rv != 0) {
         evtErrf("raft(%llx) apply failed %d", r->id, rv);
+        if (request->incRef)
+            logRelease(&r->log, index, (struct raft_entry *)entry, 1);
         raft_free(request);
     }
 
@@ -1954,7 +1966,7 @@ int replicationApply(struct raft *r)
             case RAFT_COMMAND:
                 r->last_applying = index;
                 r->nr_applying += 1;
-                rv = applyCommand(r, index, &entry->buf);
+                rv = applyCommand(r, index, entry);
                 if (rv != 0) {
                     assert(r->nr_applying);
                     r->last_applying -= 1;

@@ -82,6 +82,10 @@ void logRelease(struct raft_log *l,
                 struct raft_entry entries[],
                 unsigned n);
 
+/* Add ref for entry. Use logRelease dec ref and free entry's buf. */
+void logAddRef(struct raft_log *l, const struct raft_entry *entry,
+               raft_index index);
+
 /* Delete all entries from the given index (included) onwards. If the log is
  * empty this is a no-op. If @index is lower than or equal to the index of the
  * first entry in the log, then the log will become empty. */

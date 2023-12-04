@@ -781,6 +781,12 @@ int logAcquire(struct raft_log *l,
     return 0;
 }
 
+void logAddRef(struct raft_log *l, const struct raft_entry *entry,
+               raft_index index)
+{
+    refsIncr(l, entry->term, index);
+}
+
 /* Return true if the given batch is referenced by any entry currently in the
  * log. */
 static bool isBatchReferenced(struct raft_log *l, const void *batch)
@@ -829,7 +835,7 @@ void logRelease(struct raft_log *l,
                 if (entry->batch != batch) {
                     if (!isBatchReferenced(l, entry->batch)) {
                         batch = entry->batch;
-			raft_free(entry->batch);
+                        raft_free(entry->batch);
                     }
                 }
             }

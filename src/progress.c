@@ -45,6 +45,7 @@ int progressBuildArray(struct raft *r)
         initProgress(&progress[i], last_index);
         progress[i].recent_recv_time = r->io->time(r->io);
         progress[i].recent_match_time = r->io->time(r->io);
+        progress[i].online = true;
         if (r->configuration.servers[i].id == r->id) {
             progress[i].match_index = r->last_stored;
         }
@@ -96,6 +97,7 @@ int progressRebuildArray(struct raft *r,
         initProgress(&progress[i], last_index);
         progress[i].recent_recv_time = r->io->time(r->io);
         progress[i].recent_match_time = r->io->time(r->io);
+        progress[i].online = true;
     }
 
     raft_free(r->leader_state.progress);
@@ -345,6 +347,20 @@ bool progressSnapshotDone(struct raft *r, const unsigned i)
     return p->match_index >= p->snapshot_index;
 }
 
+bool progressGetOnline(struct raft *r, const unsigned i)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
+
+    return p->online;
+}
+
+void progressUpdateOnline(struct raft *r, const unsigned i, bool online)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
+
+    p->online = online;
+}
+
 void progressUpdateMinMatch(struct raft *r)
 {
 	assert(r->state == RAFT_LEADER);
@@ -370,6 +386,9 @@ void progressUpdateMinMatch(struct raft *r)
         }
 
 		p = &r->leader_state.progress[i];
+        if (!p->online) {
+            continue;
+        }
         if (p->recent_match_time + r->sync_replica_timeout_min >= now) {
             if (p->match_index <= r->leader_state.min_sync_match_index) {
                 r->leader_state.min_sync_match_index = p->match_index;

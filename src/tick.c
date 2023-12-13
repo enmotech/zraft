@@ -247,7 +247,6 @@ static int tickLeader(struct raft *r)
         return 0;
     }
 
-    snapshotSamplerTake(&r->sampler, r->last_applied, r->io->time(r->io));
     if (r->sync_replication) {
         progressUpdateMinMatch(r);
     }

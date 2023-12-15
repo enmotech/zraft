@@ -189,6 +189,25 @@ static void checkChangeOnMatch(struct raft *r)
     }
 }
 
+static void checkChangeTimeout(struct raft *r)
+{
+    struct raft_change *change;
+    raft_time now = r->io->time(r->io);
+    assert(r->state == RAFT_LEADER);
+
+    change = r->leader_state.change;
+    if (change->time
+        + r->max_catch_up_rounds * r->max_catch_up_round_duration > now) {
+        return;
+    }
+
+    r->leader_state.change = NULL;
+    if (change != NULL && change->cb != NULL) {
+        change->cb(change, RAFT_NOCONNECTION);
+        evtErrf("raft(%s) change timeout", r->id);
+    }
+}
+
 /* Apply time-dependent rules for leaders (Figure 3.1). */
 static int tickLeader(struct raft *r)
 {
@@ -293,6 +312,10 @@ static int tickLeader(struct raft *r)
 
     if (r->leader_state.change) {
         checkChangeOnMatch(r);
+    }
+
+    if (r->leader_state.change) {
+        checkChangeTimeout(r);
     }
 
     return 0;

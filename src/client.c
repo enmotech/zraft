@@ -255,6 +255,7 @@ int raft_add(struct raft *r,
         goto err_after_configuration_copy;
     }
     req->cb = cb;
+    req->time = r->io->time(r->io);
 
     rv = clientChangeConfiguration(r, req, &configuration);
     if (rv != 0) {
@@ -330,6 +331,7 @@ int raft_joint_promote(struct raft *r,
     last_index = logLastIndex(&r->log);
 
     req->cb = cb;
+    req->time = r->io->time(r->io);
 
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;
@@ -397,6 +399,7 @@ int raft_dup(struct raft *r, struct raft_change *req, raft_change_cb cb)
 	}
 
 	req->cb = cb;
+    req->time = r->io->time(r->io);
 
 	rv = clientChangeConfiguration(r, req, &configuration);
 	if (rv != 0) {
@@ -461,6 +464,7 @@ int raft_assign(struct raft *r,
     last_index = logLastIndex(&r->log);
 
     req->cb = cb;
+    req->time = r->io->time(r->io);
 
     assert(r->leader_state.change == NULL);
     r->leader_state.change = req;
@@ -581,6 +585,7 @@ int raft_remove(struct raft *r,
     }
 
     req->cb = cb;
+    req->time = r->io->time(r->io);
     rv = clientChangeConfiguration(r, req, &configuration);
     if (rv != 0) {
         evtErrf("raft(%llx) change conf failed %d", r->id, rv);

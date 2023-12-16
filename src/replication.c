@@ -51,7 +51,7 @@ static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
         if (status != 0) {
             tracef("failed to send append entries to server %llu: %s",
                    req->server_id, raft_strerror(status));
-            evtErrf("raft(%llx) failed to send append entries to %llu %d",
+            evtErrf("E-1528-178", "raft(%llx) failed to send append entries to %llu %d",
 		    r->id, req->server_id, status);
             /* Go back to probe mode. */
             progressToProbe(r, i);
@@ -103,7 +103,7 @@ static int sendAppendEntries(struct raft *r,
 		      sizeof(*req->entries) * r->message_log_threshold);
     if (req == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-179", "%s", "malloc");
         goto err_req_alloc;
     }
 
@@ -111,7 +111,7 @@ static int sendAppendEntries(struct raft *r,
     rv = logAcquire(&r->log, next_index, &args->entries, &args->n_entries,
                    r->message_log_threshold);
     if (rv != 0) {
-        evtErrf("raft(%llx) log acquire failed %d", r->id, rv);
+        evtErrf("E-1528-180", "raft(%llx) log acquire failed %d", r->id, rv);
         goto err_after_req_alloc;
     }
 
@@ -130,7 +130,7 @@ static int sendAppendEntries(struct raft *r,
            logLastIndex(&r->log));
 
     if (prev_index == 0) {
-	    evtWarnf("raft(%llx) send %llx entries %u  %llu %llu %llu",
+	    evtWarnf("W-1528-067", "raft(%llx) send %llx entries %u  %llu %llu %llu",
 		     r->id, server->id, args->n_entries, args->prev_log_index,
 		     args->prev_log_term, logLastIndex(&r->log));
     }
@@ -149,7 +149,7 @@ static int sendAppendEntries(struct raft *r,
     rv = r->io->send(r->io, &req->send, &message, sendAppendEntriesCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
-            evtErrf("raft(%llx) send failed %d", r->id, rv);
+            evtErrf("E-1528-181", "raft(%llx) send failed %d", r->id, rv);
         goto err_after_entries_acquired;
     }
 
@@ -259,7 +259,7 @@ static void sendSnapshotGetCb(struct raft_io_snapshot_get *get,
     rv = r->io->send(r->io, &req->send, &message, sendInstallSnapshotCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
-            evtErrf("raft(%llx) send failed %d", r->id, rv);
+            evtErrf("E-1528-182", "raft(%llx) send failed %d", r->id, rv);
         goto abort_with_snapshot;
     }
 
@@ -290,7 +290,7 @@ static int sendSnapshot(struct raft *r, const unsigned i)
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-183", "%s", "malloc");
         goto err;
     }
     request->raft = r;
@@ -302,12 +302,12 @@ static int sendSnapshot(struct raft *r, const unsigned i)
      * later point. Otherwise the progress snapshot_index would be wrong. */
     rv = r->io->snapshot_get(r->io, &request->get, sendSnapshotGetCb);
     if (rv != 0) {
-        evtErrf("raft(%llx) snapshot get failed %d", r->id, rv);
+        evtErrf("E-1528-184", "raft(%llx) snapshot get failed %d", r->id, rv);
         goto err_after_req_alloc;
     }
 
     if (r->state != RAFT_LEADER) {
-        evtNoticef("raft(%llx) leader has step down after get snapshot", r->id);
+        evtNoticef("1528-040", "raft(%llx) leader has step down after get snapshot", r->id);
         return 0;
     }
     progressUpdateSnapshotLastSend(r, i);
@@ -358,7 +358,7 @@ int replicationProgress(struct raft *r, unsigned i)
         if (snapshot_index > 0 && !progress_state_is_snapshot) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
-            evtNoticef(
+            evtNoticef("1528-041",
             "raft(%llx) send %llx snapshot %llu recent %d next 1 first %llu/%llu last %llu/%llu",
                 r->id, server->id, snapshot_index, progressGetRecentRecv(r, i),
                 logStartIndex(r), logStartTerm(r),
@@ -377,7 +377,7 @@ int replicationProgress(struct raft *r, unsigned i)
         if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
-            evtNoticef(
+            evtNoticef("1528-042",
             "raft(%llx) send %llx snapshot %llu recent %d next %llu first %llu/%llu last %llu/%llu",
                 r->id, server->id, snapshot_index, progressGetRecentRecv(r, i),
                 next_index, logStartIndex(r), logStartTerm(r),
@@ -434,7 +434,7 @@ static int triggerAll(struct raft *r)
             /* This is not a critical failure, let's just log it. */
             tracef("failed to send append entries to server %llu: %s (%d)",
                    server->id, raft_strerror(rv), rv);
-            evtErrf("raft(%llx) send append entries to %llx failed %d",
+            evtErrf("E-1528-185", "raft(%llx) send append entries to %llx failed %d",
 		    r->id, server->id, rv);
         }
     }
@@ -507,7 +507,7 @@ static void fireRequestCb(struct raft *r, raft_index index, int status)
     struct raft_barrier *barrier;
 
     if (!req) {
-	    evtWarnf("raft(%llx) get request for index %lu not exist", index);
+	    evtWarnf("W-1528-068", "raft(%llx) get request for index %lu not exist", index);
 	    return;
     }
     assert(req->type == RAFT_COMMAND || req->type == RAFT_BARRIER);
@@ -543,12 +543,12 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
      * entries in the first place, truncate our log too (since we have appended
      * these entries to it) and fire the request callback. */
     if (status != 0) {
-        evtErrf("raft(%llx) append leader failed %d", r->id, status);
+        evtErrf("E-1528-186", "raft(%llx) append leader failed %d", r->id, status);
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         fireRequestCb(r, request->index, status);
         if (r->state != RAFT_FOLLOWER) {
             convertToFollower(r);
-            evtNoticef("raft(%llx) convert from leader to follower",
+            evtNoticef("1528-043", "raft(%llx) convert from leader to follower",
 			    r->id, status);
         }
         goto out;
@@ -560,7 +560,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     /* If we are not leader anymore, just discard the result. */
     if (r->state != RAFT_LEADER) {
         tracef("local server is not leader -> ignore write log result");
-        evtWarnf("raft(%llx) is not leader, ignore write log result", r->id);
+        evtWarnf("W-1528-069", "raft(%llx) is not leader, ignore write log result", r->id);
         goto out;
     }
 
@@ -586,14 +586,14 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
 
     rv = replicationApply(r);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication apply failed %d", r->id, status);
+        evtErrf("E-1528-187", "raft(%llx) replication apply failed %d", r->id, status);
         /* TODO: just log the error? */
-        evtErrf("raft(%llx) apply error %d", r->id, rv);
+        evtErrf("E-1528-188", "raft(%llx) apply error %d", r->id, rv);
     }
 
 out:
     if (r->prev_append_status != 0 && status == 0) {
-        evtErrf("raft(%llx) previous append status %d", r->id,
+        evtErrf("E-1528-189", "raft(%llx) previous append status %d", r->id,
 		r->prev_append_status);
         abort();
     }
@@ -602,11 +602,11 @@ out:
     logRelease(&r->log, request->index, request->entries, request->n);
     if (status != 0 && r->prev_append_status == 0) {
         logTruncate(&r->log, request->index);
-        evtErrf("raft(%llx) truncate log from %llu", r->id, request->index);
+        evtErrf("E-1528-190", "raft(%llx) truncate log from %llu", r->id, request->index);
         if (r->configuration_uncommitted_index >= request->index) {
                 rv = membershipRollback(r);
                 if (rv != 0) {
-                    evtErrf("raft(%llx) rollback failed %d", r->id, rv);
+                    evtErrf("E-1528-191", "raft(%llx) rollback failed %d", r->id, rv);
                 }
         }
     }
@@ -615,7 +615,7 @@ out:
     /* Reset prev append status when the last request callback*/
     if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
         r->prev_append_status = 0;
-        evtWarnf("raft(%llx) reset previous append status", r->id);
+        evtWarnf("W-1528-070", "raft(%llx) reset previous append status", r->id);
     }
     raft_free(request);
 }
@@ -634,7 +634,7 @@ static int appendLeader(struct raft *r, raft_index index)
 
     hookRequestAppend(r, index);
     if (r->prev_append_status) {
-        evtErrf("raft(%llx) reject append with prev append status %d",
+        evtErrf("E-1528-192", "raft(%llx) reject append with prev append status %d",
 		r->id, r->prev_append_status);
         return r->prev_append_status;
     }
@@ -644,7 +644,7 @@ static int appendLeader(struct raft *r, raft_index index)
     request = raft_malloc(sizeof(*request) + sizeof(*request->entries) * n);
     if (request == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-193", "%s", "malloc");
         goto err_request_alloc;
     }
 
@@ -652,7 +652,7 @@ static int appendLeader(struct raft *r, raft_index index)
     /* Acquire all the entries from the given index onwards. */
     rv = logAcquire(&r->log, index, &entries, &n, n);
     if (rv != 0) {
-        evtErrf("raft(%llx) log acquire failed %d", r->id, rv);
+        evtErrf("E-1528-194", "raft(%llx) log acquire failed %d", r->id, rv);
         goto err_after_request_alloc;
     }
 
@@ -669,7 +669,7 @@ static int appendLeader(struct raft *r, raft_index index)
     rv = r->io->append(r->io, &request->req, entries, n, appendLeaderCb);
     if (rv != 0) {
         r->nr_appending_requests -= 1;
-        evtErrf("raft(%llx) append failed %d", r->id, rv);
+        evtErrf("E-1528-195", "raft(%llx) append failed %d", r->id, rv);
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
         goto err_after_entries_acquired;
     }
@@ -689,7 +689,7 @@ int replicationTrigger(struct raft *r, raft_index index)
 
     rv = appendLeader(r, index);
     if (rv != 0) {
-        evtErrf("raft(%llx) append leader failed %d", r->id, rv);
+        evtErrf("E-1528-196", "raft(%llx) append leader failed %d", r->id, rv);
         return rv;
     }
 
@@ -739,7 +739,7 @@ static int triggerActualPromotion(struct raft *r)
     /* Encode the new configuration and append it to the log. */
     rv = logAppendConfiguration(&r->log, term, &r->configuration);
     if (rv != 0) {
-        evtErrf("raft(%llx) log append conf failed %d", r->id, rv);
+        evtErrf("E-1528-197", "raft(%llx) log append conf failed %d", r->id, rv);
         goto err;
     }
 
@@ -752,13 +752,13 @@ static int triggerActualPromotion(struct raft *r)
     assert(entry->type == RAFT_CHANGE);
     r->hook->entry_after_append_fn(r->hook, index, entry);
 
-    evtNoticef("raft(%llx) promotee %llx promoted to voter ", r->id,
+    evtNoticef("1528-044", "raft(%llx) promotee %llx promoted to voter ", r->id,
 	       r->leader_state.promotee_id);
 
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication trigger failed %d", r->id, rv);
+        evtErrf("E-1528-198", "raft(%llx) replication trigger failed %d", r->id, rv);
         goto err_after_log_append;
     }
 
@@ -813,7 +813,7 @@ int replicationUpdate(struct raft *r,
      */
     if (result->rejected > 0) {
         if (p->state != PROGRESS__SNAPSHOT)
-            evtIdNoticef(r->id, "raft(%llx) %llx %d rejected %lu %lu %lu %lu",
+            evtNoticef("1528-045", "raft(%llx) %llx %d rejected %lu %lu %lu %lu",
                 r->id, id, i, result->rejected, result->last_log_index,
                 result->term, result->pkt);
         bool retry;
@@ -822,7 +822,7 @@ int replicationUpdate(struct raft *r,
         if (retry) {
             /* Retry, ignoring errors. */
 	        tracef("log mismatch -> send old entries to %llu", id);
-            evtIdNoticef(r->id, "raft(%llx) send old entries to %llx", r->id, id);
+            evtNoticef("1528-046", "raft(%llx) send old entries to %llx", r->id, id);
             replicationProgress(r, i);
         }
         return 0;
@@ -881,7 +881,7 @@ int replicationUpdate(struct raft *r,
         if (is_up_to_date) {
             rv = triggerActualPromotion(r);
             if (rv != 0) {
-                evtErrf("raft(%llx) trigger promotion failed %d", r->id, rv);
+                evtErrf("E-1528-199", "raft(%llx) trigger promotion failed %d", r->id, rv);
                 return rv;
             }
         }
@@ -892,7 +892,7 @@ int replicationUpdate(struct raft *r,
 
     rv = replicationApply(r);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+        evtErrf("E-1528-200", "raft(%llx) replication apply failed %d", r->id, rv);
         /* TODO: just log the error? */
     }
 
@@ -947,7 +947,7 @@ static void sendAppendEntriesResult(
 
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-201", "%s", "malloc");
         return;
     }
     req->data = r;
@@ -955,7 +955,7 @@ static void sendAppendEntriesResult(
     rv = r->io->send(r->io, req, &message, sendAppendEntriesResultCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
-            evtErrf("raft(%llx) send failed %d", r->id, rv);
+            evtErrf("E-1528-202", "raft(%llx) send failed %d", r->id, rv);
         raft_free(req);
     }
 }
@@ -991,7 +991,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     result.pkt = args->pkt;
     result.term = r->current_term;
     if (status != 0) {
-        evtErrf("raft(%llx) append follower status %d", r->id, status);
+        evtErrf("E-1528-203", "raft(%llx) append follower status %d", r->id, status);
         if (r->state != RAFT_FOLLOWER) {
             tracef("local server is not follower -> ignore I/O failure");
             goto out;
@@ -1032,7 +1032,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         if (entry->type == RAFT_CHANGE) {
             rv = membershipUncommittedChange(r, index, entry);
             if (rv != 0) {
-                evtErrf("raft(%llx) ship change failed %d", r->id, rv);
+                evtErrf("E-1528-204", "raft(%llx) ship change failed %d", r->id, rv);
                 goto out;
             }
         }
@@ -1049,7 +1049,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
         r->commit_index = min(args->leader_commit, r->last_stored);
         rv = replicationApply(r);
         if (rv != 0) {
-            evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+            evtErrf("E-1528-205", "raft(%llx) replication apply failed %d", r->id, rv);
             goto out;
         }
     }
@@ -1071,14 +1071,14 @@ out:
 
     if (status != 0 && r->prev_append_status == 0) {
         logTruncate(&r->log, request->index);
-        evtErrf("raft(%llx) truncate log from %llu", r->id, request->index);
+        evtErrf("E-1528-206", "raft(%llx) truncate log from %llu", r->id, request->index);
     }
 
     r->prev_append_status = status;
     /* Reset prev append status when the last request callback*/
     if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
         r->prev_append_status = 0;
-        evtWarnf("raft(%llx) reset previous append status", r->id);
+        evtWarnf("W-1528-071", "raft(%llx) reset previous append status", r->id);
     }
     raft_free(request);
 }
@@ -1104,7 +1104,7 @@ static int checkLogMatchingProperty(struct raft *r,
 
     /* If this is the very first entry, there's nothing to check. */
     if (args->prev_log_index == 0) {
-        evtNoticef("raft(%llx) pre_log_index 0", r->id);
+        evtNoticef("1528-047", "raft(%llx) pre_log_index 0", r->id);
         return 0;
     }
 
@@ -1117,7 +1117,7 @@ static int checkLogMatchingProperty(struct raft *r,
     if (local_prev_term != args->prev_log_term) {
         if (args->prev_log_index <= r->commit_index) {
             /* Should never happen; something is seriously wrong! */
-            evtErrf(
+            evtErrf("E-1528-207",
 		"raft(%llx) conflicting terms %llu and %llu for entry %llu"
 		"(commit index %llu) -> shutdown",
                 r->id, local_prev_term, args->prev_log_term,
@@ -1157,7 +1157,7 @@ static int deleteConflictingEntries(struct raft *r,
         raft_term local_term = logTermOf(&r->log, entry_index);
 
         if (entry_index <= logSnapshotIndex(&r->log)) {
-            evtNoticef("raft(%llx) skip index %llu le snap index %llu", r->id,
+            evtNoticef("1528-048", "raft(%llx) skip index %llu le snap index %llu", r->id,
                 entry_index, logSnapshotIndex(&r->log));
                 continue;
         }
@@ -1166,7 +1166,7 @@ static int deleteConflictingEntries(struct raft *r,
             if (entry_index <= r->commit_index) {
                 /* Should never happen; something is seriously wrong! */
                 tracef("new index conflicts with committed entry -> shutdown");
-                evtErrf("raft(%llx) entry conflicts %llu/%llu %llu/%llu",
+                evtErrf("E-1528-208", "raft(%llx) entry conflicts %llu/%llu %llu/%llu",
 			r->id, entry_index, r->commit_index, local_term,
 			entry->term);
                 return RAFT_SHUTDOWN;
@@ -1177,7 +1177,7 @@ static int deleteConflictingEntries(struct raft *r,
             if (r->configuration_uncommitted_index >= entry_index ) {
                 rv = membershipRollback(r);
                 if (rv != 0) {
-                    evtErrf("raft(%llx) rollback failed %d", r->id, rv);
+                    evtErrf("E-1528-209", "raft(%llx) rollback failed %d", r->id, rv);
                     return rv;
                 }
             }
@@ -1186,7 +1186,7 @@ static int deleteConflictingEntries(struct raft *r,
              * match. */
             rv = r->io->truncate(r->io, entry_index);
             if (rv != 0) {
-                evtErrf("raft(%llx) truncate failed %d", r->id, rv);
+                evtErrf("E-1528-210", "raft(%llx) truncate failed %d", r->id, rv);
                 return rv;
             }
             logTruncate(&r->log, entry_index);
@@ -1238,10 +1238,10 @@ int replicationAppend(struct raft *r,
     *last_log_index = r->last_stored;
 
     if (args->prev_log_index == 0) {
-        evtNoticef("raft(%llx) recv term %llu entries %lu %llu %llu %llu",
+        evtNoticef("1528-049", "raft(%llx) recv term %llu entries %lu %llu %llu %llu",
 		   r->id, args->term, args->n_entries, args->prev_log_index,
 		   args->prev_log_term, args->leader_commit);
-        evtNoticef("raft(%llx) snapshot %llu log %llu/%llu/%llu",
+        evtNoticef("1528-050", "raft(%llx) snapshot %llu log %llu/%llu/%llu",
 		   r->id, r->log.snapshot.last_index, logStartIndex(r), logStartTerm(r),
            logNumEntries(&r->log));
     }
@@ -1254,7 +1254,7 @@ int replicationAppend(struct raft *r,
     }
 
     if (args->n_entries && args_last_index <= logSnapshotIndex(&r->log)) {
-            evtNoticef("raft(%llx) ae last index %llu snap index %llu",
+            evtNoticef("1528-051", "raft(%llx) ae last index %llu snap index %llu",
                 args_last_index, logSnapshotIndex(&r->log));
             *last_log_index = logSnapshotIndex(&r->log);
             *rejected = 0;
@@ -1264,7 +1264,7 @@ int replicationAppend(struct raft *r,
     /* Delete conflicting entries. */
     rv = deleteConflictingEntries(r, args, &i);
     if (rv != 0) {
-        evtErrf("raft(%llx) delete conflicting entries failed %d", r->id, rv);
+        evtErrf("E-1528-211", "raft(%llx) delete conflicting entries failed %d", r->id, rv);
         return rv;
     }
 
@@ -1290,7 +1290,7 @@ int replicationAppend(struct raft *r,
             r->commit_index = min(args->leader_commit, r->last_stored);
             rv = replicationApply(r);
             if (rv != 0) {
-                evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+                evtErrf("E-1528-212", "raft(%llx) replication apply failed %d", r->id, rv);
                 return rv;
             }
         }
@@ -1303,7 +1303,7 @@ int replicationAppend(struct raft *r,
     request = raft_malloc(sizeof(*request) + sizeof(*request->entries) * n);
     if (request == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-213", "%s", "malloc");
         goto err;
     }
 
@@ -1324,7 +1324,7 @@ int replicationAppend(struct raft *r,
           */
         rv = logAppend(&r->log, entry->term, entry->type, &entry->buf, entry->batch);
         if (rv != 0) {
-            evtErrf("raft(%llx) log append failed %d", r->id, rv);
+            evtErrf("E-1528-214", "raft(%llx) log append failed %d", r->id, rv);
             goto err_after_request_alloc;
         }
     }
@@ -1334,7 +1334,7 @@ int replicationAppend(struct raft *r,
     rv = logAcquire(&r->log, request->index, &request->args.entries,
                     &request->args.n_entries, (unsigned)n);
     if (rv != 0) {
-        evtErrf("raft(%llx) log acquire failed %d", r->id, rv);
+        evtErrf("E-1528-215", "raft(%llx) log acquire failed %d", r->id, rv);
         goto err_after_request_alloc;
     }
 
@@ -1344,7 +1344,7 @@ int replicationAppend(struct raft *r,
 	    tracef("args->prev_log_term = %llu, args->prev_log_index = %llu, args->n_entries = %u",
 		   args->prev_log_term, args->prev_log_index, args->n_entries);
 	    ErrMsgPrintf(r->errmsg, "No log entries found at index %llu", request->index);
-	    evtErrf("raft(%llx) no log entries found at index %llu",
+	    evtErrf("E-1528-216", "raft(%llx) no log entries found at index %llu",
 		    r->id, request->index);
 	    rv = RAFT_SHUTDOWN;
 	    goto err_after_acquire_entries;
@@ -1357,7 +1357,7 @@ int replicationAppend(struct raft *r,
     if (rv != 0) {
         r->nr_appending_requests -= 1;
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        evtErrf("raft(%llx) append failed %d", r->id, rv);
+        evtErrf("E-1528-217", "raft(%llx) append failed %d", r->id, rv);
         goto err_after_acquire_entries;
     }
 
@@ -1493,7 +1493,7 @@ int replicationInstallSnapshot(struct raft *r,
 
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-218", "%s", "malloc");
         rv = RAFT_NOMEM;
         goto err;
     }
@@ -1508,7 +1508,7 @@ int replicationInstallSnapshot(struct raft *r,
     snapshot->bufs = raft_malloc(sizeof *snapshot->bufs);
     if (snapshot->bufs == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-219", "%s", "malloc");
         goto err_after_request_alloc;
     }
     snapshot->bufs[0] = args->data;
@@ -1520,7 +1520,7 @@ int replicationInstallSnapshot(struct raft *r,
                              0 /* zero trailing means replace everything */,
                              &r->snapshot.put, snapshot, installSnapshotCb);
     if (rv != 0) {
-        evtErrf("raft(%llx) snapshot put failed %d", r->id, rv);
+        evtErrf("E-1528-220", "raft(%llx) snapshot put failed %d", r->id, rv);
         goto err_after_bufs_alloc;
     }
 
@@ -1560,7 +1560,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     assert(r->nr_applying);
     r->nr_applying -= 1;
     if (r->last_applied + 1 != index) {
-        evtNoticef("%llx apply index not match %llu/%llu status %d", r->id,
+        evtNoticef("1528-052", "%llx apply index not match %llu/%llu status %d", r->id,
             index, r->last_applied, status);
         status = RAFT_IOERR;
     }
@@ -1575,9 +1575,9 @@ static void applyCommandCb(struct raft_fsm_apply *req,
 
     r->apply_status = status;
     if (status != 0) {
-        evtErrf("%llx apply index %llu failed %d", r->id, index, status);
+        evtErrf("E-1528-221", "%llx apply index %llu failed %d", r->id, index, status);
         if (r->nr_applying == 0) {
-            evtNoticef("raft(%llx) reset applying %llu %llu", r->id,
+            evtNoticef("1528-053", "raft(%llx) reset applying %llu %llu", r->id,
                 r->last_applying, r->last_applied);
             r->last_applying = r->last_applied;
         }
@@ -1588,7 +1588,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
             skip = r->hook->entry_skip_on_apply_fail(r->hook, index, entry);
 
         if (skip) {
-            evtNoticef("raft(%llx) skip apply index %llu on failed, %d",
+            evtNoticef("1528-054", "raft(%llx) skip apply index %llu on failed, %d",
                 r->id, index, status);
             goto err_skip_failed;
         }
@@ -1607,7 +1607,7 @@ err_skip_failed:
             int rv = replicationApply(r);
 
             if (rv != 0) {
-                evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+                evtErrf("E-1528-222", "raft(%llx) replication apply failed %d", r->id, rv);
                 /* TODO: just log the error? */
             }
         }
@@ -1644,7 +1644,7 @@ static int applyCommand(struct raft *r,
                        &entry->buf,
                        applyCommandCb);
     if (rv != 0) {
-        evtErrf("raft(%llx) apply failed %d", r->id, rv);
+        evtErrf("E-1528-223", "raft(%llx) apply failed %d", r->id, rv);
         if (request->incRef)
             logRelease(&r->log, index, (struct raft_entry *)entry, 1);
         raft_free(request);
@@ -1697,7 +1697,7 @@ static void applyChange(struct raft *r, const raft_index index)
          */
             server = configurationGet(&r->configuration, r->id);
             if (server == NULL) {
-	        evtNoticef("raft(%llx) not in configuration", r->id);
+	        evtNoticef("1528-055", "raft(%llx) not in configuration", r->id);
                 evtDumpConfiguration(r, &r->configuration);
                 convertToFollower(r);
             }
@@ -1775,7 +1775,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
     if (status != 0) {
         tracef("snapshot %lld at term %lld: %s", snapshot->index,
                snapshot->term, raft_strerror(status));
-        evtErrf("raft(%llx) take snapshot %llu/%llu failed %d", snapshot->index,
+        evtErrf("E-1528-224", "raft(%llx) take snapshot %llu/%llu failed %d", snapshot->index,
 		snapshot->term, status);
         goto out;
     }
@@ -1790,7 +1790,7 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
                snapshot->index,
                snapshot->term,
                raft_strerror(status));
-        evtErrf("raft(%llx) copy conf failed %d", r->id, status);
+        evtErrf("E-1528-225", "raft(%llx) copy conf failed %d", r->id, status);
         goto out;
     }
 
@@ -1816,7 +1816,7 @@ static int doSnapshot(struct raft *r, raft_index snapshot_index,
     assert(snapshot->term);
     rv = configurationCopy(&r->configuration, &snapshot->configuration);
     if (rv != 0) {
-        evtErrf("raft(%llx) copy conf failed %d", r->id, rv);
+        evtErrf("E-1528-226", "raft(%llx) copy conf failed %d", r->id, rv);
         goto abort;
     }
 
@@ -1824,7 +1824,7 @@ static int doSnapshot(struct raft *r, raft_index snapshot_index,
 
     rv = r->fsm->snapshot(r->fsm, &snapshot->bufs, &snapshot->n_bufs);
     if (rv != 0) {
-        evtErrf("raft(%llx) snapshot failed %d", r->id, rv);
+        evtErrf("E-1528-227", "raft(%llx) snapshot failed %d", r->id, rv);
         /* Ignore transient errors. We'll retry next time. */
         if (rv == RAFT_BUSY) {
             rv = 0;
@@ -1838,7 +1838,7 @@ static int doSnapshot(struct raft *r, raft_index snapshot_index,
     rv = r->io->snapshot_put(r->io, r->snapshot.trailing, &r->snapshot.put,
                              snapshot, takeSnapshotCb);
     if (rv != 0) {
-        evtErrf("raft(%llx) snapshot put failed %d", r->id, rv);
+        evtErrf("E-1528-228", "raft(%llx) snapshot put failed %d", r->id, rv);
         goto abort_after_fsm_snapshot;
     }
 
@@ -1954,7 +1954,7 @@ int replicationApply(struct raft *r)
         }
 
         if (!hookEntryShouldApply(r, index, entry)) {
-            evtInfof("raft(%llx) entry at index %llu should apply later",
+            evtInfof("I-1528-003", "raft(%llx) entry at index %llu should apply later",
                 r->id, index);
             break;
         }
@@ -1974,7 +1974,7 @@ int replicationApply(struct raft *r)
                 }
 
                 if (rv == RAFT_RETRY) {
-                    evtInfof("raft(llx) apply %llu failed with retry",
+                    evtInfof("I-1528-004", "raft(llx) apply %llu failed with retry",
                         r->id, index);
                     return 0;
                 }
@@ -2000,7 +2000,7 @@ int replicationApply(struct raft *r)
         }
 
         if (rv != 0) {
-            evtErrf("raft(%llx) apply failed %d %lu", r->id, rv, index);
+            evtErrf("E-1528-229", "raft(%llx) apply failed %d %lu", r->id, rv, index);
             break;
         }
     }
@@ -2009,7 +2009,7 @@ err_take_snapshot:
     if (shouldTakeSnapshot(r)) {
         rv = takeSnapshot(r);
 	if (rv != 0)
-            evtErrf("raft(%llx) take snapshot failed %d", r->id, rv);
+            evtErrf("E-1528-230", "raft(%llx) take snapshot failed %d", r->id, rv);
     }
 
     return rv;

@@ -30,14 +30,14 @@ static int tickFollower(struct raft *r)
     /* If we have been removed from the configuration, or maybe we didn't
      * receive one yet, just stay follower. */
     if (server == NULL) {
-        evtWarnf("raft(%llx) have been remove from conf", r->id);
+        evtWarnf("W-1528-072", "raft(%llx) have been remove from conf", r->id);
         return 0;
     }
 
     /* Try to apply and take snapshot*/
     rv = replicationApply(r);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+        evtErrf("E-1528-252", "raft(%llx) replication apply failed %d", r->id, rv);
         return rv;
     }
 
@@ -61,18 +61,18 @@ static int tickFollower(struct raft *r)
     }
 
     if (r->nr_appending_requests != 0) {
-        evtNoticef("raft(%llx) has %u pending append requests", r->id,
+        evtNoticef("1528-058", "raft(%llx) has %u pending append requests", r->id,
             r->nr_appending_requests);
         return 0;
     }
 
     if (configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
         tracef("convert to candidate and start new election");
-        evtInfof("raft(%llx) convert to candidate", r->id);
+        evtInfof("I-1528-005", "raft(%llx) convert to candidate", r->id);
         rv = convertToCandidate(r, false /* disrupt leader */);
         if (rv != 0) {
             tracef("convert to candidate: %s", raft_strerror(rv));
-            evtErrf("raft(%llx) convert to candidate failed %d", r->id, rv);
+            evtErrf("E-1528-253", "raft(%llx) convert to candidate failed %d", r->id, rv);
             return rv;
         }
     }
@@ -98,7 +98,7 @@ static int tickCandidate(struct raft *r)
      */
     if (electionTimerExpired(r)) {
         tracef("start new election");
-        evtIdInfof(r->id, "raft(%llx) start new election", r->id);
+        evtInfof("I-1528-006", "raft(%llx) start new election", r->id);
         r->candidate_state.in_pre_vote = r->pre_vote;
         r->candidate_state.disrupt_leader = false;
         return electionStart(r);
@@ -181,7 +181,7 @@ static void checkChangeOnMatch(struct raft *r)
     if (index < change->index)
         return;
 
-    evtNoticef("raft(%llx) change on match, match_id %llx index %llu",
+    evtNoticef("1528-059", "raft(%llx) change on match, match_id %llx index %llu",
                r->id, change->match_id, change->index);
     r->leader_state.change = NULL;
     if (change != NULL && change->cb != NULL) {
@@ -207,7 +207,7 @@ static int tickLeader(struct raft *r)
     if (now - r->election_timer_start >= (r->election_timeout - r->heartbeat_timeout)) {
         if (!checkContactQuorum(r)) {
             tracef("unable to contact majority of cluster -> step down");
-            evtIdNoticef(r->id, "raft(%llx) leader step down", r->id);
+            evtNoticef("1528-060", "raft(%llx) leader step down", r->id);
             if (r->stepdown_cb)
                 r->stepdown_cb(r, RAFT_TICK_STEPDOWN);
             convertToFollower(r);
@@ -219,11 +219,11 @@ static int tickLeader(struct raft *r)
     /* Try to apply and take snapshot*/
     rv = replicationApply(r);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+        evtErrf("E-1528-254", "raft(%llx) replication apply failed %d", r->id, rv);
     }
 
     if (r->state != RAFT_LEADER) {
-        evtNoticef("raft(%llx) step down after replication apply", r->id);
+        evtNoticef("1528-061", "raft(%llx) step down after replication apply", r->id);
         return 0;
     }
 
@@ -336,7 +336,7 @@ void tickCb(struct raft_io *io)
     }
     rv = tick(r);
     if (rv != 0) {
-        evtErrf("raft %x tick failed %d", r->id, rv);
+        evtErrf("E-1528-255", "raft %x tick failed %d", r->id, rv);
         convertToUnavailable(r);
         return;
     }

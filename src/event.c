@@ -1,5 +1,7 @@
 #include "event.h"
+#include <limits.h>
 #include <assert.h>
+#include "configuration.h"
 
 
 static void defaultRecord(void *data, enum raft_event_level level,
@@ -52,13 +54,21 @@ const struct raft_event_recorder *eventRecorder(void)
 void evtDumpConfiguration(struct raft *r, const struct raft_configuration *c)
 {
 	unsigned i;
+	int rv;
+	size_t offset;
+	char buf[PATH_MAX];
+	struct raft_server *s;
 
-	if (!evtIdAllowed(r->id))
-		return;
-	for (i = 0; i < c->n; ++i)
-		evtIdNoticef(r->id,
-			"phase %d raft(%llx) member %u %llx role %d %d group %d",
-			c->phase, r->id, i, c->servers[i].id,
-			c->servers[i].role, c->servers[i].role_new,
-			c->servers[i].group);
+	offset = (size_t)snprintf(buf, sizeof(buf), "raft(%llx) phase %s ",
+				r->id, configurationPhaseName(c->phase));
+	for (i = 0; i < c->n; ++i) {
+		s = &c->servers[i];
+		rv = snprintf(buf, sizeof(buf) - offset, " %llx-%s-%s/%s ",
+			s->id, configurationGroupName(s->group),
+			configurationRoleName(s->role),
+			configurationRoleName(s->role_new));
+		assert((size_t)rv < sizeof(buf) - offset);
+		offset += (size_t)rv;
+	}
+	evtNoticef("1528-017", "%s", buf);
 }

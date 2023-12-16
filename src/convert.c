@@ -148,24 +148,24 @@ static void convertToLeaderUpdateCb(struct raft_election_meta_update *update,
     int rv;
 
     if (status != 0) {
-        evtErrf("raft(%llx) convert to leader update meta term %llu failed %d",
+        evtErrf("E-1528-117", "raft(%llx) convert to leader update meta term %llu failed %d",
             r->id, update->term, status);
         goto err_free_request;
     }
 
     if (r->state != RAFT_CANDIDATE) {
-        evtErrf("raft(%llx) isn't candidate, state %d", r->id, r->state);
+        evtErrf("E-1528-118", "raft(%llx) isn't candidate, state %d", r->id, r->state);
         goto err_free_request;
     }
 
-    evtIdNoticef(r->id,
+    evtNoticef("1528-014",
                  "raft(%llx) convert to leader update meta term %llu succeed",
                  r->id, update->term);
     r->current_term = update->term;
     r->voted_for = update->vote_for;
     rv = convertToLeader(r);
     if (rv != 0) {
-        evtErrf("raft(%llx) convert to leader failed %d", r->id, rv);
+        evtErrf("E-1528-119", "raft(%llx) convert to leader failed %d", r->id, rv);
         goto err_free_request;
     }
     /* Check if we can commit some new entries. */
@@ -173,7 +173,7 @@ static void convertToLeaderUpdateCb(struct raft_election_meta_update *update,
 
     rv = replicationApply(r);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication apply failed %d", r->id, rv);
+        evtErrf("E-1528-120", "raft(%llx) replication apply failed %d", r->id, rv);
         convertToUnavailable(r);
     }
 err_free_request:
@@ -188,7 +188,7 @@ static int convertToLeaderUpdate(struct raft *r)
     update = raft_malloc(sizeof(*update));
     if (update == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("raft(%llx) malloc failed %d", r->id, rv);
+        evtErrf("E-1528-121", "raft(%llx) malloc failed %d", r->id, rv);
         goto err_return;
     }
     update->data = r;
@@ -196,7 +196,7 @@ static int convertToLeaderUpdate(struct raft *r)
     rv = electionUpdateMeta(r, update, r->current_term + 1, r->id,
                             convertToLeaderUpdateCb);
     if (rv != 0) {
-        evtErrf("raft(%llx) vote self update meta term %llu failed %d",
+        evtErrf("E-1528-122", "raft(%llx) vote self update meta term %llu failed %d",
             r->id, r->current_term + 1, rv);
         goto err_free_update;
     }
@@ -222,7 +222,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
     /* Allocate the votes array. */
     r->candidate_state.votes = raft_malloc(n_voters * sizeof(bool));
     if (r->candidate_state.votes == NULL) {
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-123", "%s", "malloc");
         return RAFT_NOMEM;
     }
     r->candidate_state.disrupt_leader = disrupt_leader;
@@ -237,10 +237,10 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
 
     if (n_voters == 1) {
         tracef("self elect and convert to leader");
-        evtInfof("raft(%llx) self elect and convert to leader", r->id);
+        evtInfof("I-1528-001", "raft(%llx) self elect and convert to leader", r->id);
         rv = convertToLeaderUpdate(r);
         if (rv != 0) {
-            evtErrf("raft(%llx) convert to leader update failed %d", r->id, rv);
+            evtErrf("E-1528-124", "raft(%llx) convert to leader update failed %d", r->id, rv);
         }
 
         return rv;
@@ -251,7 +251,7 @@ int convertToCandidate(struct raft *r, bool disrupt_leader)
     if (rv != 0) {
         r->state = RAFT_FOLLOWER;
         raft_free(r->candidate_state.votes);
-        evtErrf("raft(%llx) election start failed", r->id, rv);
+        evtErrf("E-1528-125", "raft(%llx) election start failed", r->id, rv);
         return rv;
     }
     if (r->state_change_cb)
@@ -275,7 +275,7 @@ int convertToLeader(struct raft *r)
     /* Allocate and initialize the progress array. */
     rv = progressBuildArray(r);
     if (rv != 0) {
-        evtErrf("raft(%llx) build array failed %d", r->id, rv);
+        evtErrf("E-1528-126", "raft(%llx) build array failed %d", r->id, rv);
         return rv;
     }
     r->leader_state.change = NULL;

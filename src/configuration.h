@@ -84,8 +84,12 @@ int configurationJointToNormal(const struct raft_configuration *src,
                                struct raft_configuration *dst,
                                enum raft_group group);
 
-int configurationServerRole(struct raft_configuration *c, raft_id id);
+int configurationServerRole(const struct raft_configuration *c, raft_id id);
 
 const char *configurationRoleName(int role);
+
+const char *configurationPhaseName(int phase);
+
+const char *configurationGroupName(int group);
 
 #endif /* CONFIGURATION_H_ */

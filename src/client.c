@@ -37,7 +37,7 @@ int raft_apply(struct raft *r,
         || r->leader_state.removed_from_cluster) {
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
-	    evtErrf("raft(%llx) apply failed %d", r->id, rv);
+	    evtErrf("E-1528-073", "raft(%llx) apply failed %d", r->id, rv);
         goto err;
     }
 
@@ -52,14 +52,14 @@ int raft_apply(struct raft *r,
     /* Append the new entries to the log. */
     rv = logAppendCommands(&r->log, r->current_term, bufs, n);
     if (rv != 0) {
-        evtErrf("raft(%llx) append cmd failed %d", r->id, rv);
+        evtErrf("E-1528-074", "raft(%llx) append cmd failed %d", r->id, rv);
         goto err;
     }
 
     r->latest_entry_time = req->time;
     rv = requestRegEnqueue(&r->leader_state.reg, (struct request *) req);
     if (rv != 0) {
-        evtErrf("raft(%llx) append to registry failed %d", r->id, rv);
+        evtErrf("E-1528-075", "raft(%llx) append to registry failed %d", r->id, rv);
         goto err_after_log_append;
     }
     hookRequestAccept(r, index);
@@ -73,7 +73,7 @@ int raft_apply(struct raft *r,
 
     rv = replicationTrigger(r, index);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication trigger failed %d", r->id, rv);
+        evtErrf("E-1528-076", "raft(%llx) replication trigger failed %d", r->id, rv);
         goto err_after_reg_append;
     }
 
@@ -97,7 +97,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 
     if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
-        evtErrf("raft(%llx) apply barrier failed %d", r->id, rv);
+        evtErrf("E-1528-077", "raft(%llx) apply barrier failed %d", r->id, rv);
         goto err;
     }
 
@@ -115,14 +115,14 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 
     rv = logAppend(&r->log, r->current_term, RAFT_BARRIER, &buf, NULL);
     if (rv != 0) {
-        evtErrf("raft(%llx) append barrier failed %d", r->id, rv);
+        evtErrf("E-1528-078", "raft(%llx) append barrier failed %d", r->id, rv);
         goto err_after_buf_alloc;
     }
 
     r->latest_entry_time = req->time;
     rv = requestRegEnqueue(&r->leader_state.reg, (struct request *) req);
     if (rv != 0) {
-	    evtErrf("raft(%llx) append to registry failed %d", r->id, rv);
+	    evtErrf("E-1528-079", "raft(%llx) append to registry failed %d", r->id, rv);
 	    goto err_after_log_append;
     }
     hookRequestAccept(r, index);
@@ -134,7 +134,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
 
     rv = replicationTrigger(r, index);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication trigger failed %d", r->id, rv);
+        evtErrf("E-1528-080", "raft(%llx) replication trigger failed %d", r->id, rv);
         goto err_after_reg_append;
     }
 
@@ -166,12 +166,12 @@ static int clientChangeConfiguration(
     /* Encode the new configuration and append it to the log. */
     rv = logAppendConfiguration(&r->log, term, configuration);
     if (rv != 0) {
-        evtErrf("raft(%llx) append conf failed %d", r->id, rv);
+        evtErrf("E-1528-081", "raft(%llx) append conf failed %d", r->id, rv);
         goto err;
     }
 
     req->index = index;
-    evtIdNoticef(r->id, "raft(%llx) conf append at index %lu", r->id, index);
+    evtNoticef("1528-007", "raft(%llx) conf append at index %lu", r->id, index);
     evtDumpConfiguration(r, configuration);
 
     entry = logGet(&r->log, index);
@@ -183,7 +183,7 @@ static int clientChangeConfiguration(
     if (configuration->n != r->configuration.n) {
         rv = progressRebuildArray(r, configuration);
         if (rv != 0) {
-            evtErrf("raft(%llx) rebuild array failed %d", r->id, rv);
+            evtErrf("E-1528-082", "raft(%llx) rebuild array failed %d", r->id, rv);
             goto err;
         }
     }
@@ -202,7 +202,7 @@ static int clientChangeConfiguration(
     /* Start writing the new log entry to disk and send it to the followers. */
     rv = replicationTrigger(r, index);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication trigger failed %d", r->id, rv);
+        evtErrf("E-1528-083", "raft(%llx) replication trigger failed %d", r->id, rv);
         /* TODO: restore the old next/match indexes and configuration. */
         goto err_after_log_append;
     }
@@ -235,7 +235,7 @@ int raft_add(struct raft *r,
     req->match_id = 0;
     rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
-        evtNoticef("raft(%llx) change conf failed %d", r->id, rv);
+        evtNoticef("1528-008", "raft(%llx) change conf failed %d", r->id, rv);
         return rv;
     }
 
@@ -245,20 +245,20 @@ int raft_add(struct raft *r,
      * it. */
     rv = configurationCopy(&r->configuration, &configuration);
     if (rv != 0) {
-        evtErrf("raft(%llx) copy conf failed %d", r->id, rv);
+        evtErrf("E-1528-084", "raft(%llx) copy conf failed %d", r->id, rv);
         goto err;
     }
 
     rv = raft_configuration_add(&configuration, id, RAFT_SPARE);
     if (rv != 0) {
-        evtErrf("raft(%llx) add conf failed %d", r->id, rv);
+        evtErrf("E-1528-085", "raft(%llx) add conf failed %d", r->id, rv);
         goto err_after_configuration_copy;
     }
     req->cb = cb;
 
     rv = clientChangeConfiguration(r, req, &configuration);
     if (rv != 0) {
-        evtErrf("raft(%llx) change conf failed %d", r->id, rv);
+        evtErrf("E-1528-086", "raft(%llx) change conf failed %d", r->id, rv);
         goto err_after_configuration_copy;
     }
 
@@ -289,7 +289,7 @@ int raft_joint_promote(struct raft *r,
     if (role != RAFT_VOTER && role != RAFT_LOGGER) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
-        evtErrf("raft(%llx) promote role %d failed", r->id, role, rv);
+        evtErrf("E-1528-087", "raft(%llx) promote role %d failed", r->id, role, rv);
         return rv;
     }
 
@@ -297,13 +297,13 @@ int raft_joint_promote(struct raft *r,
     if (server == NULL) {
         rv = RAFT_NOTFOUND;
         ErrMsgPrintf(r->errmsg, "no server has ID %llu", remove);
-        evtErrf("raft(%llx) has no server id %llx failed", r->id, remove, rv);
+        evtErrf("E-1528-088", "raft(%llx) has no server id %llx failed", r->id, remove, rv);
         goto err;
     }
 
     rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
-        evtNoticef("raft(%llx) change conf failed %d", r->id, rv);
+        evtNoticef("1528-009", "raft(%llx) change conf failed %d", r->id, rv);
         return rv;
     }
 
@@ -311,7 +311,7 @@ int raft_joint_promote(struct raft *r,
     if (server == NULL) {
         rv = RAFT_NOTFOUND;
         ErrMsgPrintf(r->errmsg, "no server has ID %llu", id);
-        evtErrf("raft(%llx) has no server id %llx failed", r->id, id, rv);
+        evtErrf("E-1528-089", "raft(%llx) has no server id %llx failed", r->id, id, rv);
         goto err;
     }
 
@@ -320,7 +320,7 @@ int raft_joint_promote(struct raft *r,
         const char *name = configurationRoleName(role);
         rv = RAFT_BADROLE;
         ErrMsgPrintf(r->errmsg, "server is already %s", name);
-        evtWarnf("raft(%llx) server %llx is already %s", r->id, server->id, name);
+        evtWarnf("W-1528-062", "raft(%llx) server %llx is already %s", r->id, server->id, name);
         goto err;
     }
 
@@ -344,7 +344,7 @@ int raft_joint_promote(struct raft *r,
         rv = clientChangeConfiguration(r, req, &r->configuration);
         if (rv != 0) {
             configurationJointReset(&r->configuration);
-            evtErrf("raft(%llx) change conf failed %d", r->id, rv);
+            evtErrf("E-1528-090", "raft(%llx) change conf failed %d", r->id, rv);
             return rv;
         }
 
@@ -360,7 +360,7 @@ int raft_joint_promote(struct raft *r,
     r->leader_state.round_number = 1;
     r->leader_state.round_index = last_index;
     r->leader_state.round_start = r->io->time(r->io);
-    evtNoticef("raft(%llx) promotee %llx round %u round_index %llu", r->id,
+    evtNoticef("1528-010", "raft(%llx) promotee %llx round %u round_index %llu", r->id,
 	       r->leader_state.promotee_id, r->leader_state.round_number,
 	       r->leader_state.round_index);
 
@@ -370,7 +370,7 @@ int raft_joint_promote(struct raft *r,
         /* This error is not fatal. */
         tracef("failed to send append entries to server %llu: %s (%d)",
                server->id, raft_strerror(rv), rv);
-        evtErrf("raft(%llx) replication progress failed %d", r->id, rv);
+        evtErrf("E-1528-091", "raft(%llx) replication progress failed %d", r->id, rv);
     }
     return 0;
 err:
@@ -428,13 +428,13 @@ int raft_assign(struct raft *r,
     if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE && role != RAFT_LOGGER) {
         rv = RAFT_BADROLE;
         ErrMsgFromCode(r->errmsg, rv);
-        evtErrf("raft(%llx) assign role %d failed", r->id, role, rv);
+        evtErrf("E-1528-092", "raft(%llx) assign role %d failed", r->id, role, rv);
         return rv;
     }
 
     rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
-        evtNoticef("raft(%llx) change conf failed %d", r->id, rv);
+        evtNoticef("1528-011", "raft(%llx) change conf failed %d", r->id, rv);
         return rv;
     }
 
@@ -442,7 +442,7 @@ int raft_assign(struct raft *r,
     if (server == NULL) {
         rv = RAFT_NOTFOUND;
         ErrMsgPrintf(r->errmsg, "no server has ID %llu", id);
-        evtErrf("raft(%llx) has no server id %llx failed", r->id, id, rv);
+        evtErrf("E-1528-093", "raft(%llx) has no server id %llx failed", r->id, id, rv);
         goto err;
     }
 
@@ -451,7 +451,7 @@ int raft_assign(struct raft *r,
         const char *name = configurationRoleName(role);
         rv = RAFT_BADROLE;
         ErrMsgPrintf(r->errmsg, "server is already %s", name);
-        evtWarnf("raft(%llx) server %llx is already %s", r->id, server->id, name);
+        evtWarnf("W-1528-063", "raft(%llx) server %llx is already %s", r->id, server->id, name);
         goto err;
     }
 
@@ -476,7 +476,7 @@ int raft_assign(struct raft *r,
         rv = clientChangeConfiguration(r, req, &r->configuration);
         if (rv != 0) {
             r->configuration.servers[server_index].role = old_role;
-            evtErrf("raft(%llx) change conf failed %d", r->id, rv);
+            evtErrf("E-1528-094", "raft(%llx) change conf failed %d", r->id, rv);
             return rv;
         }
 
@@ -491,7 +491,7 @@ int raft_assign(struct raft *r,
     r->leader_state.round_number = 1;
     r->leader_state.round_index = last_index;
     r->leader_state.round_start = r->io->time(r->io);
-    evtNoticef("raft(%llx) promotee %llx round %u round_index %llu", r->id,
+    evtNoticef("1528-012", "raft(%llx) promotee %llx round %u round_index %llu", r->id,
 	       r->leader_state.promotee_id, r->leader_state.round_number,
 	       r->leader_state.round_index);
 
@@ -501,7 +501,7 @@ int raft_assign(struct raft *r,
         /* This error is not fatal. */
         tracef("failed to send append entries to server %llu: %s (%d)",
                server->id, raft_strerror(rv), rv);
-        evtErrf("raft(%llx) replication progress failed %d", r->id, rv);
+        evtErrf("E-1528-095", "raft(%llx) replication progress failed %d", r->id, rv);
     }
 
     return 0;
@@ -544,14 +544,14 @@ int raft_remove(struct raft *r,
     req->match_id = 0;
     rv = membershipCanChangeConfiguration(r, joint);
     if (rv != 0) {
-        evtErrf("raft(%llx) change conf failed %d", r->id, rv);
+        evtErrf("E-1528-096", "raft(%llx) change conf failed %d", r->id, rv);
         return rv;
     }
 
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         rv = RAFT_BADID;
-        evtErrf("raft(%llx) bad id %llx", r->id, id);
+        evtErrf("E-1528-097", "raft(%llx) bad id %llx", r->id, id);
         goto err;
     }
 
@@ -560,7 +560,7 @@ int raft_remove(struct raft *r,
     if (r->configuration.phase == RAFT_CONF_JOINT) {
         rv = copyJointRemoveConfiguration(r, &configuration, id);
         if (rv != 0) {
-            evtErrf("raft(%llx) copy joint conf failed %d", r->id, rv);
+            evtErrf("E-1528-098", "raft(%llx) copy joint conf failed %d", r->id, rv);
             goto err;
         }
         configurationRemove(&configuration, id);
@@ -569,13 +569,13 @@ int raft_remove(struct raft *r,
         * from it. */
         rv = configurationCopy(&r->configuration, &configuration);
         if (rv != 0) {
-            evtErrf("raft(%llx) copy conf failed %d", r->id, rv);
+            evtErrf("E-1528-099", "raft(%llx) copy conf failed %d", r->id, rv);
             goto err;
         }
 
         rv = configurationRemove(&configuration, id);
         if (rv != 0) {
-            evtErrf("raft(%llx) remove %llx from conf failed %d", r->id, id, rv);
+            evtErrf("E-1528-100", "raft(%llx) remove %llx from conf failed %d", r->id, id, rv);
             goto err_after_configuration_copy;
         }
     }
@@ -583,7 +583,7 @@ int raft_remove(struct raft *r,
     req->cb = cb;
     rv = clientChangeConfiguration(r, req, &configuration);
     if (rv != 0) {
-        evtErrf("raft(%llx) change conf failed %d", r->id, rv);
+        evtErrf("E-1528-101", "raft(%llx) change conf failed %d", r->id, rv);
         goto err_after_configuration_copy;
     }
 
@@ -637,7 +637,7 @@ int raft_transfer(struct raft *r,
     if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
         ErrMsgFromCode(r->errmsg, rv);
-        evtErrf("raft(%llx) transfer %llx failed %d", r->id, id, rv);
+        evtErrf("E-1528-102", "raft(%llx) transfer %llx failed %d", r->id, id, rv);
         goto err;
     }
 
@@ -646,7 +646,7 @@ int raft_transfer(struct raft *r,
         if (id == 0) {
             rv = RAFT_NOTFOUND;
             ErrMsgPrintf(r->errmsg, "there's no other voting server");
-            evtErrf("raft(%llx) select transferee failed %d", r->id, rv);
+            evtErrf("E-1528-103", "raft(%llx) select transferee failed %d", r->id, rv);
             goto err;
         }
     }
@@ -656,12 +656,12 @@ int raft_transfer(struct raft *r,
         || !configurationIsVoter(&r->configuration, server, RAFT_GROUP_ANY)) {
         rv = RAFT_BADID;
         ErrMsgFromCode(r->errmsg, rv);
-        evtErrf("raft(%llx) get transferee %lu failed %d", r->id,
+        evtErrf("E-1528-104", "raft(%llx) get transferee %lu failed %d", r->id,
             server == NULL ? 0 : server->id, rv);
         goto err;
     }
 
-    evtNoticef("raft(%llx) transfer leader to %llx role %d %d group %d", r->id,
+    evtNoticef("1528-013", "raft(%llx) transfer leader to %llx role %d %d group %d", r->id,
         server->id, server->role, server->role_new, server->group);
 
     /* If this follower is up-to-date, we can send it the TimeoutNow message
@@ -675,7 +675,7 @@ int raft_transfer(struct raft *r,
         rv = membershipLeadershipTransferStart(r);
         if (rv != 0) {
             r->transfer = NULL;
-            evtErrf("raft(%llx) transfer to %llx failed %d", r->id, id, rv);
+            evtErrf("E-1528-105", "raft(%llx) transfer to %llx failed %d", r->id, id, rv);
             goto err;
         }
     }

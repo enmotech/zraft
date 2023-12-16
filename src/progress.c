@@ -64,7 +64,7 @@ int progressRebuildArray(struct raft *r,
 
     progress = raft_malloc(configuration->n * sizeof *progress);
     if (progress == NULL) {
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-157", "%s", "malloc");
         return RAFT_NOMEM;
     }
 
@@ -246,12 +246,12 @@ bool progressMaybeDecrement(struct raft *r,
             return false;
         }
         progressAbortSnapshot(r, i);
-        evtIdNoticef(r->id, "raft(%llx) %llx abort snapshot %llu", r->id, id,
+        evtNoticef("1528-027", "raft(%llx) %llx abort snapshot %llu", r->id, id,
             p->snapshot_index);
         return true;
     }
 
-    evtIdNoticef(r->id, "raft(%llx) %llx progress %u %llu %llu %llu %llu %llu %d",
+    evtNoticef("1528-028", "raft(%llx) %llx progress %u %llu %llu %llu %llu %llu %d",
 	       r->id, id, p->state, p->next_index, p->match_index,
 	       p->snapshot_index, p->last_send, p->snapshot_last_send,
 	       p->recent_recv);
@@ -260,18 +260,18 @@ bool progressMaybeDecrement(struct raft *r,
          * the matched one. */
         if (rejected <= p->match_index) {
             tracef("match index is up to date -> ignore ");
-            evtIdNoticef(r->id, "raft(%llx) %llx reject %lld <= match %lld", r->id, id,
+            evtNoticef("1528-029", "raft(%llx) %llx reject %lld <= match %lld", r->id, id,
 		       rejected, p->match_index);
             if (last_index == 1) {
                 initProgress(p, logLastIndex(&r->log));
-                evtWarnf("raft(%llx) %llx start over", r->id, id);
+                evtWarnf("W-1528-064", "raft(%llx) %llx start over", r->id, id);
             }
             return false;
         }
         /* Directly decrease next to match + 1 */
         p->next_index = min(rejected, p->match_index + 1);
         progressToProbe(r, i);
-        evtIdNoticef(r->id, "raft(%llx) %llx to probe next_index %llu",
+        evtNoticef("1528-030", "raft(%llx) %llx to probe next_index %llu",
 		   r->id, id, p->next_index);
         return true;
     }
@@ -281,13 +281,13 @@ bool progressMaybeDecrement(struct raft *r,
     if (rejected != p->next_index - 1) {
         tracef("rejected index %llu different from next index %lld -> ignore ",
                rejected, p->next_index);
-        evtIdWarnf(r->id, "raft(%llx) %llx rejected %lu diff next index %llu",
+        evtWarnf("W-1528-065",  "raft(%llx) %llx rejected %lu diff next index %llu",
 		     r->id, id, rejected, p->next_index);
         return false;
     }
 
     p->next_index = min(rejected, last_index + 1);
-    evtIdNoticef(r->id, "raft(%llx) %llx set next_index %llu", r->id, id,
+    evtNoticef("1528-031", "raft(%llx) %llx set next_index %llu", r->id, id,
                  p->next_index);
     return true;
 }

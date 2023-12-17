@@ -125,7 +125,7 @@ static void electionVoteForSelfCb(struct raft_election_meta_update *update,
     int rv;
 
     if (r->state == RAFT_UNAVAILABLE) {
-        evtErrf("E-1528-128", "raft(%llx) election set meta cb, state is unavailable", r->id);
+        evtErrf("E-1528-129", "raft(%llx) election set meta cb, state is unavailable", r->id);
         goto err_free_update;
     }
 

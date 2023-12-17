@@ -15,28 +15,28 @@ int membershipCanChangeConfiguration(struct raft *r, bool igore_joint)
 
     if (r->state != RAFT_LEADER || r->transfer != NULL) {
         rv = RAFT_NOTLEADER;
-        evtNoticef("1528-019", "raft(%llx) lost leadership with state %d",
+        evtNoticef("N-1528-019", "raft(%llx) lost leadership with state %d",
 		r->id, r->state);
         goto err;
     }
 
     if (r->configuration_uncommitted_index != 0) {
         rv = RAFT_CANTCHANGE;
-        evtNoticef("1528-020", "raft(%llx) has uncommitted configuration %llu",
+        evtNoticef("N-1528-020", "raft(%llx) has uncommitted configuration %llu",
 		r->id, r->configuration_uncommitted_index);
         goto err;
     }
 
     if (r->leader_state.promotee_id != 0) {
         rv = RAFT_CANTCHANGE;
-        evtNoticef("1528-021", "raft(%llx) has promotee server(%16llx)",
+        evtNoticef("N-1528-021", "raft(%llx) has promotee server(%16llx)",
 		r->id, r->leader_state.promotee_id);
         goto err;
     }
 
     if (!igore_joint && r->configuration.phase != RAFT_CONF_NORMAL) {
         rv = RAFT_CANTCHANGE;
-        evtNoticef("1528-022", "raft(%llx) is changing",
+        evtNoticef("N-1528-022", "raft(%llx) is changing",
 		r->id);
         goto err;
     }
@@ -100,7 +100,7 @@ bool membershipUpdateCatchUpRound(struct raft *r)
         r->leader_state.round_index = 0;
         r->leader_state.round_start = 0;
 
-        evtNoticef("1528-023", "raft(%llx) promotee %llx catch up with leader",
+        evtNoticef("N-1528-023", "raft(%llx) promotee %llx catch up with leader",
             r->id, r->leader_state.promotee_id);
         return true;
     }
@@ -112,7 +112,7 @@ bool membershipUpdateCatchUpRound(struct raft *r)
     r->leader_state.round_index = last_index;
     r->leader_state.round_start = now;
 
-    evtNoticef("1528-024", "raft(%llx) promotee %llx round %u round_index %llu",
+    evtNoticef("N-1528-024", "raft(%llx) promotee %llx round %u round_index %llu",
            r->id, r->leader_state.promotee_id, r->leader_state.round_number,
 	       r->leader_state.round_index);
 
@@ -148,7 +148,7 @@ int membershipUncommittedChange(struct raft *r,
     }
     r->configuration_uncommitted_index = index;
 
-    evtNoticef("1528-025", "raft(%llx) conf received at index %lu", r->id, index);
+    evtNoticef("N-1528-025", "raft(%llx) conf received at index %lu", r->id, index);
     evtDumpConfiguration(r, &configuration);
     hookConfChange(r, &configuration);
 
@@ -195,7 +195,7 @@ int membershipRollback(struct raft *r)
         r->role = configurationServerRole(&r->configuration, r->id);
     }
     r->configuration_uncommitted_index = 0;
-    evtNoticef("1528-026", "raft(%llx) conf rollback ", r->id);
+    evtNoticef("N-1528-026", "raft(%llx) conf rollback ", r->id);
     evtDumpConfiguration(r, &r->configuration);
     hookConfChange(r, &r->configuration);
     return 0;

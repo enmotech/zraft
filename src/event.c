@@ -70,5 +70,5 @@ void evtDumpConfiguration(struct raft *r, const struct raft_configuration *c)
 		assert((size_t)rv < sizeof(buf) - offset);
 		offset += (size_t)rv;
 	}
-	evtNoticef("1528-017", "%s", buf);
+	evtNoticef("N-1528-017", "%s", buf);
 }

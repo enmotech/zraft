@@ -61,7 +61,7 @@ static int tickFollower(struct raft *r)
     }
 
     if (r->nr_appending_requests != 0) {
-        evtNoticef("1528-058", "raft(%llx) has %u pending append requests", r->id,
+        evtNoticef("N-1528-058", "raft(%llx) has %u pending append requests", r->id,
             r->nr_appending_requests);
         return 0;
     }
@@ -181,7 +181,7 @@ static void checkChangeOnMatch(struct raft *r)
     if (index < change->index)
         return;
 
-    evtNoticef("1528-059", "raft(%llx) change on match, match_id %llx index %llu",
+    evtNoticef("N-1528-059", "raft(%llx) change on match, match_id %llx index %llu",
                r->id, change->match_id, change->index);
     r->leader_state.change = NULL;
     if (change != NULL && change->cb != NULL) {
@@ -207,7 +207,7 @@ static int tickLeader(struct raft *r)
     if (now - r->election_timer_start >= (r->election_timeout - r->heartbeat_timeout)) {
         if (!checkContactQuorum(r)) {
             tracef("unable to contact majority of cluster -> step down");
-            evtNoticef("1528-060", "raft(%llx) leader step down", r->id);
+            evtNoticef("N-1528-060", "raft(%llx) leader step down", r->id);
             if (r->stepdown_cb)
                 r->stepdown_cb(r, RAFT_TICK_STEPDOWN);
             convertToFollower(r);
@@ -223,7 +223,7 @@ static int tickLeader(struct raft *r)
     }
 
     if (r->state != RAFT_LEADER) {
-        evtNoticef("1528-061", "raft(%llx) step down after replication apply", r->id);
+        evtNoticef("N-1528-061", "raft(%llx) step down after replication apply", r->id);
         return 0;
     }
 

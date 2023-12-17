@@ -158,7 +158,7 @@ static void convertToLeaderUpdateCb(struct raft_election_meta_update *update,
         goto err_free_request;
     }
 
-    evtNoticef("1528-014",
+    evtNoticef("N-1528-014",
                  "raft(%llx) convert to leader update meta term %llu succeed",
                  r->id, update->term);
     r->current_term = update->term;

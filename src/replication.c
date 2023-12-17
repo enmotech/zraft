@@ -307,7 +307,7 @@ static int sendSnapshot(struct raft *r, const unsigned i)
     }
 
     if (r->state != RAFT_LEADER) {
-        evtNoticef("1528-040", "raft(%llx) leader has step down after get snapshot", r->id);
+        evtNoticef("N-1528-040", "raft(%llx) leader has step down after get snapshot", r->id);
         return 0;
     }
     progressUpdateSnapshotLastSend(r, i);
@@ -358,7 +358,7 @@ int replicationProgress(struct raft *r, unsigned i)
         if (snapshot_index > 0 && !progress_state_is_snapshot) {
             raft_index last_index = logLastIndex(&r->log);
             assert(last_index > 0); /* The log can't be empty */
-            evtNoticef("1528-041",
+            evtNoticef("N-1528-041",
             "raft(%llx) send %llx snapshot %llu recent %d next 1 first %llu/%llu last %llu/%llu",
                 r->id, server->id, snapshot_index, progressGetRecentRecv(r, i),
                 logStartIndex(r), logStartTerm(r),
@@ -377,7 +377,7 @@ int replicationProgress(struct raft *r, unsigned i)
         if (prev_term == 0 && !progress_state_is_snapshot) {
             assert(prev_index < snapshot_index);
             tracef("missing entry at index %lld -> send snapshot", prev_index);
-            evtNoticef("1528-042",
+            evtNoticef("N-1528-042",
             "raft(%llx) send %llx snapshot %llu recent %d next %llu first %llu/%llu last %llu/%llu",
                 r->id, server->id, snapshot_index, progressGetRecentRecv(r, i),
                 next_index, logStartIndex(r), logStartTerm(r),
@@ -548,7 +548,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
         fireRequestCb(r, request->index, status);
         if (r->state != RAFT_FOLLOWER) {
             convertToFollower(r);
-            evtNoticef("1528-043", "raft(%llx) convert from leader to follower",
+            evtNoticef("N-1528-043", "raft(%llx) convert from leader to follower",
 			    r->id, status);
         }
         goto out;
@@ -752,7 +752,7 @@ static int triggerActualPromotion(struct raft *r)
     assert(entry->type == RAFT_CHANGE);
     r->hook->entry_after_append_fn(r->hook, index, entry);
 
-    evtNoticef("1528-044", "raft(%llx) promotee %llx promoted to voter ", r->id,
+    evtNoticef("N-1528-044", "raft(%llx) promotee %llx promoted to voter ", r->id,
 	       r->leader_state.promotee_id);
 
     /* Start writing the new log entry to disk and send it to the followers. */
@@ -813,7 +813,7 @@ int replicationUpdate(struct raft *r,
      */
     if (result->rejected > 0) {
         if (p->state != PROGRESS__SNAPSHOT)
-            evtNoticef("1528-045", "raft(%llx) %llx %d rejected %lu %lu %lu %lu",
+            evtNoticef("N-1528-045", "raft(%llx) %llx %d rejected %lu %lu %lu %lu",
                 r->id, id, i, result->rejected, result->last_log_index,
                 result->term, result->pkt);
         bool retry;
@@ -822,7 +822,7 @@ int replicationUpdate(struct raft *r,
         if (retry) {
             /* Retry, ignoring errors. */
 	        tracef("log mismatch -> send old entries to %llu", id);
-            evtNoticef("1528-046", "raft(%llx) send old entries to %llx", r->id, id);
+            evtNoticef("N-1528-046", "raft(%llx) send old entries to %llx", r->id, id);
             replicationProgress(r, i);
         }
         return 0;
@@ -1104,7 +1104,7 @@ static int checkLogMatchingProperty(struct raft *r,
 
     /* If this is the very first entry, there's nothing to check. */
     if (args->prev_log_index == 0) {
-        evtNoticef("1528-047", "raft(%llx) pre_log_index 0", r->id);
+        evtNoticef("N-1528-047", "raft(%llx) pre_log_index 0", r->id);
         return 0;
     }
 
@@ -1157,7 +1157,7 @@ static int deleteConflictingEntries(struct raft *r,
         raft_term local_term = logTermOf(&r->log, entry_index);
 
         if (entry_index <= logSnapshotIndex(&r->log)) {
-            evtNoticef("1528-048", "raft(%llx) skip index %llu le snap index %llu", r->id,
+            evtNoticef("N-1528-048", "raft(%llx) skip index %llu le snap index %llu", r->id,
                 entry_index, logSnapshotIndex(&r->log));
                 continue;
         }
@@ -1238,10 +1238,10 @@ int replicationAppend(struct raft *r,
     *last_log_index = r->last_stored;
 
     if (args->prev_log_index == 0) {
-        evtNoticef("1528-049", "raft(%llx) recv term %llu entries %lu %llu %llu %llu",
+        evtNoticef("N-1528-049", "raft(%llx) recv term %llu entries %lu %llu %llu %llu",
 		   r->id, args->term, args->n_entries, args->prev_log_index,
 		   args->prev_log_term, args->leader_commit);
-        evtNoticef("1528-050", "raft(%llx) snapshot %llu log %llu/%llu/%llu",
+        evtNoticef("N-1528-050", "raft(%llx) snapshot %llu log %llu/%llu/%llu",
 		   r->id, r->log.snapshot.last_index, logStartIndex(r), logStartTerm(r),
            logNumEntries(&r->log));
     }
@@ -1254,7 +1254,7 @@ int replicationAppend(struct raft *r,
     }
 
     if (args->n_entries && args_last_index <= logSnapshotIndex(&r->log)) {
-            evtNoticef("1528-051", "raft(%llx) ae last index %llu snap index %llu",
+            evtNoticef("N-1528-051", "raft(%llx) ae last index %llu snap index %llu",
                 args_last_index, logSnapshotIndex(&r->log));
             *last_log_index = logSnapshotIndex(&r->log);
             *rejected = 0;
@@ -1560,7 +1560,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     assert(r->nr_applying);
     r->nr_applying -= 1;
     if (r->last_applied + 1 != index) {
-        evtNoticef("1528-052", "%llx apply index not match %llu/%llu status %d", r->id,
+        evtNoticef("N-1528-052", "%llx apply index not match %llu/%llu status %d", r->id,
             index, r->last_applied, status);
         status = RAFT_IOERR;
     }
@@ -1577,7 +1577,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
     if (status != 0) {
         evtErrf("E-1528-221", "%llx apply index %llu failed %d", r->id, index, status);
         if (r->nr_applying == 0) {
-            evtNoticef("1528-053", "raft(%llx) reset applying %llu %llu", r->id,
+            evtNoticef("N-1528-053", "raft(%llx) reset applying %llu %llu", r->id,
                 r->last_applying, r->last_applied);
             r->last_applying = r->last_applied;
         }
@@ -1588,7 +1588,7 @@ static void applyCommandCb(struct raft_fsm_apply *req,
             skip = r->hook->entry_skip_on_apply_fail(r->hook, index, entry);
 
         if (skip) {
-            evtNoticef("1528-054", "raft(%llx) skip apply index %llu on failed, %d",
+            evtNoticef("N-1528-054", "raft(%llx) skip apply index %llu on failed, %d",
                 r->id, index, status);
             goto err_skip_failed;
         }
@@ -1697,7 +1697,7 @@ static void applyChange(struct raft *r, const raft_index index)
          */
             server = configurationGet(&r->configuration, r->id);
             if (server == NULL) {
-	        evtNoticef("1528-055", "raft(%llx) not in configuration", r->id);
+	        evtNoticef("N-1528-055", "raft(%llx) not in configuration", r->id);
                 evtDumpConfiguration(r, &r->configuration);
                 convertToFollower(r);
             }

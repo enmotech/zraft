@@ -50,7 +50,7 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
 		request->voted_for, request->term, status);
         goto err;
     }
-    evtNoticef("1528-036", "raft(%llx) set meta succeed %u %llx",
+    evtNoticef("N-1528-036", "raft(%llx) set meta succeed %u %llx",
 	       r->id, request->term, request->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;

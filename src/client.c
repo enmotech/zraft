@@ -171,7 +171,7 @@ static int clientChangeConfiguration(
     }
 
     req->index = index;
-    evtNoticef("1528-007", "raft(%llx) conf append at index %lu", r->id, index);
+    evtNoticef("N-1528-007", "raft(%llx) conf append at index %lu", r->id, index);
     evtDumpConfiguration(r, configuration);
 
     entry = logGet(&r->log, index);
@@ -235,7 +235,7 @@ int raft_add(struct raft *r,
     req->match_id = 0;
     rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
-        evtNoticef("1528-008", "raft(%llx) change conf failed %d", r->id, rv);
+        evtNoticef("N-1528-008", "raft(%llx) change conf failed %d", r->id, rv);
         return rv;
     }
 
@@ -303,7 +303,7 @@ int raft_joint_promote(struct raft *r,
 
     rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
-        evtNoticef("1528-009", "raft(%llx) change conf failed %d", r->id, rv);
+        evtNoticef("N-1528-009", "raft(%llx) change conf failed %d", r->id, rv);
         return rv;
     }
 
@@ -360,7 +360,7 @@ int raft_joint_promote(struct raft *r,
     r->leader_state.round_number = 1;
     r->leader_state.round_index = last_index;
     r->leader_state.round_start = r->io->time(r->io);
-    evtNoticef("1528-010", "raft(%llx) promotee %llx round %u round_index %llu", r->id,
+    evtNoticef("N-1528-010", "raft(%llx) promotee %llx round %u round_index %llu", r->id,
 	       r->leader_state.promotee_id, r->leader_state.round_number,
 	       r->leader_state.round_index);
 
@@ -434,7 +434,7 @@ int raft_assign(struct raft *r,
 
     rv = membershipCanChangeConfiguration(r, false);
     if (rv != 0) {
-        evtNoticef("1528-011", "raft(%llx) change conf failed %d", r->id, rv);
+        evtNoticef("N-1528-011", "raft(%llx) change conf failed %d", r->id, rv);
         return rv;
     }
 
@@ -491,7 +491,7 @@ int raft_assign(struct raft *r,
     r->leader_state.round_number = 1;
     r->leader_state.round_index = last_index;
     r->leader_state.round_start = r->io->time(r->io);
-    evtNoticef("1528-012", "raft(%llx) promotee %llx round %u round_index %llu", r->id,
+    evtNoticef("N-1528-012", "raft(%llx) promotee %llx round %u round_index %llu", r->id,
 	       r->leader_state.promotee_id, r->leader_state.round_number,
 	       r->leader_state.round_index);
 
@@ -661,7 +661,7 @@ int raft_transfer(struct raft *r,
         goto err;
     }
 
-    evtNoticef("1528-013", "raft(%llx) transfer leader to %llx role %d %d group %d", r->id,
+    evtNoticef("N-1528-013", "raft(%llx) transfer leader to %llx role %d %d group %d", r->id,
         server->id, server->role, server->role_new, server->group);
 
     /* If this follower is up-to-date, we can send it the TimeoutNow message

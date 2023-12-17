@@ -347,7 +347,7 @@ RAFT_API int raft_replace_configuration(struct raft *r,
 					struct raft_configuration conf)
 {
 	if (r->io->state != RAFT_IO_AVAILABLE) {
-		evtNoticef("1528-032", "raft(%llx) io busy %u", r->id, r->io->state);
+		evtNoticef("N-1528-032", "raft(%llx) io busy %u", r->id, r->io->state);
 		return RAFT_BUSY;
 	}
 	if (r->state != RAFT_FOLLOWER)
@@ -360,7 +360,7 @@ RAFT_API int raft_replace_configuration(struct raft *r,
         r->role = configurationServerRole(&r->configuration, r->id);
     }
 
-	evtNoticef("1528-033", "raft(%llx) conf replace", r->id);
+	evtNoticef("N-1528-033", "raft(%llx) conf replace", r->id);
 	evtDumpConfiguration(r, &conf);
     hookConfChange(r, &conf);
 	return 0;
@@ -447,7 +447,7 @@ void raft_set_role(struct raft *r, int role)
         assert(r->configuration.phase == RAFT_CONF_JOINT);
         s->role_new = role;
     }
-    evtNoticef("1528-034", "raft(%llx) group %x change role to %d ", r->id, s->group, role);
+    evtNoticef("N-1528-034", "raft(%llx) group %x change role to %d ", r->id, s->group, role);
 }
 
 struct request *raft_first_request(struct raft *r)
@@ -536,5 +536,5 @@ void raft_set_aggressive_snapshot(struct raft *r, bool enable,
 void raft_enable_change_cb_on_match(struct raft *r, bool enable)
 {
     r->enable_change_cb_on_match = enable;
-    evtNoticef("1528-035", "raft(%llx) set change on match %d", r->id, enable);
+    evtNoticef("N-1528-035", "raft(%llx) set change on match %d", r->id, enable);
 }

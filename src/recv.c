@@ -61,7 +61,7 @@ int recvUpdateMeta(struct raft *r,
     request->voted_for = voted_for;
     request->req.data = request;
     r->io->state = RAFT_IO_BUSY;
-    evtNoticef("1528-038", "raft(%llx) recv set meta term %u vote_for %llx", r->id,
+    evtNoticef("N-1528-038", "raft(%llx) recv set meta term %u vote_for %llx", r->id,
 	       request->term, request->voted_for);
     rv = r->io->set_meta(r->io,
                  &request->req,
@@ -114,7 +114,7 @@ static void recvBumpTermIOCb(struct raft_io_set_meta *req, int status)
         goto err;
     }
 
-    evtNoticef("1528-039", "raft(%llx) set meta succeed %u %llx", r->id, request->term,
+    evtNoticef("N-1528-039", "raft(%llx) set meta succeed %u %llx", r->id, request->term,
         r->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;

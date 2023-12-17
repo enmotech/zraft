@@ -43,7 +43,7 @@ int recvTimeoutNow(struct raft *r,
     }
 
     if (r->nr_appending_requests != 0) {
-        evtNoticef("1528-037", "raft(%llx) has %u pending append requests", r->id,
+        evtNoticef("N-1528-037", "raft(%llx) has %u pending append requests", r->id,
             r->nr_appending_requests);
         return 0;
     }

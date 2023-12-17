@@ -134,7 +134,7 @@ static void electionVoteForSelfCb(struct raft_election_meta_update *update,
         goto err_free_update;
     }
 
-    evtNoticef("1528-015", "raft(%llx) vote self set meta term %llu vote_for %llx succeed",
+    evtNoticef("N-1528-015", "raft(%llx) vote self set meta term %llu vote_for %llx succeed",
         r->id, update->term, update->vote_for);
 
     r->current_term = update->term;
@@ -425,7 +425,7 @@ int electionUpdateMeta(struct raft *r, struct raft_election_meta_update *update,
     request->update = update;
     request->req.data = request;
 
-    evtNoticef("1528-016", "raft(%llx) election set meta term %u vote_for %llx",
+    evtNoticef("N-1528-016", "raft(%llx) election set meta term %u vote_for %llx",
                  r->id, term, vote_for);
     r->io->state = RAFT_IO_BUSY;
     rv = r->io->set_meta(r->io,

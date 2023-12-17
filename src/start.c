@@ -357,11 +357,11 @@ static void loadCb(struct raft_io_load *req,
             r->last_applied >= r->configuration_uncommitted_index) {
         r->configuration_index = r->configuration_uncommitted_index;
         r->configuration_uncommitted_index = 0;
-        evtNoticef("1528-056", "raft(%llx) reset conf index %llu", r->id,
+        evtNoticef("N-1528-056", "raft(%llx) reset conf index %llu", r->id,
             r->configuration_index);
     }
 
-    evtNoticef("1528-057", "raft(%llx) conf %lu/%lu log %lu/%lu %lu snap %llu/%llu index %llu/%llu/%llu/%llu",
+    evtNoticef("N-1528-057", "raft(%llx) conf %lu/%lu log %lu/%lu %lu snap %llu/%llu index %llu/%llu/%llu/%llu",
             r->id, r->configuration_index, r->configuration_uncommitted_index,
             logStartIndex(r), logStartTerm(r), logNumEntries(&r->log),
             snapshot_index, snapshot_term, r->commit_index, r->last_applying,

@@ -1181,6 +1181,7 @@ struct raft_change
     void *data;
     raft_change_cb cb;
     raft_index index;
+    raft_time time;
     raft_id match_id;
     bool cb_on_match;
 };

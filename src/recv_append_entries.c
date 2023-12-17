@@ -46,7 +46,7 @@ static void recvUpdateLeaderSnapshot(struct raft *r,
 	    r->follower_state.current_leader.trailing == trailing)
 		return;
 
-	evtIdInfof(r->id,
+	evtInfof("I-1528-002",
 		   "raft(%llx) update leader snapshot index %llu trailing %u",
 		   r->id, snapshot_index, trailing);
 	r->follower_state.current_leader.snapshot_index = snapshot_index;
@@ -69,7 +69,7 @@ int recvAppendEntries(struct raft *r,
     assert(id > 0);
     assert(args != NULL);
     if (r->prev_append_status) {
-        evtErrf("raft(%llx) reject append with prev append status %d",
+        evtErrf("E-1528-159", "raft(%llx) reject append with prev append status %d",
 		r->id, r->prev_append_status);
         return RAFT_NOCONNECTION;
     }
@@ -135,7 +135,7 @@ int recvAppendEntries(struct raft *r,
      * date. */
     rv = recvUpdateLeader(r, id);
     if (rv != 0) {
-        evtErrf("raft(%llx) update leader failed %d", r->id, rv);
+        evtErrf("E-1528-160", "raft(%llx) update leader failed %d", r->id, rv);
         return rv;
     }
 
@@ -165,7 +165,7 @@ int recvAppendEntries(struct raft *r,
     rv = replicationAppend(r, args, &result->rejected, &async,
                            &result->last_log_index);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication append %d", r->id, rv);
+        evtErrf("E-1528-161", "raft(%llx) replication append %d", r->id, rv);
         return rv;
     }
 
@@ -183,7 +183,7 @@ reply:
 
     req = HeapMalloc(sizeof *req);
     if (req == NULL) {
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-162", "%s", "malloc");
         return RAFT_NOMEM;
     }
     req->data = r;
@@ -194,7 +194,7 @@ reply:
     rv = r->io->send(r->io, req, &message, recvSendAppendEntriesResultCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
-            evtErrf("raft(%llx) send failed %d", r->id, rv);
+            evtErrf("E-1528-163", "raft(%llx) send failed %d", r->id, rv);
         raft_free(req);
         return rv;
     }

@@ -63,7 +63,7 @@ static int ensureCapacity(struct request_registry *reg, size_t required)
 
     slots = raft_calloc(size, sizeof(*slots));
     if (slots == NULL) {
-        evtErrf("%s", "calloc request slots failed");
+        evtErrf("E-1528-231", "%s", "calloc request slots failed");
         return RAFT_NOMEM;
     }
 
@@ -90,7 +90,7 @@ int requestRegEnqueue(struct request_registry *reg, struct request *req)
     required = numRequestsForIndex(reg, req->index);
     rv = ensureCapacity(reg, required);
     if (rv != 0) {
-        evtErrf("ensure capacity for %llu failed %d", required, rv);
+        evtErrf("E-1528-232", "ensure capacity for %llu failed %d", required, rv);
 	return rv;
     }
 

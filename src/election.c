@@ -87,7 +87,7 @@ static int electionSend(struct raft *r, const struct raft_server *server)
 
     send = HeapMalloc(sizeof *send);
     if (send == NULL) {
-        evtErrf("raft(%llx) heap malloc failed", r->id);
+        evtErrf("E-1528-127", "raft(%llx) heap malloc failed", r->id);
         return RAFT_NOMEM;
     }
 
@@ -96,7 +96,7 @@ static int electionSend(struct raft *r, const struct raft_server *server)
     rv = r->io->send(r->io, send, &message, sendRequestVoteCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
-            evtErrf("raft(%llx) election send failed %d", r->id, rv);
+            evtErrf("E-1528-128", "raft(%llx) election send failed %d", r->id, rv);
         HeapFree(send);
         return rv;
     }
@@ -125,22 +125,22 @@ static void electionVoteForSelfCb(struct raft_election_meta_update *update,
     int rv;
 
     if (r->state == RAFT_UNAVAILABLE) {
-        evtErrf("raft(%llx) election set meta cb, state is unavailable", r->id);
+        evtErrf("E-1528-128", "raft(%llx) election set meta cb, state is unavailable", r->id);
         goto err_free_update;
     }
 
     if(status != 0) {
-        evtErrf("raft(%llx) set meta failed %d", r->id, status);
+        evtErrf("E-1528-130", "raft(%llx) set meta failed %d", r->id, status);
         goto err_free_update;
     }
 
-    evtNoticef("raft(%llx) vote self set meta term %llu vote_for %llx succeed",
+    evtNoticef("1528-015", "raft(%llx) vote self set meta term %llu vote_for %llx succeed",
         r->id, update->term, update->vote_for);
 
     r->current_term = update->term;
     r->voted_for = update->vote_for;
     if (r->state != RAFT_CANDIDATE) {
-        evtErrf("raft(%llx) state is %u", r->id, r->state);
+        evtErrf("E-1528-131", "raft(%llx) state is %u", r->id, r->state);
         goto err_free_update;
     }
     /* Reset election timer. */
@@ -170,7 +170,7 @@ static void electionVoteForSelfCb(struct raft_election_meta_update *update,
             tracef("failed to send vote request to server %llu: %s", server->id,
                    raft_strerror(rv));
             if (rv != RAFT_NOCONNECTION)
-                evtErrf("send vote to server %llx failed %d", server->id, rv);
+                evtErrf("E-1528-132", "send vote to server %llx failed %d", server->id, rv);
         }
     }
 err_free_update:
@@ -185,7 +185,7 @@ static int electionVoteForSelf(struct raft *r)
     update = raft_malloc(sizeof(*update));
     if (update == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("raft(%llx) malloc failed %d", r->id, rv);
+        evtErrf("E-1528-133", "raft(%llx) malloc failed %d", r->id, rv);
         goto err_return;
     }
     update->data = r;
@@ -193,7 +193,7 @@ static int electionVoteForSelf(struct raft *r)
     rv = electionUpdateMeta(r, update, r->current_term + 1, r->id,
                             electionVoteForSelfCb);
     if (rv != 0) {
-        evtErrf("raft(%llx) vote self update meta term %llu failed %d",
+        evtErrf("E-1528-134", "raft(%llx) vote self update meta term %llu failed %d",
             r->id, r->current_term + 1, rv);
         goto err_free_update;
     }
@@ -253,7 +253,7 @@ int electionStart(struct raft *r)
             tracef("failed to send vote request to server %llu: %s", server->id,
                    raft_strerror(rv));
 	    if (rv != RAFT_NOCONNECTION)
-                evtErrf("send vote to server %llx failed %d", server->id, rv);
+                evtErrf("E-1528-135", "send vote to server %llx failed %d", server->id, rv);
         }
     }
 
@@ -394,7 +394,7 @@ static void electionUpdateMetaCb(struct raft_io_set_meta *req, int status)
 
     r->io->state = RAFT_IO_AVAILABLE;
     if(status != 0) {
-        evtErrf("raft(%llx) update meta term %llu vote_for %llx failed %d",
+        evtErrf("E-1528-136", "raft(%llx) update meta term %llu vote_for %llx failed %d",
                 r->id, request->update->term, request->update->vote_for,
                 status);
     }
@@ -417,7 +417,7 @@ int electionUpdateMeta(struct raft *r, struct raft_election_meta_update *update,
     request = raft_malloc(sizeof *request);
     if (request == NULL) {
         rv = RAFT_NOMEM;
-        evtErrf("raft(%llx) malloc failed", r->id);
+        evtErrf("E-1528-137", "raft(%llx) malloc failed", r->id);
         goto err_return;
     }
 
@@ -425,7 +425,7 @@ int electionUpdateMeta(struct raft *r, struct raft_election_meta_update *update,
     request->update = update;
     request->req.data = request;
 
-    evtIdNoticef(r->id, "raft(%llx) election set meta term %u vote_for %llx",
+    evtNoticef("1528-016", "raft(%llx) election set meta term %u vote_for %llx",
                  r->id, term, vote_for);
     r->io->state = RAFT_IO_BUSY;
     rv = r->io->set_meta(r->io,
@@ -434,7 +434,7 @@ int electionUpdateMeta(struct raft *r, struct raft_election_meta_update *update,
                  vote_for,
                  electionUpdateMetaCb);
     if (rv != 0) {
-        evtErrf("raft(%llx) set meta failed %d", r->id, rv);
+        evtErrf("E-1528-138", "raft(%llx) set meta failed %d", r->id, rv);
         r->io->state = RAFT_IO_AVAILABLE;
         goto err_free_request;
     }

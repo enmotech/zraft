@@ -34,7 +34,7 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
     int rv = 0;
 
     if (r->state == RAFT_UNAVAILABLE) {
-        evtErrf("raft(%llx) response to rv set meta cb, state is unavailable",
+        evtErrf("E-1528-164", "raft(%llx) response to rv set meta cb, state is unavailable",
 		r->id);
         goto err;
     }
@@ -46,18 +46,18 @@ static void respondToRequestVote(struct raft_io_set_meta *req, int status)
     }
 
     if(status != 0) {
-        evtErrf("raft %x set meta for rv %x %u failed %d", r->id,
+        evtErrf("E-1528-165", "raft %x set meta for rv %x %u failed %d", r->id,
 		request->voted_for, request->term, status);
         goto err;
     }
-    evtNoticef("raft(%llx) set meta succeed %u %llx",
+    evtNoticef("1528-036", "raft(%llx) set meta succeed %u %llx",
 	       r->id, request->term, request->voted_for);
     r->current_term = request->term;
     r->voted_for = request->voted_for;
 
     reqs = raft_malloc(sizeof *reqs);
     if (reqs == NULL) {
-        evtErrf("raft %x malloc req failed", r->id);
+        evtErrf("E-1528-166", "raft %x malloc req failed", r->id);
         convertToUnavailable(r);
         goto err;
     }
@@ -156,7 +156,7 @@ int recvRequestVote(struct raft *r,
 reply:
     req = raft_malloc(sizeof *req);
     if (req == NULL) {
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-167", "%s", "malloc");
         return RAFT_NOMEM;
     }
     req->data = r;
@@ -164,7 +164,7 @@ reply:
     rv = r->io->send(r->io, req, &message, requestVoteSendCb);
     if (rv != 0) {
         if (rv != RAFT_NOCONNECTION)
-            evtErrf("raft(%llx) send failed %d", r->id, rv);
+            evtErrf("E-1528-168", "raft(%llx) send failed %d", r->id, rv);
         raft_free(req);
         return rv;
     }

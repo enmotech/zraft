@@ -98,14 +98,14 @@ int recvAppendEntriesResult(struct raft *r,
     server = configurationGet(&r->configuration, id);
     if (server == NULL) {
         tracef("unknown server -> ignore");
-        evtWarnf("raft(%llx) ignore unknown server %llx", r->id, id);
+        evtWarnf("W-1528-066", "raft(%llx) ignore unknown server %llx", r->id, id);
         return 0;
     }
 
     /* Update the progress of this server, possibly sending further entries. */
     rv = replicationUpdate(r, server->id, result);
     if (rv != 0) {
-        evtErrf("raft(%llx) replication update failed %d", r->id, rv);
+        evtErrf("E-1528-158", "raft(%llx) replication update failed %d", r->id, rv);
         return rv;
     }
 

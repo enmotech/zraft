@@ -97,13 +97,13 @@ int raft_init(struct raft *r,
     r->state_change_cb = NULL;
     if (rv != 0) {
         ErrMsgTransfer(r->io->errmsg, r->errmsg, "io");
-        evtErrf("raft(%llx) init failed %d", r->id, rv);
+        evtErrf("E-1528-256", "raft(%llx) init failed %d", r->id, rv);
         goto err_after_address_alloc;
     }
     rv = snapshotSamplerInit(&r->sampler, SNAPSHOT_SAMPLE_SPAN,
                              SNAPSHOT_SAMPLE_PERIOD, r->io->time(r->io));
     if (rv != 0) {
-        evtErrf("raft(%llx) init snapshot sampler failed %d", r->id, rv);
+        evtErrf("E-1528-257", "raft(%llx) init snapshot sampler failed %d", r->id, rv);
         goto err_after_address_alloc;
     }
 
@@ -197,13 +197,13 @@ int raft_bootstrap(struct raft *r, const struct raft_configuration *conf)
     int rv;
 
     if (r->state != RAFT_UNAVAILABLE) {
-        evtErrf("raft(%llx) raft state %d", r->id, r->state);
+        evtErrf("E-1528-259", "raft(%llx) raft state %d", r->id, r->state);
         return RAFT_BUSY;
     }
 
     rv = r->io->bootstrap(r->io, conf);
     if (rv != 0) {
-        evtErrf("raft(%llx) bootstrap failed %d", r->id, rv);
+        evtErrf("E-1528-018", "raft(%llx) bootstrap failed %d", r->id, rv);
         return rv;
     }
 
@@ -218,13 +218,13 @@ int raft_abootstrap(struct raft *r,
     raft_id id = r->id;
 
     if (r->state != RAFT_UNAVAILABLE) {
-        evtErrf("raft(%llx) raft state %d", r->id, r->state);
+        evtErrf("E-1528-116", "raft(%llx) raft state %d", r->id, r->state);
         return RAFT_BUSY;
     }
 
     rv = r->io->abootstrap(r->io, req, conf, cb);
     if (rv != 0) {
-        evtErrf("raft(%llx) abootstrap failed %d", id, rv);
+        evtErrf("E-1528-258", "raft(%llx) abootstrap failed %d", id, rv);
         return rv;
     }
 
@@ -241,13 +241,13 @@ int raft_recover(struct raft *r, const struct raft_configuration *conf)
     int rv;
 
     if (r->state != RAFT_UNAVAILABLE) {
-        evtErrf("raft(%llx) state is ", r->id, r->state);
+        evtErrf("E-1528-260", "raft(%llx) state is ", r->id, r->state);
         return RAFT_BUSY;
     }
 
     rv = r->io->recover(r->io, conf);
     if (rv != 0) {
-        evtErrf("raft(%llx) recover failed %d", r->id, rv);
+        evtErrf("E-1528-261", "raft(%llx) recover failed %d", r->id, rv);
         return rv;
     }
 
@@ -347,7 +347,7 @@ RAFT_API int raft_replace_configuration(struct raft *r,
 					struct raft_configuration conf)
 {
 	if (r->io->state != RAFT_IO_AVAILABLE) {
-		evtNoticef("raft(%llx) io busy %u", r->id, r->io->state);
+		evtNoticef("1528-032", "raft(%llx) io busy %u", r->id, r->io->state);
 		return RAFT_BUSY;
 	}
 	if (r->state != RAFT_FOLLOWER)
@@ -360,7 +360,7 @@ RAFT_API int raft_replace_configuration(struct raft *r,
         r->role = configurationServerRole(&r->configuration, r->id);
     }
 
-	evtIdNoticef(r->id, "raft(%llx) conf replace", r->id);
+	evtNoticef("1528-033", "raft(%llx) conf replace", r->id);
 	evtDumpConfiguration(r, &conf);
     hookConfChange(r, &conf);
 	return 0;
@@ -447,7 +447,7 @@ void raft_set_role(struct raft *r, int role)
         assert(r->configuration.phase == RAFT_CONF_JOINT);
         s->role_new = role;
     }
-    evtNoticef("raft(%llx) group %x change role to %d ", r->id, s->group, role);
+    evtNoticef("1528-034", "raft(%llx) group %x change role to %d ", r->id, s->group, role);
 }
 
 struct request *raft_first_request(struct raft *r)
@@ -536,5 +536,5 @@ void raft_set_aggressive_snapshot(struct raft *r, bool enable,
 void raft_enable_change_cb_on_match(struct raft *r, bool enable)
 {
     r->enable_change_cb_on_match = enable;
-    evtNoticef("raft(%llx) set change on match %d", r->id, enable);
+    evtNoticef("1528-035", "raft(%llx) set change on match %d", r->id, enable);
 }

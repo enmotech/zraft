@@ -19,7 +19,7 @@ snapshotSamplerInit(struct raft_snapshot_sampler *s, raft_time span,
 	assert(s->size);
 	s->samples = raft_calloc(s->size, sizeof(struct raft_snapshot_sample));
 	if (!s->samples) {
-		evtErrf("calloc snapshot samples failed %u", s->size);
+		evtErrf("E-1528-233", "calloc snapshot samples failed %u", s->size);
 		return RAFT_NOMEM;
 	}
 	return 0;

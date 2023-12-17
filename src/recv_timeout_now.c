@@ -43,7 +43,7 @@ int recvTimeoutNow(struct raft *r,
     }
 
     if (r->nr_appending_requests != 0) {
-        evtNoticef("raft(%llx) has %u pending append requests", r->id,
+        evtNoticef("1528-037", "raft(%llx) has %u pending append requests", r->id,
             r->nr_appending_requests);
         return 0;
     }
@@ -67,7 +67,7 @@ int recvTimeoutNow(struct raft *r,
     /* Convert to candidate and start a new election. */
     rv = convertToCandidate(r, true /* disrupt leader */);
     if (rv != 0) {
-        evtErrf("raft(%llx) convert to candidate failed %d", rv);
+        evtErrf("E-1528-169", "raft(%llx) convert to candidate failed %d", rv);
         return rv;
     }
 

@@ -58,7 +58,7 @@ int entryCopy(const struct raft_entry *src, struct raft_entry *dst)
     if (src->buf.len > 0) {
 	    dst->buf.base = raft_entry_malloc(dst->buf.len);
 	    if (dst->buf.base == NULL) {
-                evtErrf("%s", "entry malloc");
+                evtErrf("E-1528-139", "%s", "entry malloc");
                 return RAFT_NOMEM;
 	    }
 	    memcpy(dst->buf.base, src->buf.base, dst->buf.len);
@@ -91,7 +91,7 @@ int entryBatchCopy(const struct raft_entry *src,
     if (size > 0) {
 	    batch = raft_malloc(size);
 	    if (batch == NULL) {
-		    evtErrf("%s", "malloc");
+		    evtErrf("E-1528-140", "%s", "malloc");
 		    return RAFT_NOMEM;
 	    }
     } else
@@ -101,7 +101,7 @@ int entryBatchCopy(const struct raft_entry *src,
     *dst = raft_malloc(n * sizeof **dst);
     if (*dst == NULL) {
         raft_free(batch);
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-141", "%s", "malloc");
         return RAFT_NOMEM;
     }
 

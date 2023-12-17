@@ -100,7 +100,7 @@ static int refsTryInsert(struct raft_entry_ref *table,
 
     slot = raft_malloc(sizeof *slot);
     if (slot == NULL) {
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-142", "%s", "malloc");
         return RAFT_NOMEM;
     }
 
@@ -181,7 +181,7 @@ static int refsGrow(struct raft_log *l)
 
     table = raft_calloc(size, sizeof *table);
     if (table == NULL) {
-        evtErrf("%s", "malloc");
+        evtErrf("E-1528-143", "%s", "malloc");
         return RAFT_NOMEM;
     }
 
@@ -226,7 +226,7 @@ static int refsInit(struct raft_log *l,
         l->refs_size = LOG__REFS_INITIAL_SIZE;
         l->refs = raft_calloc(l->refs_size, sizeof *l->refs);
         if (l->refs == NULL) {
-            evtErrf("%s", "malloc");
+            evtErrf("E-1528-144", "%s", "malloc");
             return RAFT_NOMEM;
         }
     }
@@ -244,7 +244,7 @@ static int refsInit(struct raft_log *l,
 
         rc = refsTryInsert(l->refs, l->refs_size, term, index, 1, &collision);
         if (rc != 0) {
-            evtErrf("%s", "malloc");
+            evtErrf("E-1528-145", "%s", "malloc");
             return RAFT_NOMEM;
         }
 
@@ -254,12 +254,12 @@ static int refsInit(struct raft_log *l,
 
         rc = refsGrow(l);
         if (rc != 0) {
-            evtErrf("grow ref failed %d", rc);
+            evtErrf("E-1528-146", "grow ref failed %d", rc);
             return rc;
         }
     };
 
-    evtErrf("%s", "malloc");
+    evtErrf("E-1528-147", "%s", "malloc");
     return RAFT_NOMEM;
 }
 
@@ -496,7 +496,7 @@ static int ensureCapacity(struct raft_log *l)
 
     entries = raft_calloc(size, sizeof *entries);
     if (entries == NULL) {
-        evtErrf("%s", "calloc");
+        evtErrf("E-1528-148", "%s", "calloc");
         return RAFT_NOMEM;
     }
 
@@ -536,7 +536,7 @@ int logAppend(struct raft_log *l,
 
     rv = ensureCapacity(l);
     if (rv != 0) {
-        evtErrf("ensure capacity failed %d", rv);
+        evtErrf("E-1528-149", "ensure capacity failed %d", rv);
         return rv;
     }
 
@@ -544,7 +544,7 @@ int logAppend(struct raft_log *l,
 
     rv = refsInit(l, term, index);
     if (rv != 0) {
-        evtErrf("ref init failed %d", rv);
+        evtErrf("E-1528-150", "ref init failed %d", rv);
         return rv;
     }
 
@@ -580,7 +580,7 @@ int logAppendCommands(struct raft_log *l,
         const struct raft_buffer *buf = &bufs[i];
 	rv = logAppend(l, term, RAFT_COMMAND, buf, NULL);
         if (rv != 0) {
-            evtErrf("log append failed %d", rv);
+            evtErrf("E-1528-151", "log append failed %d", rv);
             return rv;
         }
     }
@@ -602,14 +602,14 @@ int logAppendConfiguration(struct raft_log *l,
     /* Encode the configuration into a buffer. */
     rv = configurationEncode(configuration, &buf);
     if (rv != 0) {
-        evtErrf("conf encode failed %d", rv);
+        evtErrf("E-1528-152", "conf encode failed %d", rv);
         goto err;
     }
 
     /* Append the new entry to the log. */
     rv = logAppend(l, term, RAFT_CHANGE, &buf, NULL);
     if (rv != 0) {
-        evtErrf("append change failed %d", rv);
+        evtErrf("E-1528-153", "append change failed %d", rv);
         goto err_after_encode;
     }
 

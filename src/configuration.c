@@ -100,7 +100,7 @@ int configurationJointToNormal(const struct raft_configuration *src,
         role = (group == RAFT_GROUP_OLD) ? server->role: server->role_new;
         rv = configurationAdd(dst, server->id, role, role, RAFT_GROUP_OLD);
         if (rv != 0) {
-            evtErrf("add conf failed id %d role %d", server->id, server->role);
+            evtErrf("E-1528-106", "add conf failed id %d role %d", server->id, server->role);
             return rv;
         }
     }
@@ -178,7 +178,7 @@ int configurationCopy(const struct raft_configuration *src,
         rv = configurationAdd(dst, server->id, server->role, server->role_new,
                               server->group);
         if (rv != 0) {
-            evtErrf("add conf failed id %d role %d", server->id, server->role);
+            evtErrf("E-1528-107", "add conf failed id %d role %d", server->id, server->role);
             return rv;
         }
     }
@@ -199,7 +199,7 @@ int configurationAdd(struct raft_configuration *c,
     assert(id != 0);
 
     if (role != RAFT_STANDBY && role != RAFT_VOTER && role != RAFT_SPARE && role != RAFT_LOGGER) {
-        evtErrf("conf add bad role %d", role);
+        evtErrf("E-1528-108", "conf add bad role %d", role);
         return RAFT_BADROLE;
     }
 
@@ -207,7 +207,7 @@ int configurationAdd(struct raft_configuration *c,
     for (i = 0; i < c->n; i++) {
         server = &c->servers[i];
         if (server->id == id) {
-            evtErrf("conf add duplicated id %llx", id);
+            evtErrf("E-1528-109", "conf add duplicated id %llx", id);
             return RAFT_DUPLICATEID;
         }
     }
@@ -215,7 +215,7 @@ int configurationAdd(struct raft_configuration *c,
     /* Grow the servers array.. */
     servers = raft_realloc(c->servers, (c->n + 1) * sizeof *server);
     if (servers == NULL) {
-        evtErrf("conf add realloc failed, id %llx role %d", id, role);
+        evtErrf("E-1528-110", "conf add realloc failed, id %llx role %d", id, role);
         return RAFT_NOMEM;
     }
     c->servers = servers;
@@ -248,7 +248,7 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
 
     i = configurationIndexOf(c, id);
     if (i == c->n) {
-        evtErrf("conf remove bad id %llx", id);
+        evtErrf("E-1528-111", "conf remove bad id %llx", id);
         return RAFT_BADID;
     }
 
@@ -265,7 +265,7 @@ int configurationRemove(struct raft_configuration *c, const raft_id id)
     /* Create a new servers array. */
     servers = raft_calloc(c->n - 1, sizeof *servers);
     if (servers == NULL) {
-        evtErrf("conf remove calloc failed, id %llx", id);
+        evtErrf("E-1528-112", "conf remove calloc failed, id %llx", id);
         return RAFT_NOMEM;
     }
 
@@ -408,7 +408,7 @@ int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c,
 
     /* Check the encoding format version */
     if (byteGet8(&buf) != ENCODING_FORMAT) {
-        evtErrf("%s", "malformed");
+        evtErrf("E-1528-113", "%s", "malformed");
 	    return RAFT_MALFORMED;
     }
     /* then read the phase */
@@ -424,7 +424,7 @@ int configurationDecodeFromBuf(const void *buf, struct raft_configuration *c,
         role = byteGet8(&buf);
         rv = configurationAdd(c, id, role, role, RAFT_GROUP_OLD);
         if (rv != 0) {
-            evtErrf("conf add %llx failed", id, rv);
+            evtErrf("E-1528-114", "conf add %llx failed", id, rv);
             return rv;
         }
     }
@@ -477,7 +477,7 @@ static int defaultEncode(void *ptr,
     buf->len = configurationEncodedSize(c);
     buf->base = raft_entry_malloc(buf->len);
     if (buf->base == NULL) {
-        evtErrf("%s", "malloc failed");
+        evtErrf("E-1528-115", "%s", "malloc failed");
         return RAFT_NOMEM;
     }
 
@@ -536,7 +536,7 @@ void raft_configuration_codec_set_default(void)
 	currentCodec = &defaultCodec;
 }
 
-int configurationServerRole(struct raft_configuration *c, raft_id id)
+int configurationServerRole(const struct raft_configuration *c, raft_id id)
 {
     const struct raft_server *server = configurationGet(c, id);
 
@@ -552,4 +552,19 @@ const char *configurationRoleName(int role)
     assert(role == RAFT_STANDBY || role == RAFT_VOTER || role == RAFT_SPARE
         || role == RAFT_LOGGER);
     return roleNames[role];
+}
+
+static const char *phaseNames[] =  {"normal", "joint"};
+const char *configurationPhaseName(int phase)
+{
+    assert(phase == RAFT_CONF_NORMAL || phase == RAFT_CONF_JOINT);
+    return phaseNames[phase];
+}
+
+static const char *groupNames[] = {"", "old", "new", "both"};
+const char *configurationGroupName(int group)
+{
+    assert(group == RAFT_GROUP_OLD || group == RAFT_GROUP_NEW
+        || group == RAFT_GROUP_ANY);
+    return groupNames[group];
 }

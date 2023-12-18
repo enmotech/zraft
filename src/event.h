@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define EVT_NEXT_ID (262)
+#define EVT_NEXT_ID (263)
 #define EVT_PER_SEC (200)
 
 const struct raft_event_recorder *eventRecorder(void);

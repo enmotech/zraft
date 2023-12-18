@@ -204,7 +204,7 @@ static void checkChangeTimeout(struct raft *r)
     r->leader_state.change = NULL;
     if (change != NULL && change->cb != NULL) {
         change->cb(change, RAFT_NOCONNECTION);
-        evtErrf("raft(%s) change timeout", r->id);
+        evtErrf("E-1528-262", "raft(%llx) change timeout", r->id);
     }
 }
 

@@ -171,14 +171,15 @@ static void checkChangeOnMatch(struct raft *r)
 
     assert(r->state == RAFT_LEADER);
     change = r->leader_state.change;
-    if (!change->cb_on_match || !r->enable_change_cb_on_match)
+    if (!change->cb_on_match || !r->enable_change_cb_on_match
+        || r->leader_state.promotee_id)
         return;
 
     i = configurationIndexOf(&r->configuration, change->match_id);
     if (i == r->configuration.n)
         return;
     index = progressMatchIndex(r, i);
-    if (index < change->index)
+    if (index < change->index || change->index == 0)
         return;
 
     evtNoticef("N-1528-059", "raft(%llx) change on match, match_id %llx index %llu",

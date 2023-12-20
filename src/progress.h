@@ -108,6 +108,12 @@ bool progressMaybeDecrement(struct raft *r,
 /* Return true if match_index is equal or higher than the snapshot_index. */
 bool progressSnapshotDone(struct raft *r, unsigned i);
 
+/* Return online state. */
+bool progressGetOnline(struct raft *r, const unsigned i);
+
+/* Update online state. */
+void progressUpdateOnline(struct raft *r, const unsigned i, bool online);
+
 /* Reset the minimum match index */
 void progressUpdateMinMatch(struct raft *r);
 

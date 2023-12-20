@@ -1779,7 +1779,6 @@ static void takeSnapshotCb(struct raft_io_snapshot_put *req, int status)
 		snapshot->term, status);
         goto out;
     }
-    snapshotSamplerTake(&r->sampler, snapshot->index, r->io->time(r->io));
 
     /* backup the configuration in case a membershipRollback occurs */
     configurationClose(&r->snapshot.configuration);

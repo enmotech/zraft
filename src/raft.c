@@ -16,6 +16,7 @@
 #include "event.h"
 #include "snapshot_sampler.h"
 #include "request.h"
+#include "progress.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -100,13 +101,6 @@ int raft_init(struct raft *r,
         evtErrf("E-1528-256", "raft(%llx) init failed %d", r->id, rv);
         goto err_after_address_alloc;
     }
-    rv = snapshotSamplerInit(&r->sampler, SNAPSHOT_SAMPLE_SPAN,
-                             SNAPSHOT_SAMPLE_PERIOD, r->io->time(r->io));
-    if (rv != 0) {
-        evtErrf("E-1528-257", "raft(%llx) init snapshot sampler failed %d", r->id, rv);
-        goto err_after_address_alloc;
-    }
-
     r->latest_entry_time = r->io->time(r->io);
     return 0;
 
@@ -131,7 +125,6 @@ static void ioCloseCb(struct raft_io *io)
     logClose(&r->log);
     raft_configuration_close(&r->configuration);
     raft_configuration_close(&r->snapshot.configuration);
-    snapshotSamplerClose(&r->sampler);
     if (r->close_cb != NULL) {
         r->close_cb(r);
     }
@@ -424,15 +417,6 @@ bool raft_is_distruptive_candidate(struct raft *r)
     return r->candidate_state.disrupt_leader;
 }
 
-int raft_set_snapshot_sample_span(struct raft *r, unsigned span)
-{
-    assert(span >= SNAPSHOT_SAMPLE_SPAN_MIN);
-    snapshotSamplerClose(&r->sampler);
-
-    return snapshotSamplerInit(&r->sampler, span, SNAPSHOT_SAMPLE_PERIOD,
-        r->io->time(r->io));
-}
-
 void raft_set_role(struct raft *r, int role)
 {
     assert(role == RAFT_STANDBY || role == RAFT_SPARE || role == RAFT_VOTER
@@ -537,4 +521,26 @@ void raft_enable_change_cb_on_match(struct raft *r, bool enable)
 {
     r->enable_change_cb_on_match = enable;
     evtNoticef("N-1528-035", "raft(%llx) set change on match %d", r->id, enable);
+}
+
+void raft_update_replica_online(struct raft *r, raft_id replica_id,
+                                bool online)
+{
+    assert(r->state == RAFT_LEADER);
+    unsigned i;
+
+    i = configurationIndexOf(&r->configuration, replica_id);
+    if (i == r->configuration.n) {
+        evtNoticef("N-1528-263", "raft(%llx) replica %llx not in conf", r->id,
+                   replica_id);
+        return;
+    }
+
+    if (progressGetOnline(r, i) == online) {
+        return;
+    }
+
+    progressUpdateOnline(r, i, online);
+    evtInfof("I-1528-264", "raft(%llx) update replica %llx online %d", r->id,
+             replica_id, online);
 }

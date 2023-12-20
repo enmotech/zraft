@@ -617,6 +617,7 @@ struct raft_progress
     bool recent_recv;             /* A msg was received within election timeout. */
     raft_time recent_recv_time;   /* Timestamp of last AppendEntriesResult RPC.*/
     raft_time recent_match_time;  /* Timestamp of last matched AppendEntriesResult RPC.*/
+    bool online;                  /* Whether replica is online. */
 };
 
 struct raft; /* Forward declaration. */
@@ -929,7 +930,6 @@ struct raft
     /* Flag for raft dynamic change log trailing */
     bool enable_dynamic_trailing;
     unsigned max_dynamic_trailing;
-    struct raft_snapshot_sampler sampler;
     raft_index pkt_id;
     raft_time latest_entry_time;
     struct {
@@ -1482,12 +1482,6 @@ RAFT_API void raft_enable_election_at_start(struct raft *r, bool enable);
 RAFT_API bool raft_is_distruptive_candidate(struct raft *r);
 
 /**
- * Set snapshot sample span in ms.
- * Return 0 or RAFT_NOMEM
- */
-RAFT_API int raft_set_snapshot_sample_span(struct raft *r, unsigned span);
-
-/**
  * Change raft's current role
  */
 RAFT_API void raft_set_role(struct raft *r, int role);
@@ -1530,6 +1524,13 @@ RAFT_API void raft_set_aggressive_snapshot(struct raft *r, bool enable,
  * index.
  */
 RAFT_API void raft_enable_change_cb_on_match(struct raft *r, bool enable);
+
+/**
+ * Noitfy leader the state change of replica.
+ * New leader assume that all replica's default state is online.
+ */
+RAFT_API void raft_update_replica_online(struct raft *r, raft_id replica_id,
+                                         bool online);
 
 #undef RAFT__REQUEST
 

@@ -1583,7 +1583,12 @@ static void applyCommandCb(struct raft_fsm_apply *req,
         }
 
         entry = logGet(&r->log, index);
-        assert(entry);
+        if (!entry) {
+            evtNoticef("N-1528-265", "raft(%llx) index %llu already freed",
+                       r->id, index);
+            return;
+        }
+
         if (r->hook->entry_skip_on_apply_fail && r->last_applied + 1 == index)
             skip = r->hook->entry_skip_on_apply_fail(r->hook, index, entry);
 

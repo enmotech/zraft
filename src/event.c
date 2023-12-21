@@ -63,10 +63,11 @@ void evtDumpConfiguration(struct raft *r, const struct raft_configuration *c)
 				r->id, configurationPhaseName(c->phase));
 	for (i = 0; i < c->n; ++i) {
 		s = &c->servers[i];
-		rv = snprintf(buf, sizeof(buf) - offset, " %llx-%s-%s/%s ",
-			s->id, configurationGroupName(s->group),
-			configurationRoleName(s->role),
-			configurationRoleName(s->role_new));
+		rv = snprintf(buf + offset, sizeof(buf) - offset,
+			      " %llx-%s-%s/%s ", s->id,
+			      configurationGroupName(s->group),
+			      configurationRoleName(s->role),
+			      configurationRoleName(s->role_new));
 		assert((size_t)rv < sizeof(buf) - offset);
 		offset += (size_t)rv;
 	}

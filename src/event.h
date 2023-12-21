@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define EVT_NEXT_ID (265)
+#define EVT_NEXT_ID (266)
 #define EVT_PER_SEC (200)
 
 const struct raft_event_recorder *eventRecorder(void);
@@ -39,7 +39,7 @@ const struct raft_event_recorder *eventRecorder(void);
 #define evtNoticef(id, fmt, ...)                                       \
 	do {                                                       \
 		if (evtLevelAllowed(RAFT_NOTICE))                  \
-			evtRecordf(RAFT_NOTICE, id, ": " fmt, __VA_ARGS__); \
+			evtRecordf(RAFT_NOTICE, id ": " fmt, __VA_ARGS__); \
 	} while (0)
 
 #define evtInfof(id, fmt, ...)                                       \

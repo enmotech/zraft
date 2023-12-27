@@ -477,6 +477,8 @@ static size_t updateLastStored(struct raft *r,
          * different term, it means that this entry got truncated, so let's stop
          * here. */
         if (local_term == 0 || (local_term > 0 && local_term != entry->term)) {
+            evtWarnf("W-1528-266", "raft(%llx) entry term diff %lu/%lu i %u last_stored %lu",
+                     r->id, local_term, entry->term, i, r->last_stored);
             break;
         }
 

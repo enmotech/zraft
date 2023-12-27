@@ -44,6 +44,7 @@ int raft_apply(struct raft *r,
     /* Index of the first entry being appended. */
     index = logLastIndex(&r->log) + 1;
     tracef("%u commands starting at %lld", n, index);
+    req->time = r->io->time(r->io);
     req->type = RAFT_COMMAND;
     req->index = index;
     req->cb = cb;
@@ -106,6 +107,7 @@ int raft_barrier(struct raft *r, struct raft_barrier *req, raft_barrier_cb cb)
     /* Index of the barrier entry being appended. */
     index = logLastIndex(&r->log) + 1;
     tracef("barrier starting at %lld", index);
+    req->time = r->io->time(r->io);
     req->type = RAFT_BARRIER;
     req->index = index;
     req->cb = cb;

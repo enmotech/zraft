@@ -650,6 +650,7 @@ struct request
 {
     /* Must be kept in sync with RAFT__REQUEST in raft.h */
     void *data;
+    raft_time time;
     int type;
     raft_index index;
     void *queue[2];
@@ -1107,6 +1108,7 @@ RAFT_API raft_index raft_commit_index(struct raft *r);
 /* Common fields across client request types. */
 #define RAFT__REQUEST \
     void *data;       \
+    raft_time time;   \
     int type;         \
     raft_index index; \
     void *queue[2]

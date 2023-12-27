@@ -62,6 +62,7 @@ int replicationProgress(struct raft *r, unsigned i);
  * It must be called only by leaders. */
 int replicationUpdate(struct raft *r,
 		      const raft_id id,
+              unsigned i,
 		      const struct raft_append_entries_result *result);
 
 /* Append the log entries in the given request if the Log Matching Property is

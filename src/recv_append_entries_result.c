@@ -60,8 +60,8 @@ int recvAppendEntriesResult(struct raft *r,
                             const struct raft_append_entries_result *result)
 {
     int match;
-    const struct raft_server *server;
     int rv;
+    unsigned i;
 
     assert(r != NULL);
     assert(id > 0);
@@ -95,15 +95,15 @@ int recvAppendEntriesResult(struct raft *r,
     assert(result->term == r->current_term);
 
     /* Ignore responses from servers that have been removed */
-    server = configurationGet(&r->configuration, id);
-    if (server == NULL) {
+    i = configurationIndexOf(&r->configuration, id);
+    if (i == r->configuration.n) {
         tracef("unknown server -> ignore");
         evtWarnf("W-1528-066", "raft(%llx) ignore unknown server %llx", r->id, id);
         return 0;
     }
 
     /* Update the progress of this server, possibly sending further entries. */
-    rv = replicationUpdate(r, server->id, result);
+    rv = replicationUpdate(r, id, i, result);
     if (rv != 0) {
         evtErrf("E-1528-158", "raft(%llx) replication update failed %d", r->id, rv);
         return rv;

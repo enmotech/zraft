@@ -1284,6 +1284,13 @@ int replicationAppend(struct raft *r,
      *   entry).
      */
     if (n == 0) {
+        if (args->n_entries != 0 || args->prev_log_index < r->last_stored) {
+            return 0;
+        }
+        /**
+         * Only upon receiving the most recent empty AppendEntries,
+         * Should we check if we can commit any pending entries.
+         */
         if ((args->leader_commit > r->commit_index)
              && r->last_stored >= r->commit_index
              && !replicationInstallSnapshotBusy(r)) {

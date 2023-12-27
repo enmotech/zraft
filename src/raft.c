@@ -101,7 +101,6 @@ int raft_init(struct raft *r,
         evtErrf("E-1528-256", "raft(%llx) init failed %d", r->id, rv);
         goto err_after_address_alloc;
     }
-    r->latest_entry_time = r->io->time(r->io);
     return 0;
 
 err_after_address_alloc:
@@ -443,11 +442,6 @@ struct request *raft_first_request(struct raft *r)
 void raft_set_leader_stepdown_cb(struct raft *r, raft_leader_stepdown_cb cb)
 {
     r->stepdown_cb = cb;
-}
-
-raft_time raft_latest_entry_time(struct raft *r)
-{
-    return r->latest_entry_time;
 }
 
 static void raft_dump_progress(struct raft *r, raft_dump_fn dump)

@@ -650,7 +650,6 @@ struct request
 {
     /* Must be kept in sync with RAFT__REQUEST in raft.h */
     void *data;
-    raft_time time;
     int type;
     raft_index index;
     void *queue[2];
@@ -931,7 +930,6 @@ struct raft
     bool enable_dynamic_trailing;
     unsigned max_dynamic_trailing;
     raft_index pkt_id;
-    raft_time latest_entry_time;
     struct {
 	    bool     enable;    /* Flag for enable aggressive snapshot */
 	    unsigned threshold; /* N. of entries before snapshot */
@@ -1109,7 +1107,6 @@ RAFT_API raft_index raft_commit_index(struct raft *r);
 /* Common fields across client request types. */
 #define RAFT__REQUEST \
     void *data;       \
-    raft_time time;   \
     int type;         \
     raft_index index; \
     void *queue[2]
@@ -1496,11 +1493,6 @@ RAFT_API struct request *raft_first_request(struct raft *r);
  */
 RAFT_API void raft_set_leader_stepdown_cb(struct raft *r,
                                           raft_leader_stepdown_cb cb);
-
-/**
- * Get the latest entry time.
- */
-RAFT_API raft_time raft_latest_entry_time(struct raft *r);
 
 typedef int (raft_dump_fn)(char *fmt, ...);
 /**

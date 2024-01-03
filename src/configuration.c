@@ -547,6 +547,19 @@ int configurationServerRole(const struct raft_configuration *c, raft_id id)
     return server->role;
 }
 
+bool configurationHasRole(const struct raft_configuration *c, int role)
+{
+    unsigned i;
+    struct raft_server *s;
+
+    for (i = 0; i < c->n; ++i) {
+        s = &c->servers[i];
+        if (configurationServerRole(c, s->id) == role)
+            return true;
+    }
+    return false;
+}
+
 static const char *roleNames[] = {"stand-by", "voter", "spare", "logger"};
 const char *configurationRoleName(int role)
 {

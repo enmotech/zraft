@@ -76,6 +76,8 @@ int recvAppendEntries(struct raft *r,
     result->pkt = args->pkt;
     result->rejected = args->prev_log_index;
     result->last_log_index = logLastIndex(&r->log);
+    result->n_entries = args->n_entries;
+    result->timestamp = args->timestamp;
 
     recvCheckMatchingTerms(r, args->term, &match);
     assert(match <= 0);

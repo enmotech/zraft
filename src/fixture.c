@@ -893,6 +893,7 @@ static int ioInit(struct raft_io *raft_io, unsigned index, raft_time *time)
     raft_io->snapshot_put = ioMethodSnapshotPut;
     raft_io->snapshot_get = ioMethodSnapshotGet;
     raft_io->time = ioMethodTime;
+    raft_io->time_us = ioMethodTime;
     raft_io->random = ioMethodRandom;
 
     return 0;

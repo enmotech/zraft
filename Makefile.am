@@ -40,7 +40,8 @@ libraft_la_SOURCES = \
   src/hook.c \
   src/event.c \
   src/request.c \
-  src/snapshot_sampler.c
+  src/snapshot_sampler.c \
+  src/metric.c
 
 bin_PROGRAMS =
 
@@ -76,7 +77,8 @@ test_unit_core_SOURCES = \
   test/unit/test_log.c \
   test/unit/test_queue.c \
   test/unit/test_request.c \
-  test/unit/test_snapshotsampler.c
+  test/unit/test_snapshotsampler.c \
+  test/unit/test_metric.c
 test_unit_core_CFLAGS = $(AM_CFLAGS) -Wno-conversion -std=gnu11
 test_unit_core_LDADD = libtest.la ./.libs/libraft.a
 

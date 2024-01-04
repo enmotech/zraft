@@ -618,6 +618,7 @@ struct raft_progress
     raft_time recent_recv_time;   /* Timestamp of last AppendEntriesResult RPC.*/
     raft_time recent_match_time;  /* Timestamp of last matched AppendEntriesResult RPC.*/
     bool online;                  /* Whether replica is online. */
+    bool lagged;                  /* Whether replica is lagged. */
 };
 
 struct raft; /* Forward declaration. */

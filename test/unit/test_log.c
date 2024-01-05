@@ -1339,3 +1339,28 @@ TEST(logHook, remove, setUp, tearDown, 0, NULL)
     munit_assert_uint64(g_hook_entry_remove_num, ==, 28);
     return MUNIT_OK;
 }
+
+SUITE(logHasExternalRef)
+
+TEST(logHasExternalRef, no, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+
+    APPEND_MANY(1, 1);
+    munit_assert_false(logHasExternalRef(&f->log));
+    return MUNIT_OK;
+}
+
+TEST(logHasExternalRef, yes, setUp, tearDown, 0, NULL)
+{
+    struct fixture *f = data;
+    const struct raft_entry *entry;
+
+    APPEND_MANY(1, 1);
+    entry = logGet(&f->log, 1);
+    munit_assert(entry != NULL);
+    logAddRef(&f->log, entry, 1);
+    munit_assert_true(logHasExternalRef(&f->log));
+    logRelease(&f->log, 1, (struct raft_entry *)entry, 1);
+    return MUNIT_OK;
+}

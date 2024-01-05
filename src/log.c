@@ -1016,3 +1016,25 @@ void logSetHook(struct raft_log *l, struct raft_log_hook *hook)
 {
     l->hook = hook;
 }
+
+bool logHasExternalRef(struct raft_log *l)
+{
+    size_t i;
+    struct raft_entry_ref *bucket;
+
+    for (i = 0; i < l->refs_size; i++) {
+        bucket = &l->refs[i];
+        if (bucket->count == 0) {
+            /* If the count is zero, we expect that the bucket is unused. */
+            assert(bucket->next == NULL);
+            continue;
+        }
+
+        while(bucket) {
+            if (bucket->count > 1)
+                return true;
+            bucket = bucket->next;
+        }
+    }
+    return false;
+}

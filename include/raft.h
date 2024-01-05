@@ -1527,6 +1527,11 @@ RAFT_API void raft_enable_change_cb_on_match(struct raft *r, bool enable);
 RAFT_API void raft_update_replica_online(struct raft *r, raft_id replica_id,
                                          bool online);
 
+/**
+ * Determine Whether Log Entry Is Referenced Externally.
+ */
+RAFT_API bool raft_log_has_external_ref(struct raft *r);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

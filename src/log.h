@@ -122,4 +122,9 @@ raft_term logStartTerm(struct raft *r);
  */
 void logSetHook(struct raft_log *l, struct raft_log_hook *hook);
 
+/**
+ * Determine Whether Log Entry Is Referenced Externally.
+ */
+bool logHasExternalRef(struct raft_log *l);
+
 #endif /* RAFT_LOG_H_ */

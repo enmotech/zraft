@@ -538,3 +538,8 @@ void raft_update_replica_online(struct raft *r, raft_id replica_id,
     evtInfof("I-1528-264", "raft(%llx) update replica %llx online %d", r->id,
              replica_id, online);
 }
+
+bool raft_log_has_external_ref(struct raft *r)
+{
+    return logHasExternalRef(&r->log);
+}

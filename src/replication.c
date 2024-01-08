@@ -1721,7 +1721,7 @@ static void applyChange(struct raft *r, const raft_index index)
 
 static raft_index nextSnapshotIndex(struct raft *r)
 {
-	raft_index snapshot_index = r->last_applied;
+	raft_index snapshot_index = min(r->last_applied, r->last_stored);
 	raft_index hook_snapshot_index = 0;
 
 	if (r->hook->get_next_snapshot_index)
@@ -1730,7 +1730,7 @@ static raft_index nextSnapshotIndex(struct raft *r)
 	if (r->state == RAFT_FOLLOWER && r->sync_snapshot) {
 		snapshot_index =
 			min(r->follower_state.current_leader.snapshot_index,
-			    r->last_applied);
+			    min(r->last_applied, r->last_stored));
 	}
 
 	if (hook_snapshot_index != 0)

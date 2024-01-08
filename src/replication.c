@@ -533,6 +533,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     struct appendLeader *request = req->data;
     struct raft *r = request->raft;
     size_t server_index;
+    int prev_status = r->prev_append_status;
     int rv;
 
     tracef("leader: written %u entries starting at %lld: status %d", request->n,
@@ -541,6 +542,12 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     hookRequestAppendDone(r, request->index);
     assert(r->nr_appending_requests > 0);
     r->nr_appending_requests -= 1;
+    r->prev_append_status = status;
+    /* Reset prev append status when the last request callback*/
+    if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
+        r->prev_append_status = 0;
+        evtWarnf("W-1528-070", "raft(%llx) reset previous append status", r->id);
+    }
     /* In case of a failed disk write, if we were the leader creating these
      * entries in the first place, truncate our log too (since we have appended
      * these entries to it) and fire the request callback. */
@@ -594,15 +601,15 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
     }
 
 out:
-    if (r->prev_append_status != 0 && status == 0) {
+    if (prev_status != 0 && status == 0) {
         evtErrf("E-1528-189", "raft(%llx) previous append status %d", r->id,
-		r->prev_append_status);
+		        prev_status);
         abort();
     }
 
     /* Tell the log that we're done referencing these entries. */
     logRelease(&r->log, request->index, request->entries, request->n);
-    if (status != 0 && r->prev_append_status == 0) {
+    if (status != 0 && prev_status == 0) {
         logTruncate(&r->log, request->index);
         evtErrf("E-1528-190", "raft(%llx) truncate log from %llu", r->id, request->index);
         if (r->configuration_uncommitted_index >= request->index) {
@@ -611,13 +618,6 @@ out:
                     evtErrf("E-1528-191", "raft(%llx) rollback failed %d", r->id, rv);
                 }
         }
-    }
-
-    r->prev_append_status = status;
-    /* Reset prev append status when the last request callback*/
-    if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
-        r->prev_append_status = 0;
-        evtWarnf("W-1528-070", "raft(%llx) reset previous append status", r->id);
     }
     raft_free(request);
 }
@@ -976,6 +976,7 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
     struct raft_append_entries_result result;
     size_t i;
     size_t j;
+    int prev_status = r->prev_append_status;
     int rv;
 
     tracef("I/O completed on follower: status %d", status);
@@ -985,6 +986,12 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
     assert(r->nr_appending_requests > 0);
     r->nr_appending_requests -= 1;
+    r->prev_append_status = status;
+    /* Reset prev append status when the last request callback*/
+    if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
+        r->prev_append_status = 0;
+        evtWarnf("W-1528-071", "raft(%llx) reset previous append status", r->id);
+    }
 
     result.pkt = args->pkt;
     result.term = r->current_term;
@@ -1067,16 +1074,9 @@ out:
     logRelease(&r->log, request->index, request->args.entries,
 	    request->args.n_entries);
 
-    if (status != 0 && r->prev_append_status == 0) {
+    if (status != 0 && prev_status == 0) {
         logTruncate(&r->log, request->index);
         evtErrf("E-1528-206", "raft(%llx) truncate log from %llu", r->id, request->index);
-    }
-
-    r->prev_append_status = status;
-    /* Reset prev append status when the last request callback*/
-    if (r->prev_append_status != 0 && r->nr_appending_requests == 0) {
-        r->prev_append_status = 0;
-        evtWarnf("W-1528-071", "raft(%llx) reset previous append status", r->id);
     }
     raft_free(request);
 }

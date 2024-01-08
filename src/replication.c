@@ -551,7 +551,7 @@ static void appendLeaderCb(struct raft_io_append *req, int status)
         if (r->state != RAFT_FOLLOWER) {
             convertToFollower(r);
             evtNoticef("N-1528-043", "raft(%llx) convert from leader to follower",
-			    r->id, status);
+			    r->id);
         }
         goto out;
     }

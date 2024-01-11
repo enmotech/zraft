@@ -46,7 +46,7 @@ int progressBuildArray(struct raft *r)
         progress[i].recent_recv_time = r->io->time(r->io);
         progress[i].recent_match_time = r->io->time(r->io);
         progress[i].online = true;
-        progress[i].lagged = false;
+        progress[i].log_min_timeout = false;
         if (r->configuration.servers[i].id == r->id) {
             progress[i].match_index = r->last_stored;
         }
@@ -81,6 +81,8 @@ int progressRebuildArray(struct raft *r,
             continue;
         }
         progress[j] = r->leader_state.progress[i];
+        progress[j].recent_recv_time = r->io->time(r->io);
+        progress[j].recent_match_time = r->io->time(r->io);
     }
 
     /* Then reset the replication state for servers that are present in the new
@@ -99,7 +101,7 @@ int progressRebuildArray(struct raft *r,
         progress[i].recent_recv_time = r->io->time(r->io);
         progress[i].recent_match_time = r->io->time(r->io);
         progress[i].online = true;
-        progress[i].lagged = false;
+        progress[i].log_min_timeout = false;
     }
 
     raft_free(r->leader_state.progress);
@@ -397,10 +399,10 @@ void progressUpdateMinMatch(struct raft *r)
                 r->leader_state.min_sync_match_index = p->match_index;
                 r->leader_state.min_sync_match_replica = s->id;
             }
-            p->lagged = false;
+            p->log_min_timeout = false;
         } else {
-            if (!p->lagged) {
-                p->lagged = true;
+            if (!p->log_min_timeout) {
+                p->log_min_timeout = true;
                 evtNoticef("N-1528-267", "raft(%llx) %llx lagged for %ums",
                             r->id, s->id, now - p->recent_match_time);
             }

@@ -178,12 +178,10 @@ static int clientChangeConfiguration(
     r->hook->entry_after_append_fn(r->hook, index, entry);
     hookConfChange(r, configuration);
 
-    if (configuration->n != r->configuration.n) {
-        rv = progressRebuildArray(r, configuration);
-        if (rv != 0) {
-            evtErrf("E-1528-082", "raft(%llx) rebuild array failed %d", r->id, rv);
-            goto err;
-        }
+    rv = progressRebuildArray(r, configuration);
+    if (rv != 0) {
+        evtErrf("E-1528-082", "raft(%llx) rebuild array failed %d", r->id, rv);
+        goto err;
     }
 
     /* Update the current configuration if we've created a new object. */

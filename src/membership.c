@@ -146,7 +146,14 @@ int membershipUncommittedChange(struct raft *r,
     if (configurationIndexOf(&r->configuration, r->id) != r->configuration.n) {
         r->role = configurationServerRole(&r->configuration, r->id);
     }
+
     r->configuration_uncommitted_index = index;
+    if (r->last_applying >= r->configuration_uncommitted_index) {
+        r->configuration_index = r->configuration_uncommitted_index;
+        r->configuration_uncommitted_index = 0;
+        evtNoticef("N-1528-268", "raft(%llx) reset conf index %llu", r->id,
+            r->configuration_index);
+    }
 
     evtNoticef("N-1528-025", "raft(%llx) conf received at index %lu", r->id, index);
     evtDumpConfiguration(r, &configuration);

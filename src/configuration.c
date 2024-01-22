@@ -34,7 +34,6 @@ void configurationClose(struct raft_configuration *c)
     if (c->servers != NULL) {
         raft_free(c->servers);
         c->servers = NULL;
-        c->n = 0;
     }
 }
 

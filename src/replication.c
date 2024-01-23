@@ -1739,13 +1739,15 @@ static raft_index nextSnapshotIndex(struct raft *r)
 	return snapshot_index;
 }
 
-static bool shouldTakeSnapshot(struct raft *r)
+static unsigned takeSnapshotThreshold(struct raft *r)
+{
+    return r->aggressive_snapshot.enable ?
+            r->aggressive_snapshot.threshold: r->snapshot.threshold;
+}
+
+static bool shouldTakeSnapshot(struct raft *r, unsigned threshold)
 {
     raft_index snapshot_index;
-    unsigned threshold = r->snapshot.threshold;
-
-    if (r->aggressive_snapshot.enable)
-        threshold = r->aggressive_snapshot.threshold;
 
     /* If we are shutting down, let's not do anything. */
     if (r->state == RAFT_UNAVAILABLE) {
@@ -1912,16 +1914,12 @@ err_do_snapshot:
 void replicationRemoveTrailing(struct raft *r)
 {
     unsigned trailing;
+    raft_index snapshot_index;
 
-    /* If a snapshot is already in progress or we're installing a snapshot, we
-     * don't want to start another one. */
-    if (r->snapshot.pending.term != 0 || r->snapshot.put.data != NULL) {
+    if (!shouldTakeSnapshot(r, 1)) {
         return;
     }
-
-    if (r->log.snapshot.last_index == 0) {
-        return;
-    }
+    snapshot_index = nextSnapshotIndex(r);
 
     trailing = r->snapshot.trailing;
     if (!r->enable_dynamic_trailing) {
@@ -1931,10 +1929,10 @@ void replicationRemoveTrailing(struct raft *r)
 err_do_snapshot:
     if (r->aggressive_snapshot.enable)
         trailing = r->aggressive_snapshot.trailing;
-    if (r->log.snapshot.last_index <= trailing ||
-	    !logGet(&r->log, r->log.snapshot.last_index - trailing))
-	return;
-    doSnapshot(r, r->log.snapshot.last_index, trailing);
+    if (snapshot_index <= trailing ||
+	    !logGet(&r->log, snapshot_index - trailing))
+	    return;
+    doSnapshot(r, snapshot_index, trailing);
 }
 
 int replicationApply(struct raft *r)
@@ -2015,7 +2013,7 @@ int replicationApply(struct raft *r)
     }
 
 err_take_snapshot:
-    if (shouldTakeSnapshot(r)) {
+    if (shouldTakeSnapshot(r, takeSnapshotThreshold(r))) {
         rv = takeSnapshot(r);
 	if (rv != 0)
             evtErrf("E-1528-230", "raft(%llx) take snapshot failed %d", r->id, rv);

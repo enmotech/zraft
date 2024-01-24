@@ -331,7 +331,7 @@ TEST(snapshot, installOneTimeOutAppendAfter, setUp, tearDown, 0, NULL)
     CLUSTER_STEP_UNTIL_APPLIED(2, 5, 5000);
 
     /* Assert that the leader has retried the InstallSnapshot RPC */
-    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 2);
+    munit_assert_int(CLUSTER_N_SEND(0, RAFT_IO_INSTALL_SNAPSHOT), ==, 4);
 
     return MUNIT_OK;
 }

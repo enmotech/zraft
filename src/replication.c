@@ -1885,7 +1885,7 @@ static unsigned figureOutDynamicTrailing(struct raft *r,
         index = logLastIndex(&r->log);
 
     if (index <= snapshot_index)
-        trailing = (unsigned int)(snapshot_index - index) + 1;
+        trailing = (unsigned int)(snapshot_index - index) + 2;
     else
         trailing = 1;
 
@@ -1925,7 +1925,7 @@ void replicationRemoveTrailing(struct raft *r)
     if (!r->enable_dynamic_trailing) {
         goto err_do_snapshot;
     }
-    trailing = figureOutDynamicTrailing(r, r->log.snapshot.last_index);
+    trailing = figureOutDynamicTrailing(r, snapshot_index);
 err_do_snapshot:
     if (r->aggressive_snapshot.enable)
         trailing = r->aggressive_snapshot.trailing;

@@ -164,6 +164,15 @@ static int recvEnsureMatchingTerm(struct raft *r,
     case RAFT_IO_TIMEOUT_NOW:
         term = message->timeout_now.term;
         break;
+    case RAFT_IO_REQUEST_VOTE:
+        if (message->request_vote.disrupt_leader) {
+            term = message->request_vote.term;
+            if (r->state == RAFT_LEADER && r->current_term < term) {
+                convertToFollower(r);
+            }
+        }
+        *async = false;
+        return 0;
     case RAFT_IO_REQUEST_VOTE_RESULT:
         term = message->request_vote_result.term;
         break;

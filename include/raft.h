@@ -930,7 +930,6 @@ struct raft
     bool enable_election_at_start;
     /* Flag for raft dynamic change log trailing */
     bool enable_dynamic_trailing;
-    unsigned max_dynamic_trailing;
     raft_index pkt_id;
     struct {
 	    bool     enable;    /* Flag for enable aggressive snapshot */
@@ -1387,6 +1386,7 @@ struct raft_hook
                                 const struct raft_append_entries *ae,
                                 struct raft_append_entries_result *result,
                                 bool *discard);
+    unsigned (*max_dynamic_trailing)(struct raft_hook *h);
 };
 
 RAFT_API void raft_set_hook(struct raft *r, struct raft_hook * hook);
@@ -1465,11 +1465,6 @@ RAFT_API void raft_enable_request_hook(struct raft *r, bool enable);
  * Set enable dynamic trailing @enable
  */
 RAFT_API void raft_enable_dynamic_trailing(struct raft *r, bool enable);
-
-/**
- * Set max dynamic trailing
- */
-RAFT_API void raft_set_max_dynamic_trailing(struct raft *r, unsigned trailing);
 
 /*
 * Set the only voter elect as leader at start

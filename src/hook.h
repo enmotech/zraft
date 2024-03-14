@@ -21,4 +21,7 @@ bool hookHackAppendEntries(struct raft *r,
 
 bool hookEntryShouldApply(struct raft *r, raft_index index,
 			  const struct raft_entry *entry);
+
+unsigned hookMaxDynamicTrailing(struct raft *r, unsigned def);
+
 #endif //HOOK_H

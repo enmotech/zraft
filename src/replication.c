@@ -39,6 +39,7 @@
 
 #define PKT_TERM_BITS 16
 #define PKT_ID_BITS 32
+#define DEFAULT_MAX_DYNAMIC_TRAILING 128
 
 /* Callback invoked after request to send an AppendEntries RPC has completed. */
 static void sendAppendEntriesCb(struct raft_io_send *send, const int status)
@@ -1889,9 +1890,12 @@ static unsigned figureOutDynamicTrailing(struct raft *r,
     else
         trailing = 1;
 
-    if (r->leader_state.replica_sync_between_min_max_timeout)
-	    trailing = max(r->max_dynamic_trailing, trailing);
+    if (!r->leader_state.replica_sync_between_min_max_timeout)
+        goto err_return;
 
+    trailing = max(hookMaxDynamicTrailing(r, DEFAULT_MAX_DYNAMIC_TRAILING),
+		           trailing);
+err_return:
     return trailing;
 }
 

@@ -21,7 +21,6 @@
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
 #define DEFAULT_INSTALL_SNAPSHOT_TIMEOUT 30000 /* 30 seconds */
-#define DEFAULT_DYNAMIC_MAX_TRAILING 128
 #define DEFAULT_SNAPSHOT_THRESHOLD 1024
 #define DEFAULT_SNAPSHOT_TRAILING 2048
 #define DEFAULT_MESSAGE_LOG_THRESHOLD 16
@@ -89,7 +88,6 @@ int raft_init(struct raft *r,
     r->non_voter_grant_vote = false;
     r->enable_request_hook = false;
     r->enable_dynamic_trailing = false;
-    r->max_dynamic_trailing = DEFAULT_DYNAMIC_MAX_TRAILING;
     r->enable_election_at_start = true;
     r->pkt_id = 0;
     r->aggressive_snapshot.enable = false;
@@ -397,11 +395,6 @@ void raft_enable_request_hook(struct raft *r, bool enable)
 
 void raft_enable_dynamic_trailing(struct raft *r, bool enable){
     r->enable_dynamic_trailing = enable;
-}
-
-void raft_set_max_dynamic_trailing(struct raft *r, unsigned trailing)
-{
-    r->max_dynamic_trailing = trailing;
 }
 
 void raft_enable_election_at_start(struct raft *r, bool enable)

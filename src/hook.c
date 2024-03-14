@@ -217,3 +217,10 @@ bool hookEntryShouldApply(struct raft *r, raft_index index,
 {
 	return r->hook->entry_should_apply(r->hook, index, entry);
 }
+
+unsigned hookMaxDynamicTrailing(struct raft *r, unsigned def)
+{
+	if (r->hook->max_dynamic_trailing)
+		return r->hook->max_dynamic_trailing(r->hook);
+	return def;
+}

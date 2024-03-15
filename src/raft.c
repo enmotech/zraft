@@ -90,7 +90,6 @@ int raft_init(struct raft *r,
     r->enable_dynamic_trailing = false;
     r->enable_election_at_start = true;
     r->pkt_id = 0;
-    r->aggressive_snapshot.enable = false;
     r->enable_change_cb_on_match = false;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
@@ -494,14 +493,6 @@ void raft_dump(struct raft *r, raft_dump_fn dump)
 void raft_set_log_hook(struct raft *r, struct raft_log_hook *hook)
 {
     logSetHook(&r->log, hook);
-}
-
-void raft_set_aggressive_snapshot(struct raft *r, bool enable,
-                                  unsigned threshold, unsigned trailing)
-{
-    r->aggressive_snapshot.enable = enable;
-    r->aggressive_snapshot.threshold = threshold;
-    r->aggressive_snapshot.trailing = trailing;
 }
 
 void raft_enable_change_cb_on_match(struct raft *r, bool enable)

@@ -931,11 +931,6 @@ struct raft
     /* Flag for raft dynamic change log trailing */
     bool enable_dynamic_trailing;
     raft_index pkt_id;
-    struct {
-	    bool     enable;    /* Flag for enable aggressive snapshot */
-	    unsigned threshold; /* N. of entries before snapshot */
-	    unsigned trailing;  /* N. of trailing entries to retain */
-    } aggressive_snapshot;
     bool enable_change_cb_on_match;
 };
 
@@ -1502,12 +1497,6 @@ RAFT_API void raft_dump(struct raft *r, raft_dump_fn dump);
  * Set log hook.
  */
 RAFT_API void raft_set_log_hook(struct raft *r, struct raft_log_hook *hook);
-
-/**
- * Set aggressive snapshot.
- */
-RAFT_API void raft_set_aggressive_snapshot(struct raft *r, bool enable,
-					   unsigned threshold, unsigned trailing);
 
 /**
  * Enable call callback of configuration change when replica's progress match

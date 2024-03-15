@@ -1740,12 +1740,6 @@ static raft_index nextSnapshotIndex(struct raft *r)
 	return snapshot_index;
 }
 
-static unsigned takeSnapshotThreshold(struct raft *r)
-{
-    return r->aggressive_snapshot.enable ?
-            r->aggressive_snapshot.threshold: r->snapshot.threshold;
-}
-
 static bool shouldTakeSnapshot(struct raft *r, unsigned threshold)
 {
     raft_index snapshot_index;
@@ -1910,8 +1904,6 @@ static int takeSnapshot(struct raft *r)
     }
     trailing = figureOutDynamicTrailing(r, snapshot_index);
 err_do_snapshot:
-    if (r->aggressive_snapshot.enable)
-        trailing = r->aggressive_snapshot.trailing;
     return doSnapshot(r, snapshot_index, trailing);
 }
 
@@ -1931,8 +1923,6 @@ void replicationRemoveTrailing(struct raft *r)
     }
     trailing = figureOutDynamicTrailing(r, snapshot_index);
 err_do_snapshot:
-    if (r->aggressive_snapshot.enable)
-        trailing = r->aggressive_snapshot.trailing;
     if (snapshot_index <= trailing ||
 	    !logGet(&r->log, snapshot_index - trailing))
 	    return;
@@ -2017,7 +2007,7 @@ int replicationApply(struct raft *r)
     }
 
 err_take_snapshot:
-    if (shouldTakeSnapshot(r, takeSnapshotThreshold(r))) {
+    if (shouldTakeSnapshot(r, r->snapshot.threshold)) {
         rv = takeSnapshot(r);
 	if (rv != 0)
             evtErrf("E-1528-230", "raft(%llx) take snapshot failed %d", r->id, rv);

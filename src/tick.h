@@ -9,4 +9,9 @@
  * certain amount of time has elapsed and will be invoked periodically. */
 void tickCb(struct raft_io *io);
 
+/**
+ * Check whether leader is in contact with the majority.
+ */
+bool tickCheckContactQuorum(struct raft *r);
+
 #endif /* TICK_H_ */

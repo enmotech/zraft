@@ -17,6 +17,7 @@
 #include "snapshot_sampler.h"
 #include "request.h"
 #include "progress.h"
+#include "tick.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -526,4 +527,13 @@ void raft_update_replica_online(struct raft *r, raft_id replica_id,
 bool raft_log_has_external_ref(struct raft *r)
 {
     return logHasExternalRef(&r->log);
+}
+
+bool raft_check_leader_contact_quorum(struct raft *r)
+{
+    if (r->state != RAFT_LEADER) {
+        return false;
+    }
+
+    return tickCheckContactQuorum(r);
 }

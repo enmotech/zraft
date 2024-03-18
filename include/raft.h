@@ -1516,6 +1516,11 @@ RAFT_API void raft_update_replica_online(struct raft *r, raft_id replica_id,
  */
 RAFT_API bool raft_log_has_external_ref(struct raft *r);
 
+/**
+ * Check whether leader is still contact with the majority.
+ */
+RAFT_API bool raft_check_leader_contact_quorum(struct raft *r);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

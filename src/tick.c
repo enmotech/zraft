@@ -209,6 +209,26 @@ static void checkChangeTimeout(struct raft *r)
     }
 }
 
+bool tickCheckContactQuorum(struct raft *r)
+{
+    raft_time now = r->io->time(r->io);
+    assert(r->state == RAFT_LEADER);
+
+    if (now - r->election_timer_start >= (r->election_timeout - r->heartbeat_timeout)) {
+        if (!checkContactQuorum(r)) {
+            tracef("unable to contact majority of cluster -> step down");
+            evtNoticef("N-1528-060", "raft(%llx) leader step down", r->id);
+            if (r->stepdown_cb)
+                r->stepdown_cb(r, RAFT_TICK_STEPDOWN);
+            convertToFollower(r);
+            return false;
+        }
+        r->election_timer_start = r->io->time(r->io);
+    }
+
+    return true;
+}
+
 /* Apply time-dependent rules for leaders (Figure 3.1). */
 static int tickLeader(struct raft *r)
 {
@@ -224,16 +244,9 @@ static int tickLeader(struct raft *r)
      *   successful round of heartbeats to a majority of its cluster; this
      *   allows clients to retry their requests with another server.
      */
-    if (now - r->election_timer_start >= (r->election_timeout - r->heartbeat_timeout)) {
-        if (!checkContactQuorum(r)) {
-            tracef("unable to contact majority of cluster -> step down");
-            evtNoticef("N-1528-060", "raft(%llx) leader step down", r->id);
-            if (r->stepdown_cb)
-                r->stepdown_cb(r, RAFT_TICK_STEPDOWN);
-            convertToFollower(r);
-            return 0;
-        }
-        r->election_timer_start = r->io->time(r->io);
+    if (!tickCheckContactQuorum(r)) {
+        tracef("tick check contact quorum failed.");
+        return 0;
     }
 
     /* Try to apply and take snapshot*/

@@ -563,7 +563,7 @@ void raft_update_replica_lagged(struct raft *r, raft_id replica_id, bool lagged)
 
     i = configurationIndexOf(&r->configuration, replica_id);
     if (i == r->configuration.n) {
-        evtNoticef("N-1528-268", "raft(%llx) replica %llx not in conf", r->id,
+        evtNoticef("N-1528-272", "raft(%llx) replica %llx not in conf", r->id,
                    replica_id);
         return;
     }

@@ -92,6 +92,7 @@ int raft_init(struct raft *r,
     r->enable_election_at_start = true;
     r->pkt_id = 0;
     r->enable_change_cb_on_match = false;
+    r->metric.ae_sample_rate = 0;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -444,7 +445,7 @@ static void raft_dump_progress(struct raft *r, raft_dump_fn dump)
 
 	for (i = 0; i < r->configuration.n; i++) {
 		dump(
-		"raft(%lx) member %u %lx role %d state %u index %llu/%llu/%llu last_send %llu/%llu recent_recv %u/%llu ms\n",
+		"raft(%lx) member %u %lx role %d state %u index %llu/%llu/%llu last_send %llu/%llu recent_recv %u/%llums samples %lu latency %lluus\n",
 		     r->id, i,
 		     r->configuration.servers[i].id,
 		     r->configuration.servers[i].role,
@@ -455,7 +456,9 @@ static void raft_dump_progress(struct raft *r, raft_dump_fn dump)
 		     r->leader_state.progress[i].last_send,
 		     r->leader_state.progress[i].snapshot_last_send,
 		     r->leader_state.progress[i].recent_recv,
-		     r->leader_state.progress[i].recent_recv_time);
+		     r->leader_state.progress[i].recent_recv_time,
+             r->leader_state.progress[i].ae_metric.nr_samples,
+             r->leader_state.progress[i].ae_metric.latency);
 	}
 }
 
@@ -536,4 +539,56 @@ bool raft_check_leader_contact_quorum(struct raft *r)
     }
 
     return tickCheckContactQuorum(r);
+}
+
+void raft_reset_ae_metric(struct raft *r, raft_id replica_id)
+{
+    assert(r->state == RAFT_LEADER);
+    unsigned i;
+
+    i = configurationIndexOf(&r->configuration, replica_id);
+    if (i == r->configuration.n) {
+        evtNoticef("N-1528-271", "raft(%llx) replica %llx not in conf", r->id,
+                   replica_id);
+        return;
+    }
+
+    progressResetAeMetric(r, i);
+}
+
+void raft_update_replica_lagged(struct raft *r, raft_id replica_id, bool lagged)
+{
+    assert(r->state == RAFT_LEADER);
+    unsigned i;
+
+    i = configurationIndexOf(&r->configuration, replica_id);
+    if (i == r->configuration.n) {
+        evtNoticef("N-1528-268", "raft(%llx) replica %llx not in conf", r->id,
+                   replica_id);
+        return;
+    }
+
+    if (progressGetLagged(r, i) == lagged) {
+        return;
+    }
+
+    progressUpdateLagged(r, i, lagged);
+    evtInfof("I-1528-269", "raft(%llx) update replica %llx lagged %d", r->id,
+             replica_id, lagged);
+}
+
+bool raft_configuration_has_role(const struct raft_configuration *c, int role)
+{
+    assert(role == RAFT_STANDBY || role == RAFT_VOTER || role == RAFT_SPARE ||
+	   role == RAFT_LOGGER);
+
+    return configurationHasRole(c, role);
+}
+
+void raft_set_metric_setting(struct raft *r,
+                             const struct raft_metric_setting *setting)
+{
+        assert((setting->ae_sample_rate & (setting->ae_sample_rate - 1)) == 0);
+
+        r->metric.ae_sample_rate = setting->ae_sample_rate;
 }

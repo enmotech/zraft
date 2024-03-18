@@ -22,6 +22,7 @@
 #include "../test/lib/fsm.h"
 #include "byte.h"
 #include "snapshot_sampler.h"
+#include "metric.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -99,6 +100,7 @@ static int sendAppendEntries(struct raft *r,
     args->prev_log_term = prev_term;
     args->snapshot_index = r->log.snapshot.last_index;
     args->trailing = r->snapshot.trailing;
+    args->timestamp = r->io->time_us(r->io);
 
     req = raft_malloc(sizeof(*req) +
 		      sizeof(*req->entries) * r->message_log_threshold);
@@ -784,6 +786,25 @@ err:
     return rv;
 }
 
+static void trySampleAELatency(struct raft *r, struct raft_progress *p,
+                               raft_time timestamp)
+{
+    raft_time us;
+
+    if (!metricShouldSample(&p->ae_metric, r->metric.ae_sample_rate)) {
+        goto err_skip_sample;
+    }
+
+    us = r->io->time_us(r->io);
+    if (us <= timestamp) {
+        goto err_skip_sample;
+    }
+
+    metricSampleLatency(&p->ae_metric, us - timestamp);
+err_skip_sample:
+    return;
+}
+
 int replicationUpdate(struct raft *r, const raft_id id, unsigned i,
 		      const struct raft_append_entries_result *result)
 {
@@ -864,6 +885,10 @@ int replicationUpdate(struct raft *r, const raft_id id, unsigned i,
         case PROGRESS__PROBE:
             /* Transition to pipeline */
             progressToPipeline(r, i);
+    }
+
+    if (result->n_entries && result->timestamp) {
+        trySampleAELatency(r, p, result->timestamp);
     }
 
     if (!updated) {
@@ -996,6 +1021,8 @@ static void appendFollowerCb(struct raft_io_append *req, int status)
 
     result.pkt = args->pkt;
     result.term = r->current_term;
+    result.n_entries = args->n_entries;
+    result.timestamp = args->timestamp;
     if (status != 0) {
         evtErrf("E-1528-203", "raft(%llx) append follower status %d", r->id, status);
         if (r->state != RAFT_FOLLOWER) {

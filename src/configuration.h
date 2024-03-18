@@ -92,4 +92,6 @@ const char *configurationPhaseName(int phase);
 
 const char *configurationGroupName(int group);
 
+bool configurationHasRole(const struct raft_configuration *c, int role);
+
 #endif /* CONFIGURATION_H_ */

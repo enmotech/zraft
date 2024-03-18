@@ -5,6 +5,7 @@
 #include "log.h"
 #include "tracing.h"
 #include "event.h"
+#include "metric.h"
 
 #ifdef ENABLE_TRACE
 #define tracef(...) Tracef(r->tracer, __VA_ARGS__)
@@ -30,6 +31,8 @@ static void initProgress(struct raft_progress *p, raft_index last_index)
     p->snapshot_last_send = 0;
     p->recent_recv = false;
     p->state = PROGRESS__PROBE;
+    metricInit(&p->ae_metric);
+    p->lagged = false;
 }
 
 int progressBuildArray(struct raft *r)
@@ -390,7 +393,7 @@ void progressUpdateMinMatch(struct raft *r)
         }
 
 		p = &r->leader_state.progress[i];
-        if (!p->online) {
+        if (!p->online || p->lagged) {
             continue;
         }
 
@@ -413,6 +416,26 @@ void progressUpdateMinMatch(struct raft *r)
 	        r->leader_state.replica_sync_between_min_max_timeout++;
 	    }
 	}
+}
+
+void progressResetAeMetric(struct raft *r, unsigned i)
+{
+    assert(r->state == RAFT_LEADER);
+    metricReset(&r->leader_state.progress[i].ae_metric);
+}
+
+bool progressGetLagged(struct raft *r, const unsigned i)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
+
+    return p->lagged;
+}
+
+void progressUpdateLagged(struct raft *r, const unsigned i, bool lagged)
+{
+    struct raft_progress *p = &r->leader_state.progress[i];
+
+    p->lagged = lagged;
 }
 
 #undef tracef

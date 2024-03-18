@@ -117,4 +117,13 @@ void progressUpdateOnline(struct raft *r, const unsigned i, bool online);
 /* Reset the minimum match index */
 void progressUpdateMinMatch(struct raft *r);
 
+/* Reset ae metric. */
+void progressResetAeMetric(struct raft *r, unsigned i);
+
+/* Return lagged state. */
+bool progressGetLagged(struct raft *r, const unsigned i);
+
+/* Update lagged state. */
+void progressUpdateLagged(struct raft *r, const unsigned i, bool lagged);
+
 #endif /* PROGRESS_H_ */

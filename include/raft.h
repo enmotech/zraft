@@ -301,7 +301,8 @@ struct raft_append_entries
     struct raft_entry *entries; /* Log entries to append. */
     unsigned n_entries;         /* Size of the log entries array. */
     raft_index snapshot_index;  /* Index of current snapshot */
-    unsigned trailing;
+    unsigned trailing;          /* Trailing for last snapshot */
+    raft_time timestamp;        /* Time in microseconds. */
 };
 
 /**
@@ -313,6 +314,8 @@ struct raft_append_entries_result
     raft_term term;            /* Receiver's current_term. */
     raft_index rejected;       /* If non-zero, the index that was rejected. */
     raft_index last_log_index; /* Receiver's last log entry index, as hint. */
+    unsigned n_entries;        /* Number of entries received. */
+    raft_time timestamp;       /* Timestamp from AppendEntries RPC. */
 };
 
 /**
@@ -567,6 +570,8 @@ struct raft_io
                         raft_io_snapshot_get_cb cb);
     raft_time (*time)(struct raft_io *io);
     int (*random)(struct raft_io *io, int min, int max);
+    /* Return the current time in microseconds. */
+    raft_time (*time_us)(struct raft_io *io);
 #define RAFT_IO_AVAILABLE	0
 #define RAFT_IO_BUSY		1
     /*
@@ -604,6 +609,15 @@ struct raft_fsm
 enum { RAFT_UNAVAILABLE, RAFT_FOLLOWER, RAFT_CANDIDATE, RAFT_LEADER };
 
 /**
+ * Metrics
+ */
+struct raft_metric {
+        size_t nr_events;  /* Number of events. */
+        size_t nr_samples; /* Number of events samples. */
+        raft_time latency; /* Avarage latency for all samples in us. */
+};
+
+/**
  * Used by leaders to keep track of replication progress for each server.
  */
 struct raft_progress
@@ -618,7 +632,9 @@ struct raft_progress
     raft_time recent_recv_time;   /* Timestamp of last AppendEntriesResult RPC.*/
     raft_time recent_match_time;  /* Timestamp of last matched AppendEntriesResult RPC.*/
     bool online;                  /* Whether replica is online. */
-    bool log_min_timeout ;        /* Whether log min timeout. */
+    bool log_min_timeout;         /* Whether log min timeout. */
+    struct raft_metric ae_metric; /* Metric for append entry. */
+    bool lagged;                  /* Whether replica is lagged. */
 };
 
 struct raft; /* Forward declaration. */
@@ -932,6 +948,10 @@ struct raft
     bool enable_dynamic_trailing;
     raft_index pkt_id;
     bool enable_change_cb_on_match;
+    struct {
+        /* Ae sample rate. */
+        size_t ae_sample_rate;
+    } metric;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1515,12 +1535,39 @@ RAFT_API void raft_update_replica_online(struct raft *r, raft_id replica_id,
  * Determine Whether Log Entry Is Referenced Externally.
  */
 RAFT_API bool raft_log_has_external_ref(struct raft *r);
+struct raft_metric_setting {
+        /* Sample rate of append entry, Must be a power of two. */
+        size_t ae_sample_rate;
+};
 
 /**
  * Check whether leader is still contact with the majority.
  */
 RAFT_API bool raft_check_leader_contact_quorum(struct raft *r);
 
+/**
+ * Update metric setting.
+ */
+RAFT_API void raft_set_metric_setting(struct raft *r,
+                                    const struct raft_metric_setting *setting);
+
+/**
+ * Reset the ae metric, but only when the r.state equals RAFT_LEADER.
+ */
+RAFT_API void raft_reset_ae_metric(struct raft *r, raft_id replica_id);
+
+/**
+ * Noitfy leader replica is lagged.
+ * New leader assume that all replica's default lagged is false.
+ */
+RAFT_API void raft_update_replica_lagged(struct raft *r, raft_id replica_id,
+                                         bool lagged);
+
+/**
+ * Whether configuration contains replica with role.
+ */
+RAFT_API bool raft_configuration_has_role(const struct raft_configuration *c,
+					  int role);
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

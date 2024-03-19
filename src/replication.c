@@ -1788,7 +1788,7 @@ static bool shouldTakeSnapshot(struct raft *r, unsigned threshold)
     }
 
     snapshot_index = nextSnapshotIndex(r);
-    if (snapshot_index <= r->log.snapshot.last_index)
+    if (snapshot_index < r->log.snapshot.last_index)
 	    return false;
     /* If we didn't reach the threshold yet, do nothing. */
     if (snapshot_index - r->log.snapshot.last_index < threshold) {
@@ -1939,7 +1939,7 @@ void replicationRemoveTrailing(struct raft *r)
     unsigned trailing;
     raft_index snapshot_index;
 
-    if (!shouldTakeSnapshot(r, 1)) {
+    if (!shouldTakeSnapshot(r, 0)) {
         return;
     }
     snapshot_index = nextSnapshotIndex(r);

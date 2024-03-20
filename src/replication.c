@@ -1907,7 +1907,7 @@ static unsigned figureOutDynamicTrailing(struct raft *r,
         index = logLastIndex(&r->log);
 
     if (index <= snapshot_index)
-        trailing = (unsigned int)(snapshot_index - index) + 2;
+        trailing = (unsigned int)(snapshot_index - index) + 1;
     else
         trailing = 1;
 

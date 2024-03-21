@@ -2073,6 +2073,22 @@ static bool replicationQuorumGroup(struct raft *r, raft_index index, int group)
     return votes >= n_voters;
 }
 
+bool replicationEntryReplicationQuorum(struct raft *r, const raft_index index)
+{
+    assert(r->state == RAFT_LEADER);
+    assert(logTermOf(&r->log, index) <= r->current_term);
+
+    if (r->configuration.phase == RAFT_CONF_JOINT) {
+        if (!replicationQuorumGroup(r, index, RAFT_GROUP_NEW))
+            return false;
+    }
+
+    if (!replicationQuorumGroup(r, index, RAFT_GROUP_OLD))
+        return false;
+
+    return true;
+}
+
 void replicationQuorum(struct raft *r, const raft_index index)
 {
     raft_index prev_commit_index = r->commit_index;
@@ -2092,13 +2108,9 @@ void replicationQuorum(struct raft *r, const raft_index index)
         return;
     }
 
-    if (r->configuration.phase == RAFT_CONF_JOINT) {
-        if (!replicationQuorumGroup(r, index, RAFT_GROUP_NEW))
-            return;
-    }
-
-    if (!replicationQuorumGroup(r, index, RAFT_GROUP_OLD))
+    if (!replicationEntryReplicationQuorum(r, index)) {
         return;
+    }
 
     r->commit_index = index;
     tracef("new commit index %llu", r->commit_index);

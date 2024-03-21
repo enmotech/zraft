@@ -1568,6 +1568,11 @@ RAFT_API void raft_update_replica_lagged(struct raft *r, raft_id replica_id,
  */
 RAFT_API bool raft_configuration_has_role(const struct raft_configuration *c,
 					  int role);
+/**
+ * Whether entry at given index has been replicated to a majority.
+ */
+RAFT_API bool raft_check_entry_replication_quorum(struct raft *r,
+						  raft_index index);
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

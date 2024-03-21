@@ -18,6 +18,7 @@
 #include "request.h"
 #include "progress.h"
 #include "tick.h"
+#include "replication.h"
 
 #define DEFAULT_ELECTION_TIMEOUT 1000 /* One second */
 #define DEFAULT_HEARTBEAT_TIMEOUT 100 /* One tenth of a second */
@@ -591,4 +592,9 @@ void raft_set_metric_setting(struct raft *r,
         assert((setting->ae_sample_rate & (setting->ae_sample_rate - 1)) == 0);
 
         r->metric.ae_sample_rate = setting->ae_sample_rate;
+}
+
+bool raft_check_entry_replication_quorum(struct raft *r, raft_index index)
+{
+    return replicationEntryReplicationQuorum(r, index);
 }

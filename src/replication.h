@@ -113,4 +113,9 @@ void replicationQuorum(struct raft *r, const raft_index index);
  */
 void replicationRemoveTrailing(struct raft *r);
 
+/**
+ * Whether entry at given index has been replicated to a majority.
+ */
+bool replicationEntryReplicationQuorum(struct raft *r, const raft_index index);
+
 #endif /* REPLICATION_H_ */

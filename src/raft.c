@@ -37,6 +37,7 @@
  * server hasn't caught up with the logs yet. */
 #define DEFAULT_MAX_CATCH_UP_ROUNDS 10
 #define DEFAULT_MAX_CATCH_UP_ROUND_DURATION (5 * 1000)
+#define DEFAULT_TICK_SNAPSHOT_FREQUENCY (1)
 
 int raft_init(struct raft *r,
               struct raft_io *io,
@@ -94,6 +95,8 @@ int raft_init(struct raft *r,
     r->pkt_id = 0;
     r->enable_change_cb_on_match = false;
     r->metric.ae_sample_rate = 0;
+    r->ticks = 0;
+    r->tick_snapshot_frequency = DEFAULT_TICK_SNAPSHOT_FREQUENCY;
     rv = r->io->init(r->io, r->id);
     r->state_change_cb = NULL;
     if (rv != 0) {
@@ -597,4 +600,10 @@ void raft_set_metric_setting(struct raft *r,
 bool raft_check_entry_replication_quorum(struct raft *r, raft_index index)
 {
     return replicationEntryReplicationQuorum(r, index);
+}
+
+void raft_set_tick_snapshot_frequency(struct raft *r, unsigned freq)
+{
+    assert(freq);
+    r->tick_snapshot_frequency = freq;
 }

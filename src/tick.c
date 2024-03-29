@@ -34,14 +34,16 @@ static int tickFollower(struct raft *r)
         return 0;
     }
 
-    /* Try to apply and take snapshot*/
-    rv = replicationApply(r);
-    if (rv != 0) {
-        evtErrf("E-1528-252", "raft(%llx) replication apply failed %d", r->id, rv);
-        return rv;
-    }
+    if ((r->ticks % r->tick_snapshot_frequency) == 0) {
+        /* Try to apply and take snapshot*/
+        rv = replicationApply(r);
+        if (rv != 0) {
+            evtErrf("E-1528-252", "raft(%llx) replication apply failed %d", r->id, rv);
+            return rv;
+        }
 
-    replicationRemoveTrailing(r);
+        replicationRemoveTrailing(r);
+    }
 
     /* Check if we need to start an election.
      *
@@ -249,22 +251,24 @@ static int tickLeader(struct raft *r)
         return 0;
     }
 
-    /* Try to apply and take snapshot*/
-    rv = replicationApply(r);
-    if (rv != 0) {
-        evtErrf("E-1528-254", "raft(%llx) replication apply failed %d", r->id, rv);
-    }
+    if ((r->ticks % r->tick_snapshot_frequency) == 0) {
+        /* Try to apply and take snapshot*/
+        rv = replicationApply(r);
+        if (rv != 0) {
+            evtErrf("E-1528-254", "raft(%llx) replication apply failed %d", r->id, rv);
+        }
 
-    if (r->state != RAFT_LEADER) {
-        evtNoticef("N-1528-061", "raft(%llx) step down after replication apply", r->id);
-        return 0;
-    }
+        if (r->state != RAFT_LEADER) {
+            evtNoticef("N-1528-061", "raft(%llx) step down after replication apply", r->id);
+            return 0;
+        }
 
-    if (r->sync_replication) {
-        progressUpdateMinMatch(r);
-    }
+        if (r->sync_replication) {
+            progressUpdateMinMatch(r);
+        }
 
-    replicationRemoveTrailing(r);
+        replicationRemoveTrailing(r);
+    }
 
     /* Possibly send heartbeats.
      *
@@ -346,6 +350,7 @@ static int tick(struct raft *r)
         return 0;
     }
 
+    ++r->ticks;
     switch (r->state) {
         case RAFT_FOLLOWER:
             rv = tickFollower(r);

@@ -952,6 +952,8 @@ struct raft
         /* Ae sample rate. */
         size_t ae_sample_rate;
     } metric;
+    unsigned ticks;
+    unsigned tick_snapshot_frequency;
 };
 
 RAFT_API int raft_init(struct raft *r,
@@ -1573,6 +1575,12 @@ RAFT_API bool raft_configuration_has_role(const struct raft_configuration *c,
  */
 RAFT_API bool raft_check_entry_replication_quorum(struct raft *r,
 						  raft_index index);
+
+/**
+ * Set the snapshot frequency in tick.
+ */
+RAFT_API void raft_set_tick_snapshot_frequency(struct raft *r, unsigned freq);
+
 #undef RAFT__REQUEST
 
 #endif /* RAFT_H */

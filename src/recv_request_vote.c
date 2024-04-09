@@ -142,6 +142,10 @@ int recvRequestVote(struct raft *r,
             }
 
             if(match > 0 || (voted_for != r->voted_for)) {
+                if (r->state != RAFT_FOLLOWER) {
+                    convertToFollower(r);
+                }
+
                 return recvUpdateMeta(r,
                                       &message,
                                       args->term,

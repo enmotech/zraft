@@ -183,6 +183,9 @@ static int recvEnsureMatchingTerm(struct raft *r,
     recvCheckMatchingTerms(r, term, &match);
     if(match > 0) {
         *async = true;
+        if (r->state != RAFT_FOLLOWER) {
+            convertToFollower(r);
+        }
         return recvUpdateMeta(r,
                               message,
                               term,
